@@ -58,7 +58,7 @@
            (serve-connection
             (new-connection config:initial-connection-timeout
                             ip op (current-custodian) #f)))))
-      
+
       ;; serve-connection: connection -> void
       ;; respond to all requests on this connection
       (define (serve-connection conn)
@@ -382,57 +382,65 @@
       (define (servlet-content-producer/path conn req host-info uri)
         (with-handlers (;; couldn't find the servlet
                         [exn:fail:filesystem:exists:servlet?
-                         (lambda (the-exn)
-                           (output-response/method
+                        (lambda (the-exn)
+                          (output-response/method
                             conn
                             ((responders-file-not-found (host-responders
-                                                         host-info))
+                                                          host-info))
                              (request-uri req))
                             (request-method req)))]
                         ;; servlet is broken
                         [(lambda (x) #t)
-                         (lambda (the-exn)
-                           (output-response/method
+                        (lambda (the-exn)
+                          (output-response/method
                             conn
                             ((responders-servlet-loading (host-responders
-                                                          host-info)) uri
-                                                          the-exn)
+                                                           host-info)) uri
+                             the-exn)
                             (request-method req)))])
           (let* ([invoke-id (string->symbol (symbol->string (gensym 'id)))]
-                 [time-bomb (start-timer (timeouts-default-servlet
-                                          (host-timeouts host-info))
-                                         (lambda ()
-                                           (hash-table-remove! config:instances invoke-id)
-                                           (kill-connection! conn)))]
-                 [adjust-timeout!
-                  (lambda (secs)
-                    (reset-timer time-bomb secs))]
-                 [real-servlet-path (url-path->path
-                                     (paths-servlet (host-paths host-info))
-                                     (url-path->string (url-path uri)))]
-                 [servlet-program (cached-load real-servlet-path)]
-                 [initial-request req])
+                            [time-bomb (start-timer (timeouts-default-servlet
+                                                      (host-timeouts host-info))
+                                                    (lambda ()
+                                                      (hash-table-remove! config:instances invoke-id)
+                                                      (kill-connection! conn)))]
+                            [adjust-timeout!
+                            (lambda (secs)
+                              (reset-timer time-bomb secs))]
+                            [real-servlet-path (url-path->path
+                                                 (paths-servlet (host-paths host-info))
+                                                 (url-path->string (url-path uri)))]
+                            [servlet-program (cached-load real-servlet-path)]
+                            [initial-request req])
             (let/cc suspend
               (parameterize ([current-directory (get-servlet-base-dir real-servlet-path)])
                 (thread-cell-set!
-                 current-servlet-context
-                 (let ([inst (create-new-instance! config:instances invoke-id)])
-                   (make-servlet-context inst conn req
-                                         (lambda ()
-                                           (semaphore-post (servlet-instance-mutex
-                                                            inst))
-                                           (suspend #t)))))
+                  current-servlet-context
+                  (let ([inst (create-new-instance! config:instances invoke-id)])
+                    (make-servlet-context inst conn req
+                                          (lambda ()
+                                            (semaphore-post (servlet-instance-mutex
+                                                              inst))
+                                            (suspend #t)))))
                 (with-handlers ([;; servlet is broken
-                                 (lambda (x) #t)
-                                 (lambda (the-exn)
-                                   (output-response/method
-                                    conn
-                                    ((responders-servlet (host-responders
-                                                          host-info)) uri the-exn)
-                                    (request-method req)))])
-                  (output-response
-                   conn
-                   (invoke-unit/sig servlet-program servlet^))))))))
+                                    (lambda (x) #t)
+                                    (lambda (the-exn)
+                                      (output-response/method
+                                        conn
+                                        ((responders-servlet (host-responders
+                                                               host-info)) uri the-exn)
+                                        (request-method req)))])
+                  ;; Two possibilities:
+                  ;; - module servlet. start : Request -> Void handles
+                  ;;   output-response via send/finish, etc.
+                  ;; - unit/sig or simple xexpr servlet. These must produce a
+                  ;;   response, which is then output by the server.
+                  ;; Here, we do not know if the servlet was a module,
+                  ;; unit/sig, or Xexpr; we do know whether it produces a
+                  ;; response.
+                  (let ((r (invoke-unit/sig servlet-program servlet^)))
+                    (when (response? r)
+                      (output-response conn r)))))))))
 
       ;; path -> path
       ;; The actual servlet's parent directory.
