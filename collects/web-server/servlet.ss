@@ -1,11 +1,26 @@
 ;; Default choice for writing module servlets
 (module servlet mzscheme
-  (require "request-parsing.ss"
+  (require (lib "contract.ss")
+           (all-except "request-parsing.ss" request-bindings)
            "servlet-tables.ss"
-           "response.ss")
+           "response.ss"
+           "servlet-helpers.ss"
+           "xexpr-callback.ss")
 
-  (provide send/suspend send/finish send/back send/forward)
+  (provide/contract
+    (send/back (response? . -> . any))
+    (send/finish (response? . -> . any))
+    (send/suspend ((string? . -> . response?) . -> . request?))
+    (send/forward ((string? . -> . response?) . -> . request?))
+    (send/suspend/callback (xexpr/callback? . -> . any))
+    )
 
+  (provide
+    (all-from "servlet-helpers.ss")
+    (all-from "xexpr-callback.ss")
+    )
+
+
   ;; ************************************************************
   ;; EXPORTS
 
@@ -38,6 +53,19 @@
     (clear-continuations!)
     (send/suspend response-generator))
 
+  ;; send/suspend/callback : xexpr/callback? -> void
+  ;; send/back a response with callbacks in it; send/suspend those callbacks.
+  (define (send/suspend/callback p-exp)
+    (let/cc k0
+      (send/back
+        (replace-procedures
+          p-exp (lambda (proc)
+                  (let/cc k1 (k0 (proc (send/suspend k1)))))))))
+
+  
+  ;; ************************************************************
+  ;; HELPERS
+
   ;; store-continuation!: continuation -> url-string
   ;; store a continuation in the k-table for the current servlet-instance
   (define (store-continuation! k)
@@ -59,6 +87,13 @@
       (thread-cell-ref current-servlet-context))
      (make-hash-table)))
 
+  ;; replace-procedures : xexpr/callbacks? (xexpr/callbacks? -> xexpr?) -> xexpr?
+  ;; Change procedures to the send/suspend of a k-url
+  (define (replace-procedures p-exp p->a)
+    (cond
+      ((list? p-exp) (map (lambda (p-e) (replace-procedures p-e p->a))
+                          p-exp))
+      ((procedure? p-exp) (p->a p-exp))
+      (else p-exp)))
 
 )
-
