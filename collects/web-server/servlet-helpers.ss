@@ -4,8 +4,14 @@
            "web-server.ss"
            (lib "servlet-sig.ss" "web-server"))
   
-  (provide extract-binding/single extract-bindings exists-binding? extract-user-pass build-suspender make-html-response/incremental
-           anchor-case)
+  (provide extract-binding/single
+           extract-bindings
+	   exists-binding?
+	   extract-user-pass
+	   build-suspender
+	   ;make-html-response/incremental
+           ;anchor-case
+	   )
   
   ; extract-binding/single : sym (listof (cons sym str)) -> str
   (define (extract-binding/single name bindings)
@@ -41,10 +47,10 @@
                            . ,content))))))
   
   ; make-html-response/incremental : ((string -> void) -> void) -> response/incremental
-  (define (make-html-response/incremental chunk-maker)
-    (make-response/incremental
-     200 "Okay" (current-seconds) "text/html" '()
-     chunk-maker))
+  ;(define (make-html-response/incremental chunk-maker)
+  ;  (make-response/incremental
+  ;   200 "Okay" (current-seconds) "text/html" '()
+  ;   chunk-maker))
   
   (define-syntax anchor-case
     (lambda (stx)
