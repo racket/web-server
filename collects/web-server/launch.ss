@@ -8,7 +8,7 @@
   
   (parse-command-line
    "web-server"
-   (namespace-variable-binding 'argv)
+   (current-command-line-arguments)
    `((once-each
       [("-f" "--configuration-table")
        ,(lambda (flag file-name)
