@@ -19,8 +19,8 @@
     (set! the-connection-manager
           (start-server-resource-manager
            make-connection
-           (lambda (conn)
-             (custodian-shutdown-all (connection-custodian conn)))
+           (lambda (conn-demned)
+             (custodian-shutdown-all (connection-custodian conn-demned)))
            top-cust)))
 
   ;; new-connection: number i-port o-port custodian boolean -> connection
