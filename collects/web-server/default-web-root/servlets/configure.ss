@@ -258,12 +258,18 @@
         (make-configuration-table
          (string->nat (extract-binding/single 'port bindings))
          (string->nat (extract-binding/single 'waiting bindings))
-         (string->nat (extract-binding/single 'time-initial bindings))
+         (string->num (extract-binding/single 'time-initial bindings))
          (configuration-table-default-host old)
          (map (lambda (h pattern)
                 (cons pattern (cdr h)))
               (configuration-table-virtual-hosts old)
               (extract-bindings 'host-regexps bindings))))
+      
+      ; string->num : str -> nat
+      (define (string->num str)
+        (let ([n (string->number str)])
+          (or n
+              (error 'string->nat "~s is not a number" str))))
       
       ; string->nat : str -> nat
       (define (string->nat str)
@@ -594,8 +600,6 @@
              (file-root ,(paths-htdocs p))
              (servlet-root ,(paths-servlet p))
              (password-authentication ,(paths-passwords p))))))
-      
-      (define configuration-table-language "configuration-table-language.ss")
       
       ; extract-definition : sym (listof s-expr) -> s-expr
       ; to return the rhs from (def name rhs) not (def (name . args) body)

@@ -17,7 +17,7 @@
     (servlet ;servlet-loading
      authentication servlets-refreshed passwords-refreshed file-not-found protocol))
   
-  ; timeouts = (make-timeouts nat^6)
+  ; timeouts = (make-timeouts nat^5)
   (provide-define-struct timeouts (default-servlet password servlet-connection file-per-byte file-base))
   
   ; paths = (make-paths str^6)
