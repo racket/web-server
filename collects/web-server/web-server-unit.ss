@@ -51,23 +51,29 @@
           (let ([connection-cust (make-custodian)])
             (parameterize ([current-custodian connection-cust])
               (let-values ([(ip op) (get-ports)])
-                (serve-ports ip op)
-                (loop))))))
+                (thread
+                 (lambda ()
+                   (serve-connection
+                    (new-connection config:initial-connection-timeout
+                                    ip op (current-custodian) #f)))))
+              (loop)))))
 
       ;; serve-ports : input-port output-port -> void
       ;; returns immediately, spawning a thread to handle
       ;; the connection
       ;; NOTE: this doesn't use a connection manager since
       ;;       connection managers don't do anything anyways. -robby
+      ;; NOTE: (GregP) should allow the user to pass in a connection-custodian
       (define (serve-ports ip op)
-        (let ([the-server-custodian (make-custodian)])
-          (parameterize ([current-custodian the-server-custodian]
-                         [current-server-custodian the-server-custodian])
+        (let ([connection-cust (make-custodian)]
+              [server-cust (make-custodian)])
+          (parameterize ([current-custodian connection-cust]
+                         [current-server-custodian server-cust])
             (thread
              (lambda ()
                (serve-connection
                 (new-connection config:initial-connection-timeout
-                                ip op (current-custodian) #f)))))))
+                                ip op connection-cust #f)))))))
 
       ;; serve-connection: connection -> void
       ;; respond to all requests on this connection
@@ -420,35 +426,48 @@
                      [real-servlet-path (url-path->path
                                          (paths-servlet (host-paths host-info))
                                          (url-path->string (url-path uri)))]
-                     [servlet-program (cached-load real-servlet-path)]
                      [servlet-exit-handler (make-servlet-exit-handler inst)]
-                     [time-bomb (start-timer (timeouts-default-servlet
-                                              (host-timeouts host-info))
-                                             (lambda () (servlet-exit-handler #f)))])
+                     )
+
                 (parameterize ([current-directory (get-servlet-base-dir real-servlet-path)]
                                [current-custodian servlet-custodian]
                                [current-servlet-instance inst]
                                [exit-handler servlet-exit-handler])
-                  (with-handlers ([(lambda (x) #t)
-                                   (make-servlet-exception-handler inst host-info)])
 
-                    ;; The following bindings need to be in scope for the
-                    ;; invoke-unit/sig
-                    (let ([adjust-timeout!
-                           (lambda (secs) (reset-timer time-bomb secs))]
-                          [initial-request req])
 
-                      ;; Two possibilities:
-                      ;; - module servlet. start : Request -> Void handles
-                      ;;   output-response via send/finish, etc.
-                      ;; - unit/sig or simple xexpr servlet. These must produce a
-                      ;;   response, which is then output by the server.
-                      ;; Here, we do not know if the servlet was a module,
-                      ;; unit/sig, or Xexpr; we do know whether it produces a
-                      ;; response.
-                      (let ([r (invoke-unit/sig servlet-program servlet^)])
-                        (when (response? r)
-                          (send/back r))))))))
+                  (let (;; timer thread must be within the dynamic extent of
+                        ;; servlet custodian
+                        [time-bomb (start-timer (timeouts-default-servlet
+                                                 (host-timeouts host-info))
+                                                (lambda ()
+                                                  (servlet-exit-handler #f)))]
+                        ;; any resources (e.g. threads) created when the
+                        ;; servlet is loaded should be within the dynamic
+                        ;; extent of the servlet custodian
+                        [servlet-program (cached-load real-servlet-path)])
+
+                    (with-handlers ([(lambda (x) #t)
+                                     (make-servlet-exception-handler inst
+                                                                     host-info)])
+
+
+                      ;; The following bindings need to be in scope for the
+                      ;; invoke-unit/sig
+                      (let ([adjust-timeout!
+                             (lambda (secs) (reset-timer time-bomb secs))]
+                            [initial-request req])
+
+                        ;; Two possibilities:
+                        ;; - module servlet. start : Request -> Void handles
+                        ;;   output-response via send/finish, etc.
+                        ;; - unit/sig or simple xexpr servlet. These must produce a
+                        ;;   response, which is then output by the server.
+                        ;; Here, we do not know if the servlet was a module,
+                        ;; unit/sig, or Xexpr; we do know whether it produces a
+                        ;; response.
+                        (let ([r (invoke-unit/sig servlet-program servlet^)])
+                          (when (response? r)
+                            (send/back r)))))))))
             (semaphore-post sema))))
 
       ;; make-servlet-exit-handler: servlet-instance -> alpha -> void
@@ -603,7 +622,8 @@
                                [the-servlet (dynamic-require module-name 'servlet)])
                            ; more here - check constraints
                            the-servlet)]
-                        [else (raise (format "unknown sevlet version ~e" version))])))]
+                        [else
+                         (raise (format "unknown sevlet version ~e" version))])))]
                  ;; response
                  [(response? s)
                   (letrec ([go (lambda ()

@@ -123,6 +123,8 @@
   ;; output-headers: connection number string (listof (listof String))
   ;;                 number string -> void
   ;; Write the headers portion of a response to an output port.
+  ;; NOTE: According to RFC 2145 the server should write HTTP/1.1
+  ;;       header for *all* clients.
   (define (output-headers conn code message extras seconds mime)
     (let ([o-port (connection-o-port conn)])
       (for-each
