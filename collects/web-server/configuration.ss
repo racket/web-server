@@ -1,13 +1,5 @@
 ; configuration language example
 (module configuration mzscheme
-  (provide complete-configuration
-           ;build-path-unless-absolute
-           build-developer-configuration
-           default-configuration-table-path
-           load-configuration
-           load-developer-configuration
-	   update-configuration
-           )
   (require "configuration-structures.ss"
            "configuration-table-structs.ss"
            "servlet-sig.ss"
@@ -15,21 +7,34 @@
            "parse-table.ss"
            "dispatcher.ss"
            (lib "unitsig.ss")
+           (lib "contract.ss")
 	   (lib "url.ss" "net")
 	   (lib "date.ss"))
+
+  (provide complete-configuration
+           ;build-path-unless-absolute
+           build-developer-configuration
+           default-configuration-table-path
+	   update-configuration
+           )
+
+  (provide/contract
+   [load-configuration (path? . -> . unit/sig?)]
+   [load-developer-configuration (path? . -> . unit/sig?)])
+  
   
   (define default-configuration-table-path
     (build-path (collection-path "web-server") "configuration-table"))
   
-  ; get-configuration : str -> configuration-table
+  ; get-configuration : path -> configuration-table
   (define (get-configuration table-file-name)
     (parse-configuration-table (call-with-input-file table-file-name read)))
   
-  ; load-configuration : str -> configuration
+  ; load-configuration : path -> configuration
   (define (load-configuration table-file-name)
     (complete-configuration (directory-part table-file-name) (get-configuration table-file-name)))
   
-  ; load-developer-configuration : str -> configuration
+  ; load-developer-configuration : path -> configuration
   (define (load-developer-configuration table-file-name)
     (complete-developer-configuration (directory-part table-file-name) (get-configuration table-file-name)))
 
@@ -201,7 +206,10 @@
     (lambda (url)
       (error-response 404 "File not found" file-not-found-file)))
   
-  (define servlet? (prefix? "/servlets/"))
+  (define servlet?
+    (let ([servlets-regexp (regexp "^/servlets/.*")])
+      (lambda (str)
+        (regexp-match servlets-regexp str))))
   
   ; access-denied? : str sym str -> (U #f str)
   ; (define (access-denied? client-ip user-name password) ???)

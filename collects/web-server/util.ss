@@ -5,7 +5,6 @@
   
   (provide get-mime-type
            update-params 
-           prefix?
            provide-define-struct
            extract-flag
            hash-table-empty?)
@@ -13,102 +12,96 @@
   (provide/contract 
    [path->list  (path? . -> . (cons/p (union path? (symbols 'up 'same))
                                       (listof (union path? (symbols 'up 'same)))))]
-   [url-path->path ((union (symbols 'up 'same) string?) . -> . path?)]
+   [url-path->path ((union (symbols 'up 'same) path?) string? . -> . path?)]
    [directory-part (path? . -> . path?)])
-  
+
+  (define myprint printf)
+
   ; prefix? : str -> str -> bool
   ; more here - consider moving this to mzlib's string.ss
-  (define (prefix? prefix)
+  ;; Notes: (GregP)
+  ;; 1. What's the significance of char # 255 ???
+  ;; 2. 255 isn't an ascii character. ascii is 7-bit
+  ;; 3. OK fuck this. It is only used in three places, some of them
+  ;;    will involve bytes while the others may involve strings. So
+  ;;    I will just use regular expressions and get on with life.
+  (define (prefix?-old prefix)
+    (myprint "prefix? prefix = ~s~n" prefix)
     (let* ([len (string-length prefix)]
            [last (string-ref prefix (sub1 len))]
            [ascii (char->integer last)])
       (if (= 255 ascii)
-          ; something could be done about this - ab255 -> ac
-          ; and all 255's eliminates upper range check
+                                        ; something could be done about this - ab255 -> ac
+                                        ; and all 255's eliminates upper range check
           (error 'prefix? "prefix can't end in the largest character")
           (let ([next (string-append (substring prefix 0 (sub1 len))
                                      (string (integer->char (add1 ascii))))])
             (lambda (x)
               (and (string<=? prefix x) (string<? x next)))))))
+  
 
+
+  ;; get-mime-type: path -> bytes
+  ;; determine the mime type based on the filename's suffix
+  ;;
+  ;; Notes (GregP):
+  ;; 1. Can we determine the mime type based on file contents?
+  ;; 2. Assuming that 7-bit ASCII is correct for mime-type
+  (define get-mime-type
+    (let ([file-suffix-regexp (byte-regexp #".*\\.([^\\.]*$)")])
+      (lambda (path)
+        (let ([sffx (cadr (regexp-match file-suffix-regexp (path->bytes path)))])
+          (hash-table-get MIME-TYPE-TABLE
+                          (string->symbol (bytes->string/utf-8 sffx))
+                          (lambda () DEFAULT-MIME-TYPE))))))
+    
   
-  ; copy-port : iport oport -> Void
-  ;; (Greg P) copy-port seems to be implemented elseware in the PLT library
-  ;; (Greg P) This is dead code, testing with copy-port from thread.ss
-  ;; see if maybe the library version will do here
-  (define buffer-size 4096)
-  (define (copy-port from to)
-    (with-handlers ([void void])
-      ; display can raise an error if the tcp port is closed by the client
-      (let* ([buffer (make-string buffer-size)])
-        (let loop ()
-          (let ([l (read-string-avail! buffer from)])
-            (unless (eof-object? l)
-              (display (if (< l buffer-size)
-                           (substring buffer 0 l)
-                           buffer)
-                       to)
-              (loop)))))))    
-  
-  ; get-mime-type : String -> String
-  ; to find a mime type based on the filename's suffix
-  (define (get-mime-type path)
-    (let loop ([n (sub1 (string-length path))])
-      (cond
-        [(< n 0) DEFAULT-MIME-TYPE]
-        [(char=? (string-ref path n) #\.)
-         (hash-table-get MIME-TYPE-TABLE
-                         (string->symbol (substring path (+ n 1) (string-length path)))
-                         (lambda () DEFAULT-MIME-TYPE))]
-        [(char=? (string-ref path n) #\/) DEFAULT-MIME-TYPE]
-        [else (loop (sub1 n))])))
-  
-  (define DEFAULT-MIME-TYPE "text/plain")
+  (define DEFAULT-MIME-TYPE #"text/plain")
   
   (define MIME-TYPE-TABLE
     (let ([table (make-hash-table)])
       (for-each (lambda (x) (hash-table-put! table (car x) (cdr x)))
-                '((htm  . "text/html")
-                  (html . "text/html")
-                  (css  . "text/css")
-                  (txt  . "text/plain")
-                  (hqx  . "application/mac-binhex40")
-                  (doc  . "application/msword")
-                  (plt  . "application/octet-stream")
-                  (w02  . "application/octet-stream")
-                  (w03  . "application/octet-stream")
-                  (exe  . "application/octet-stream")
-                  (bin  . "application/octet-stream")
-                  (pdf  . "application/pdf")
-                  (ps   . "application/postscript")
-                  (rtf  . "application/rtf")
-                  (dvi  . "application/x-dvi")
-                  (tar  . "application/x-tar")
-                  (tex  . "application/x-tex")
-                  (zip  . "application/zip")
-                  (xls  . "application/msexcel")
-                  (ppt  . "application/powerpoint")
-                  (pot  . "application/powerpoint")
-                  (ppf  . "application/persuasion")
-                  (fm   . "application/filemaker")
-                  (pm6  . "application/pagemaker")
-                  (psd  . "application/x-photoshop")
-                  (pdd  . "application/x-photoshop")
-                  (ram  . "audio/x-pn-realaudio")
-                  (ra   . "audio/x-realaudio")
-                  (swf  . "application/x-shockwave-flash")
-                  (aif  . "audio/aiff")
-                  (au   . "audio/basic")
-                  (voc  . "audio/voice")
-                  (wav  . "audio/wave")
-                  (mov  . "video/quicktime")
-                  (mpg  . "video/mpeg")
-                  (png  . "image/png")
-                  (bmp  . "image/bmp")
-                  (gif  . "image/gif")
-                  (jpg  . "image/jpeg")
-                  (tif  . "image/tiff")
-                  (pic  . "image/x-pict")))
+                '((htm  . #"text/html")
+                  (html . #"text/html")
+                  (css  . #"text/css")
+                  (txt  . #"text/plain")
+                  (hqx  . #"application/mac-binhex40")
+                  (doc  . #"application/msword")
+                  (plt  . #"application/octet-stream")
+                  (w02  . #"application/octet-stream")
+                  (w03  . #"application/octet-stream")
+                  (exe  . #"application/octet-stream")
+                  (bin  . #"application/octet-stream")
+                  (pdf  . #"application/pdf")
+                  (ps   . #"application/postscript")
+                  (rtf  . #"application/rtf")
+                  (dvi  . #"application/x-dvi")
+                  (tar  . #"application/x-tar")
+                  (tex  . #"application/x-tex")
+                  (zip  . #"application/zip")
+                  (xls  . #"application/msexcel")
+                  (ppt  . #"application/powerpoint")
+                  (pot  . #"application/powerpoint")
+                  (ppf  . #"application/persuasion")
+                  (fm   . #"application/filemaker")
+                  (pm6  . #"application/pagemaker")
+                  (psd  . #"application/x-photoshop")
+                  (pdd  . #"application/x-photoshop")
+                  (ram  . #"audio/x-pn-realaudio")
+                  (ra   . #"audio/x-realaudio")
+                  (swf  . #"application/x-shockwave-flash")
+                  (aif  . #"audio/aiff")
+                  (au   . #"audio/basic")
+                  (voc  . #"audio/voice")
+                  (wav  . #"audio/wave")
+                  (mov  . #"video/quicktime")
+                  (mpg  . #"video/mpeg")
+                  (png  . #"image/png")
+                  (bmp  . #"image/bmp")
+                  (gif  . #"image/gif")
+                  (jpg  . #"image/jpeg")
+                  (tif  . #"image/tiff")
+                  (pic  . #"image/x-pict")))
       table))
   
   (define (directory-part path)
@@ -149,10 +142,6 @@
             [(string? base) (loop base new-acc)]
             [else ; conflate 'relative and #f
              new-acc])))))
-  
-  ; don't use this as it is wrong for the Macintosh
-  '(define (url-path->path base p)
-     (build-path base (substring p 1 (string-length p))))
   
   ; chop-string : Char String -> (listof String)
   (define (chop-string separator s)

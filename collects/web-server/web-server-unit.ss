@@ -19,7 +19,9 @@
            (lib "tcp-sig.ss" "net")
            (lib "url.ss" "net")
            )
-  (define DEFAULT-HOST-NAME "<none>")
+;  (define DEFAULT-HOST-NAME "<none>")
+
+  (define myprint printf)
   
   
   
@@ -38,6 +40,7 @@
       ; to start the server and return a thunk to shut it down
       ; If tcp-listen fails, the exception will be raised in the caller's thread.
       (define (serve)
+        (myprint "serve~n")
         (let ([server-custodian (make-custodian)])
           (parameterize ([current-custodian server-custodian])
             (let ([get-ports
@@ -55,20 +58,15 @@
       ; -------------------------------------------------------------------------------
       ; The Server Loop
       
-      (define METHOD:REGEXP
-        (regexp "^(GET|HEAD|POST|PUT|DELETE|TRACE) (.+) HTTP/([0-9]+)\\.([0-9]+)$"))
-      
-      (define (match-method x)
-        (regexp-match METHOD:REGEXP x))
-      ;:(define match-method (type: (str -> (union false (list str str str str str)))))
-      
       ; server-loop : custodian (-> iport oport) (-> void) -> void
       ; note - connection-lost is used by the development environment
       (define (server-loop top-custodian listener connection-lost)
+        (myprint "server-loop~n")
         (let exception-loop ()
           (with-handlers ([exn:i/o:tcp? (lambda (exn) (exception-loop))]
                           [void (lambda (exn)
                                   (fprintf (current-error-port) "server-loop exn: ~a" exn)
+                                  (raise exn)
                                   (exception-loop))])
             (let listener-loop ()
               (let ([connection-cust (make-custodian)])
@@ -88,7 +86,11 @@
                                                      (lambda (exn)
                                                        (connection-lost)
                                                        (kill-this-session))]
-                                                    [void (lambda (exn) (kill-this-session))])
+                                                    [exn?
+                                                     (lambda (exn)
+                                                       (raise exn)
+                                                       (kill-this-session)
+                                                       )])
                                       (serve-connection top-custodian ses)
                                       (kill-this-session))))
                           (shutdown))))))
@@ -98,21 +100,26 @@
       ; to respond to all the requests on an http connection
       ; (Currently only the first request is answered.)
       (define (serve-connection top-custodian ses)
+        (myprint "serve-connection~n")
         (let* ([conn (session-payload ses)]
                [ip (connection-i-port conn)])
           (let connection-loop ()
             (let-values ([(method uri-string major-version minor-version)
-                          (read-request-line ip (connection-o-port conn))])
+                          (read-request-line ip)])
+              (myprint "   after read-request-line~n")          
               (let* ([headers (read-headers ip)]
-                     [uri     (decode-some-url-parts (string->url uri-string))]
+                     [uri     (decode-some-url-parts
+                               (string->url
+                                (bytes->string/utf-8 uri-string)))]
                      [host    (get-host uri headers)]
                      [host-conf (config:virtual-hosts host)])
+                (myprint "   headers = ~s~n" headers)
                 ; more here - don't extract host-ip and client-ip twice (leakage)
                 (let-values ([(host-ip client-ip) (tcp-addresses ip)])
                   ((host-log-message host-conf) host-ip client-ip method uri host)
                   (let ([close (close-connection? headers
-                                                  (string->number major-version)
-                                                  (string->number minor-version)
+                                                  (string->number (bytes->string/utf-8 major-version))
+                                                  (string->number (bytes->string/utf-8 minor-version))
                                                   client-ip host-ip)])
                     (set-connection-close?! conn close)
                     (dispatch top-custodian method host-conf uri headers ses)
@@ -131,11 +138,13 @@
       ; dispatch : custodian Method Host URL x-table session -> Void
       ; to respond to an HTTP request
       (define (dispatch top-custodian method host-info uri headers ses)
+        (myprint "dispatch~n")
         (let ([path (url-path uri)]
               [conn (session-payload ses)])
           (cond
             [(access-denied? method uri headers host-info config:access)
              => (lambda (realm)
+                  (myprint "   access-denied?~n")
                   (renew-session! ses connection-queue (timeouts-password (host-timeouts host-info)))
                   (request-authentication conn method uri host-info realm))]
             
@@ -143,13 +152,16 @@
              => (lambda (a-resource)
                   (cond
                     [(static-resource? a-resource)
+                     (myprint "   static-resource~n")
                      (file-content-producer a-resource method uri headers ses host-info)]
                     [(dynamic-resource? a-resource)
+                     (myprint "   dynamic-resource~n")
                      (renew-session! ses connection-queue (timeouts-servlet-connection (host-timeouts host-info)))
                      ; more here - make timeout proportional to size of bindings
                      (servlet-content-producer a-resource top-custodian method uri headers conn host-info)]))]
             
             [(conf-prefix? path)
+             (myprint "   conf-prefix?~n")
              (cond
                [(string=? "/conf/refresh-servlets" path)
                 ; more here - this is broken - only out of date or specifically mentioned
@@ -163,10 +175,16 @@
                 (report-error conn method ((responders-passwords-refreshed (host-responders host-info))))]
                [else (report-error conn method (responders-file-not-found uri))])]
             
-            [else (report-error conn method (responders-file-not-found uri))])))
-      
-      
-      (define conf-prefix? (prefix? "/conf/"))
+            [else
+             (myprint "   else..~n")
+             (report-error conn method (responders-file-not-found uri))])))
+
+      ;; conf-prefix?: string -> (union (listof string) #f)
+      ;; does the path string have "/conf/" as a prefix?
+      (define conf-prefix?
+        (let ([conf-re (regexp "^/conf/.*")])
+          (lambda (str)
+            (regexp-match conf-re str))))
       
       ; --------------------------------------------------------------------------
       ; SERVING SERVLETS:
@@ -234,16 +252,17 @@
                 (cr '(lib "servlet-library-internal.ss" "web-server") y #f)
                 (cr x y z)))))
       
-      ;; load-servlet/path string -> (union #f signed-unit)
+      ;; load-servlet/path path -> (union #f signed-unit)
       ;; given a string path to a filename attempt to load a servlet
       ;; A servlet-file will contain either
       ;;;; A signed-unit-servlet
       ;;;; A module servlet
       ;;;;;; (two versions, 'v1 and I don't know what 'typed-model-split-store0 is)
       ;;;; A response
-      (define (load-servlet/path name)
-        (and (file-exists? name)
-             (let ([s (load/use-compiled name)])
+      (define (load-servlet/path a-path)
+        (myprint "load-servlet/path a-path = ~s~n" a-path)
+        (and (file-exists? a-path)
+             (let ([s (load/use-compiled a-path)])
                (cond
                  ;; signed-unit servlet
                  ; MF: I'd also like to test that s has the correct import signature.
@@ -253,7 +272,7 @@
                  [(void? s) 
                   (parameterize ([current-namespace (config:make-servlet-namespace)])
                     (eval `(current-module-name-resolver ,servlet-resolver))
-                    (let* ([module-name `(file ,name)]
+                    (let* ([module-name `(file ,(path->string a-path))]
                            [version (dynamic-require module-name 'interface-version)])
                       (case version
                         [(v1)
@@ -273,11 +292,11 @@
                  [(response? s)
                   (letrec ([go (lambda ()
                                  (begin
-                                   (set! go (lambda () (load/use-compiled name)))
+                                   (set! go (lambda () (load/use-compiled a-path)))
                                    s))])
                     (unit/sig () (import servlet^) (go)))]
                  [else
-                  (raise (format "Loading ~e produced ~n~e~n instead of a servlet." name s))]))))
+                  (raise (format "Loading ~e produced ~n~e~n instead of a servlet." a-path s))]))))
       
       
       
@@ -363,18 +382,25 @@
       ; serve-file : resource Method url session host -> void
       ; to find the file, including searching for implicit index files, and serve it otu
       (define (serve-file a-resource method uri ses host-info)
+        (myprint "serve-file~n")
         (let ([conn (session-payload ses)]
               [path (url-path->path (resource-base a-resource) (resource-path a-resource))])
           (cond
-            [(file-exists? path) (output-file method path ses host-info)]
+            [(file-exists? path)
+             (myprint "   file-exists?~n")
+             (output-file method path ses host-info)]
             [(directory-exists? path)
+             (myprint "   directory-exists?~n")
              (let loop ([dir-defaults (host-indices host-info)])
+               (myprint "   top of loop~n")
                (cond
                  [(pair? dir-defaults)
+                  (myprint "      pair?~n")
                   (let ([full-name (build-path path (car dir-defaults))])
                     (if (file-exists? full-name)
                         (cond
                           [(looks-like-directory? (url-path uri))
+                           (myprint "         looks-like-directory?~n")
                            (output-file method full-name ses host-info)]
                           [else
                            ; more here - look into serving the file _and_ providing a Location header or
@@ -393,6 +419,7 @@
       ; output-file : Method str session host -> void
       ; to serve out the file
       (define (output-file method path ses host-info)
+        (myprint "output-file~n")
 	(let ([conn (session-payload ses)])
           (let ([size (file-size path)]
                 [timeouts (host-timeouts host-info)])
@@ -414,10 +441,10 @@
       ; access-denied? : Method URL x-table host Access-table -> (+ false str)
       ; the return string is the prompt for authentication
       (define (access-denied? method uri headers host-info access-table)
-        
+        (myprint "access-denied?~n")
         ;; denied?: str sym str -> (U str #f)
         ;; a function to authenticate the user
-        (let ([denied? 
+        (let ([denied?
                
                ;; GregP lookup the authenticator function, if you can't find it, then try to load the
                ;; passwords file for this host.
@@ -429,6 +456,7 @@
                     (hash-table-put! access-table host-info f)
                     f)))])
           (let ([user-pass (extract-user-pass headers)])
+            (myprint "   extract-user-pass returned: user-pass = ~s~n" user-pass)
             (if user-pass
                 (denied? (url-path uri) (lowercase-symbol! (car user-pass)) (cdr user-pass))
                 (denied? (url-path uri) fake-user "")))))
@@ -441,6 +469,7 @@
       ; If the password file does not exist, all accesses are allowed.  If the file is malformed, an
       ; exn:password-file is raised.
       (define (read-passwords host-info)
+        (myprint "read-passwords~n")
         (let ([password-path (host-passwords host-info)])
           (with-handlers ([void (lambda (exn)
                                   (raise (make-exn:password-file (format "could not load password file ~a" password-path)
@@ -452,12 +481,17 @@
                            (raise "malformed passwords"))
                          (map (lambda (x) (make-pass-entry (car x) (regexp (cadr x)) (cddr x)))
                               raw))])
-                  ; str sym str -> (+ false str)
+                  
+                  ;; string symbol bytes -> (union #f string)
                   (lambda (request-path user-name password)
+                    (myprint "   &*&*&*&*request-path = ~s   password = ~s~n" request-path password)
                     (ormap (lambda (x)
                              (and (regexp-match (pass-entry-pattern x) request-path)
                                   (let ([name-pass (assq user-name (pass-entry-users x))])
-                                    (if (and name-pass (string=? (cadr name-pass) password))
+                                    (if (and name-pass
+                                             (string=?
+                                              (cadr name-pass)
+                                              (bytes->string/utf-8 password)))
                                         #f
                                         (pass-entry-domain x)))))
                            passwords)))
@@ -485,6 +519,7 @@
       ;; GregP: at first look, it seems that this gets called when the user
       ;; has supplied bad authentication credentials.
       (define (request-authentication conn method uri host-info realm)
+        (myprint "request-authentication~n")
         (report-error conn method
                       ((responders-authentication (host-responders host-info))
                        uri `(WWW-Authenticate . ,(string-append " Basic realm=\"" realm "\"")))))

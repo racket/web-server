@@ -21,7 +21,7 @@
 	      (error 'web-server "configuration file ~s not found" file-name)]
 	     [(not (memq 'read (file-or-directory-permissions file-name)))
 	      (error 'web-server "configuration file ~s is not readable" file-name)]
-	     [else (cons 'config file-name)]))
+	     [else (cons 'config (string->path file-name))]))
 	 ("Use an alternate configuration table" "file-name")]
 	[("-p" "--port")
 	 ,(lambda (flag port)

@@ -19,6 +19,8 @@
            temporarily
            see-other
            let*-bindings)
+
+  (define myprint printf)
   
   ; extract-binding/single : sym (listof (cons sym str)) -> str
   (define (extract-binding/single name bindings)
@@ -141,16 +143,32 @@
   (define (match-authentication x) (regexp-match AUTHENTICATION-REGEXP x))
   ;:(define match-authentication (type: (str -> (union false (list str str str)))))
 
-  ; extract-user-pass : (listof (cons sym str)) -> (U #f (cons str str))
+  ; extract-user-pass : (listof (cons sym bytes)) -> (U #f (cons str str))
+  ;; Notes (GregP)
+  ;; 1. This is Basic Authentication (RFC 1945 SECTION 11.1)
+  ;;    e.g. an authorization header will look like this:
+  ;;         Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==
+  ;; 2. Headers should be read as bytes and then translated to unicode as appropriate.
+  ;; 3. The Authorization header should have bytes (i.e. (cdr pass-pair) is bytes
   (define (extract-user-pass headers)
+    (myprint "extract-user-pass~n")
     (let ([pass-pair (assq 'authorization headers)])
       (and pass-pair
 	   (let ([basic-credentials (cdr pass-pair)])
 	     (cond
 	      [(and (basic? basic-credentials)
-		    (match-authentication (base64-decode (substring basic-credentials 6 (string-length basic-credentials)))))
+		    (match-authentication
+                     (base64-decode (subbytes basic-credentials 6 (bytes-length basic-credentials))))
+                     )
 	       => (lambda (user-pass)
 		    (cons (cadr user-pass) (caddr user-pass)))]
 	      [else #f])))))
 
-  (define basic? (prefix? "Basic ")))
+  ;; basic?: bytes -> (union (listof bytes) #f)
+  ;; does the second part of the authorization header start with #"Basic "
+  (define basic?
+    (let ([basic-regexp (byte-regexp #"^Basic .*")])
+      (lambda (some-bytes)
+        (regexp-match basic-regexp some-bytes))))
+
+  )
