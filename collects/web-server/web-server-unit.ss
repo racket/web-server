@@ -454,7 +454,6 @@
       ; output-file : Method str oport timer host bool -> void
       ; to serve out the file
       (define (output-file method path out timer host-info close)
-        (printf "web-server: about to output-file~n")
         (let ([size (file-size path)]
               [timeouts (host-timeouts host-info)])
           (reset-timer timer (+ (timeouts-file-base timeouts) (* size (timeouts-file-per-byte timeouts))))
