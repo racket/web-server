@@ -671,8 +671,10 @@
                             . ,(map (lambda (x) (list (symbol->string (car x)) ": " (cdr x)))
                                     (response/full-extras page))))
           ((response/full-body page)
-           (lambda (chunk)
-             (fprintf out "~x\r\n~a\r\n" (string-length chunk) chunk)))
+           (lambda chunks
+             (fprintf out "~x\r\n" (foldl (lambda (c acc) (+ (string-length c) acc)) 0 chunks))
+             (for-each (lambda (chunk) (display chunk out)) chunks)
+             (fprintf out "\r\n")))
           ; one \r\n ends the last (empty) chunk and the second \r\n ends the (non-existant) trailers
           (fprintf out "0\r\n\r\n")]
          [else 
