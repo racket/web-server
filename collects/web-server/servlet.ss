@@ -37,7 +37,7 @@
   ;; send/finish: response -> void
   ;; send a response and clear the continuation table
   (define (send/finish resp)
-    (clear-continuations!)
+    (clear-continuations! (current-servlet-instance))
     (send/back resp))
 
   ;; send/suspend: (url -> response) -> request
@@ -57,7 +57,7 @@
   ;; send/forward: (url -> response) -> request
   ;; clear the continuation table, then behave like send/suspend
   (define (send/forward response-generator)
-    (clear-continuations!)
+    (clear-continuations! (current-servlet-instance))
     (send/suspend response-generator))
 
   ;; send/suspend/callback : xexpr/callback? -> void
@@ -72,13 +72,6 @@
 
   ;; ************************************************************
   ;; HELPERS
-
-  ;; clear-continuations! -> void
-  ;; replace the k-table for the current servlet-instance
-  (define (clear-continuations!)
-    (set-servlet-instance-k-table!
-     (current-servlet-instance)
-     (make-hash-table)))
 
   ;; replace-procedures : xexpr/callbacks? (xexpr/callbacks? -> xexpr?) -> xexpr?
   ;; Change procedures to the send/suspend of a k-url
