@@ -20,7 +20,7 @@
            (lib "url.ss" "net")
            )
 
-  (define myprint printf)
+  ;(define myprint printf)
   
   (define web-server@
     (unit/sig web-server^
@@ -75,9 +75,9 @@
           (with-handlers ([exn:fail:network? (lambda (exn)
                                                (raise exn)
                                                (exception-loop))]
-;                          [void (lambda (exn)
-;                                  (fprintf (current-error-port) "server-loop exn: ~a" exn)
-;                                  (exception-loop))]
+                          [void (lambda (exn)
+                                  (fprintf (current-error-port) "server-loop exn: ~a" exn)
+                                  (exception-loop))]
                           )
             (let listener-loop ()
               (let ([connection-cust (make-custodian)])
@@ -95,7 +95,7 @@
                       (if ses
                           (thread (lambda ()
                                     (with-handlers (
-                                                    ;[exn:i/o:port:closed?
+;                                                    [exn:i/o:port:closed?
 ;                                                     (lambda (exn)
 ;                                                       (connection-lost)
 ;                                                       (kill-this-session))]
@@ -113,13 +113,11 @@
       ; to respond to all the requests on an http connection
       ; (Currently only the first request is answered.)
       (define (serve-connection top-custodian ses)
-        (myprint "serve-connection~n")
         (let* ([conn (session->resource ses)]
                [ip (connection-i-port conn)])
           (let connection-loop ()
             (let-values ([(method uri-string major-version minor-version)
                           (read-request-line ip)])
-              (myprint "   uri-string = ~a" uri-string)
               (let* ([headers (read-headers ip)]
                      [uri     (string->url
                                (bytes->string/utf-8 uri-string))]
