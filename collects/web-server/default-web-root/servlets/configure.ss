@@ -11,11 +11,14 @@
            (lib "url.ss" "net")
            (lib "etc.ss")
            (lib "pretty.ss")
+           (lib "file.ss")
            (rename (lib "host-configuration-table-language.ss" "web-server") build-path-maybe build-path-maybe))
   
   (define servlet
     (unit/sig ()
       (import servlet^)
+      
+      (define CONFIGURE-SERVLET-NAME "configure.ss")
       
       (adjust-timeout! (* 12 60 60))
       (error-print-width 800) ; 10-ish lines
@@ -39,13 +42,18 @@
       ; user-pass = (make-user-pass sym str)
       (define-struct user-pass (user pass))
       
+      ; configuration-path : str
+      (define configuration-path (build-path (collection-path "web-server") "configuration-table.ss"))
+      
+      (define doc-dir "Defaults/documentation")
+      
       ; build-footer : str -> html
       (define (build-footer base)
         (let ([scale (lambda (n) (number->string (round (/ n 4))))])
           `(p "Powered by "
               (a ([href "http://www.plt-scheme.org/"])
                  (img ([width ,(scale 211)] [height ,(scale 76)]
-                       [src ,(string-append base "documentation/plt-logo.gif")]))))))
+                       [src ,(string-append base doc-dir "/plt-logo.gif")]))))))
       
       (define footer (build-footer "/"))
       
@@ -56,6 +64,13 @@
                      (p "You must connect to the configuration tool from the machine the server runs on.")
                      ,footer)))
       
+      (define permission-error-page
+        `(html (head (title "Web Server Configuration Permissions Error"))
+               (body ([bgcolor "white"])
+                     (p "You must have read and write access to "
+                        (code ,configuration-path)
+                        " in order to configure the server."))))
+      
       ; check-ip-address : request -> request
       (define (check-ip-address request)
         (unless (string=? "127.0.0.1" (request-host-ip request))
@@ -64,9 +79,15 @@
       
       (check-ip-address initial-request)
       
+      (let ([perms (file-or-directory-permissions configuration-path)])
+        (unless (and (memq 'write perms) (memq 'read perms))
+          ; race condition - changing the permissions after this check
+          ; will result in an exception later (which serves them right)
+          (send/finish permission-error-page)))
+      
       ; more here - abstract with static pages?
       (define web-server-icon
-        `(img ([src "/documentation/web-server.gif"]
+        `(img ([src ,(string-append "/" doc-dir "/web-server.gif")]
                ;[width "123"] [height "115"]
                [width "61"] [height "57"])))
       
@@ -178,13 +199,21 @@
                                                      (paths-passwords paths)))))
           new))
       
+      (define restart-message
+        `((h3 (font ([color "red"]) "Restart the Web server to use the new settings."))
+          "You may need to choose a different port or wait a while before restarting."))
+      
       ; request-new-top-configuration : top-configuration -> str -> html
       (define (request-new-top-configuration old)
         (build-suspender
          '("PLT Web Server Configuration")
          `((h1 "PLT Web Server Configuration Management")
            ,web-server-icon
-           "copyright 2001 by Paul Graunke and the PLT" (br)
+           "copyright 2001 by Paul Graunke and PLT"
+           (hr)
+           (table ([width "90%"])
+            (tr (td ,@restart-message)
+                (td ([align "right"]) (input ([type "submit"] [name "configure"] [value "Update Configuration"])))))    
            (hr)
            (h2 "Basic Configuration")
            (table
@@ -198,11 +227,11 @@
            (hr)
            (h2 "Host Name Configuration")
            (p "The Web server accepts requests on behalf of multiple " (em "hosts")
-              "each corresponding to a domain name such as " (code "www.plt-scheme.org")
+              " each corresponding to a domain name."
               " The table below maps domain names to host specific configurations.")
-           (table 
+           (table ([width "50%"])
             ;(tr (th ([colspan "2"]) "Host Configuration"))
-            (tr (th "Name pattern") ;(th "Host configuration path")
+            (tr (th ([align "left"]) "Name") ;(th "Host configuration path")
                 (th "Delete")
                 (th "Edit"))
             (tr (td ,"Default Host")
@@ -220,12 +249,12 @@
             (tr (td (input ([type "submit"] [name "add-host"] [value "Add Host"])))
                 (td nbsp); (input ([type "submit"] [name "configure"] [value "Delete"]))
                 (td (input ([type "submit"] [name "edit-host-details"] [value "Edit"])))))
-           (input ([type "submit"] [name "configure"] [value "Update Configuration"]))
+           (hr)
            ,footer)))
       
       ; make-table-row : xexpr sym str [xexpr ...] -> xexpr
       (define (make-table-row label tag default-text . extra-tds)
-        `(tr (td (a ([href ,(format "/documentation/terms/~a.html" tag)]) ,label))
+        `(tr (td (a ([href ,(format "/~a/terms/~a.html" doc-dir tag)]) ,label))
              (td ,(make-field "text" tag (format "~a" default-text)))
              . ,extra-tds))
       
@@ -259,6 +288,8 @@
           (build-suspender
            '("Configure Host")
            `((h1 "PLT Web Server Host configuration")
+             (input ([type "submit"] [value "Save Configuration"]))
+             (hr)
              (table (tr (th ([colspan "2"]) "Timeout Seconds") (th nbsp))
                     ,(make-3columns "Default Servlet" 'time-default-servlet (timeouts-default-servlet timeouts))
                     ,(make-3columns "Password" 'time-password (timeouts-password timeouts))
@@ -295,6 +326,7 @@
                                    'path-not-found-message (paths-not-found-message paths))
                     ,(make-dir-row "Protocol error" "Message root"
                                    'path-protocol-message (paths-protocol-message paths)))
+             (hr)
              (input ([type "submit"] [value "Save Configuration"]))
              ,footer))))
       
@@ -335,7 +367,7 @@
                   (write-to-file which-one (format-passwords new-passwords))
                   (edit-passwords which-one new-passwords))])
           (cond
-            [(and (assq 'edit-realm bindings) (assq 'edit bindings))
+            [(assq 'edit bindings)
              => (lambda (edit)
                   (again (drop (map (let ([to-edit (string->number (cdr edit))])
                                       (lambda (r n)
@@ -345,10 +377,10 @@
                                     passwords
                                     (build-list (length passwords) (lambda (x) x)))
                                to-deactivate)))]
-            [(assq 'add-realm bindings)
+            [(assq 'add bindings)
              (again (cons (make-realm "new realm" "" null)
                           (drop passwords to-deactivate)))]
-            [else (write-to-file which-one (format-passwords (drop passwords to-deactivate)))])))
+            [else (drop passwords to-deactivate)])))
       
       ; password-updates : str passwords -> request
       (define (password-updates which-one passwords)
@@ -357,7 +389,7 @@
          `((h1 "Updating Passwords for ")
            (h3 ,which-one)
            (h2 "You may wish to " (font ([color "red"]) "backup") " this password file.")
-           (p "Each authentication " (em "realm") " password protects URLs that match a pattern. "
+           (p "Each authentication " (em "realm") " password protects URLs that match a pattern."
               "Choose a realm to edit below:")
            (table
             (tr (th "Realm Name") (th "Delete") (th "Edit"))
@@ -367,9 +399,8 @@
                            (td ,(make-field "radio" 'edit n))))
                     passwords
                     (build-list (length passwords) number->string)))
-           ,(make-field "submit" 'add-realm "Add Realm")
-           ,(make-field "submit" 'update-realm "Update")
-           ,(make-field "submit" 'edit-realm "Edit")
+           ,(make-field "submit" 'submit "Add Realm")
+           ,(make-field "submit" 'submit "Edit")
            ,footer)))
       
       ; edit-realm : realm -> realm
@@ -476,9 +507,6 @@
       
       ; io
       
-      ; configuration-path : str
-      (define configuration-path (build-path (collection-path "web-server") "configuration-table.ss"))
-      
       ; read-configuration : -> top-configuration
       ; This assumes that the module is well-formed once it sees the module is written in the right language.
       (define (read-configuration)
@@ -489,18 +517,19 @@
             (error 'read-configuration
                    "The top level configuration file is not a module in the configuration-table-language"))
           (let ([body (cdddr configuration)])
-            (make-top-configuration (extract-definition 'port body)
-                                    (extract-definition 'max-waiting body)
-                                    (extract-definition 'initial-connection-timeout body)
-                                    (parse-host-configuration (extract-definition 'default-host-table body))
-                                    (map (lambda (x)
-                                           (unless (and (pair? x) (eq? 'cons (car x))
-                                                        (pair? (cdr x)) (string? (cadr x)))
-                                             (error 'read-configuration "expected `(cons ,str ,host-configuration-syntax) received ~s" x))
-                                           (cons (cadr x)
-                                                 (parse-host-configuration (caddr x))))
-                                         ; skip the symbol 'list
-                                         (cdr (extract-definition 'virtual-host-table body)))))))
+            (make-top-configuration
+             (extract-definition 'port body)
+             (extract-definition 'max-waiting body)
+             (extract-definition 'initial-connection-timeout body)
+             (parse-host-configuration (extract-definition 'default-host-table body))
+             (map (lambda (x)
+                    (unless (and (pair? x) (eq? 'cons (car x))
+                                 (pair? (cdr x)) (string? (cadr x)))
+                      (error 'read-configuration "expected `(cons ,str ,host-configuration-syntax) received ~s" x))
+                    (cons (cadr x)
+                          (parse-host-configuration (caddr x))))
+                  ; skip the symbol 'list
+                  (cdr (extract-definition 'virtual-host-table body)))))))
       
       ; parse-host-configuartion : s-expr -> host-configuration
       ; more here - better error checking
@@ -553,7 +582,10 @@
              (null? (cdddr x))))
       
       ; write-configuration : top-configuration -> void
+      ; writes out the new configuration file and
+      ; also copies the configure.ss servlet to the default-host's servlet directory
       (define (write-configuration new)
+        (ensure-configuration-servlet (top-configuration-default-host new))
         (let ([new-module
                `(module configuration-table
                   ,configuration-table-language
@@ -576,6 +608,49 @@
                                         `(cons ,(car h) ,(format-host (cdr h))))
                                       (top-configuration-hosts new)))))])
           (write-to-file configuration-path new-module)))
+      
+      ; ensure-configuration-servlet : host-configuration -> void
+      (define (ensure-configuration-servlet host)
+        (let* ([paths (host-configuration-paths host)]
+               [root (build-path-maybe (collection-path "web-server")
+                                       (paths-host-root paths))]
+               [servlets-path
+                (build-path (build-path-maybe root (paths-servlet paths)) "servlets")])
+          (ensure-file (collection-path "web-server" "default-web-root" "servlets")
+                       servlets-path CONFIGURE-SERVLET-NAME)
+          (let ([defaults "Defaults"])
+            (ensure* (collection-path "web-server" "default-web-root" "htdocs")
+                     (build-path (build-path-maybe root (paths-htdocs paths)))
+                     defaults))))
+      
+      ; ensure-file : str str str -> void
+      ; to copy (build-path from name) to (build-path to name), creating directories as
+      ; needed if the latter does not already exist.  
+      (define (ensure-file from to name)
+        (let ([to (simplify-path to)])
+          (ensure-directory-shallow to)
+          (let ([to-path (build-path to name)])
+            (unless (file-exists? to-path)
+              (copy-file (build-path from name) to-path)))))
+      
+      ; ensure* : str str str -> void
+      (define (ensure* from to name)
+        (ensure-directory-shallow to)
+        (let ([p (build-path from name)])
+          (cond
+            [(directory-exists? p)
+             (let ([dest (build-path to name)])
+               (ensure-directory-shallow dest)
+               (for-each (lambda (x) (ensure* p dest x))
+                         (directory-list p)))]
+            [(file-exists? p)
+             (ensure-file from to name)])))
+      
+      ; ensure-directory-shallow : str -> void
+      (define (ensure-directory-shallow to)
+        (unless (directory-exists? to)
+          ; race condition - someone else could make the directory
+          (make-directory* to)))
       
       ; format-host : host-configuration
       (define (format-host host)

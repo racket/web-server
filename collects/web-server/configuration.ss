@@ -56,7 +56,7 @@
               (if (exn? exn) (exn-message exn) exn))
       (error-response 500 "Servlet error" servlet-error-file)))
   
-  ; gen-servlets-refreshed : str -> -> response
+  ; gen-servlets-refreshed : str -> -> responseapply-default-functions-to-host-table
   (define (gen-servlets-refreshed servlet-refresh-file)
     (lambda ()
       (error-response 200 "Servlet cache refreshed" servlet-refresh-file)))
