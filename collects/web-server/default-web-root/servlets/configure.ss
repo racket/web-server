@@ -34,7 +34,7 @@
       (define-struct user-pass (user pass))
       
       ; configuration-path : str
-      (define configuration-path (build-path (collection-path "web-server") "configuration-table.ss"))
+      (define configuration-path (build-path (collection-path "web-server") "configuration-table"))
       
       (define doc-dir "Defaults/documentation")
       
@@ -338,13 +338,17 @@
       
       ; update-host-table : host-table (listof (cons sym str)) -> host-table
       (define (update-host-table old bindings)
-        (make-host-table
-         (apply make-timeouts
-                (map (lambda (tag) (string->number (extract-binding/single tag bindings)))
-                     '(time-default-servlet time-password time-servlet-connection time-file-per-byte time-file-base)))
-         (apply make-paths
-                (map (lambda (tag) (extract-binding/single tag bindings))
-                     '(path-host-root path-log path-htdocs path-servlet path-password path-message-root path-servlet-message path-access-message path-servlet-refresh-message path-password-refresh-message path-not-found-message path-protocol-message)))))
+        (let ([eb (lambda (tag) (extract-binding/single tag bindings))])
+          (make-host-table
+           (host-table-indices old)
+           (host-table-log-format old)
+           (apply make-messages
+                  (map eb '(path-servlet-message path-access-message path-servlet-refresh-message path-password-refresh-message path-not-found-message path-protocol-message)))
+           (apply make-timeouts
+                  (map (lambda (tag) (string->number (extract-binding/single tag bindings)))
+                       '(time-default-servlet time-password time-servlet-connection time-file-per-byte time-file-base)))
+           (apply make-paths
+                  (map eb '(path-message-root path-host-root path-log path-htdocs path-servlet path-password))))))
       
       ; Password Configuration
       
@@ -387,7 +391,7 @@
          `((h1 "Updating Passwords for ")
            (h3 ,which-one)
            (h2 "You may wish to " (font ([color "red"]) "backup") " this password file.")
-           (p "Each authentication " (em "realm") " password protects URLs that match a pattern."
+           (p "Each authentication " (em "realm") " password protects URLs that match a pattern. "
               "Choose a realm to edit below:")
            (table
             (tr (th "Realm Name") (th "Delete") (th "Edit"))
