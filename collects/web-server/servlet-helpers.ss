@@ -11,6 +11,7 @@
 	   extract-user-pass
 	   build-suspender
 	   make-html-response/incremental
+           report-errors-to-browser
            ;anchor-case
 	   redirect-to
            permanently
@@ -77,6 +78,20 @@
      200 "Okay" (current-seconds) "text/html" '()
      chunk-maker))
   
+  ; : (response -> doesn't) -> void
+  ; to report exceptions that occur later to the browser
+  ; this must be called at the begining of a servlet
+  (define (report-errors-to-browser send/finish-or-back)
+    (current-exception-handler
+     (lambda (exn)
+       (send/finish-or-back
+        `(html (head (title "Servlet Error"))
+               (body ([bgcolor "white"])
+                     (p "The following error occured: "
+                        ,(if (exn? exn)
+                             (exn-message exn)
+                             (format "~e" exn)))))))))
+    
   (define-syntax anchor-case
     (lambda (stx)
       (syntax-case stx ()
