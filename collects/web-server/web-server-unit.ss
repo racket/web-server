@@ -89,7 +89,7 @@
 	(let connection-loop ()
 	  (let-values ([(method uri-string major-version minor-version) (read-request ip op)])
 	    (let* ([headers (read-headers ip)]
-		   [uri     (string->url uri-string)]
+		   [uri     (decode-some-url-parts (string->url uri-string))]
 		   [host    (get-host uri headers)]
 		   [host-conf (config:virtual-hosts host)])
 	      ; more here - don't extract host-ip and client-ip twice (leakage)
