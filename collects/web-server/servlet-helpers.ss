@@ -4,6 +4,7 @@
 	   "util.ss"
            (lib "servlet-sig.ss" "web-server")
            (lib "xml.ss" "xml")
+           (lib "errortrace-lib.ss" "errortrace")
 	   (lib "base64.ss" "net"))
   
   (provide extract-binding/single
@@ -18,6 +19,7 @@
            permanently
            temporarily
            see-other
+           exn->string
            let*-bindings)
 
   ; extract-binding/single : sym (listof (cons sym str)) -> str
@@ -90,9 +92,18 @@
         `(html (head (title "Servlet Error"))
                (body ([bgcolor "white"])
                      (p "The following error occured: "
-                        ,(if (exn? exn)
-                             (exn-message exn)
-                             (format "~e" exn)))))))))
+                        (pre ,(exn->string exn)))))))))
+  
+  ;; exn->string : (union exn any) -> string
+  ;; builds an error message, including errortrace annotations (if present)
+  (define (exn->string exn)
+    (if (exn? exn)
+        (let ([op (open-output-string)])
+          (display (exn-message exn) op)
+          (newline op)
+          (print-error-trace op exn)
+          (get-output-string op))
+        (format "~s\n" exn)))
   
   (define-syntax let*-bindings
     (lambda (stx)

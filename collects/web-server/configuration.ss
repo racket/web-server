@@ -6,6 +6,7 @@
            "util.ss"
            "parse-table.ss"
            "dispatcher.ss"
+           "servlet-helpers.ss"
            (lib "unitsig.ss")
            (lib "contract.ss")
 	   (lib "url.ss" "net")
@@ -163,10 +164,8 @@
                         TEXT/HTML-MIME-TYPE
                         null ; check
                         (list "Servlet didn't load.\n"
-                              (if (exn? exn)
-                                  (exn-message exn)
-                                  (format "~s~n" exn)))))
-  
+                              (exn->string exn))))
+ 
   ; gen-servlet-not-found : str -> url -> response
   (define (gen-servlet-not-found file-not-found-file)
     (lambda (url)
@@ -176,8 +175,7 @@
   (define (gen-servlet-responder servlet-error-file)
     (lambda (url exn)
       ; more here - use separate log file
-      (printf "Servlet exception: ~s~n"
-              (if (exn? exn) (exn-message exn) exn))
+      (printf "Servlet exception:\n~s\n" (exn->string exn))
       (error-response 500 "Servlet error" servlet-error-file)))
   
   ; gen-servlets-refreshed : str -> -> response

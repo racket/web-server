@@ -648,9 +648,7 @@
         `(html (head (title "Error"))
                (body ([bgcolor "white"])
                      (p "Servlet exception: "
-                        ,(if (exn? exn)
-                             (exn-message exn)
-                             (format "~s" exn)))
+                        (pre ,(exn->string exn)))
                      ,footer)))
       
       (define must-select-host-page
