@@ -101,7 +101,11 @@
 	new-namespace)))
 
   ; : (listof (cons sym TST)) -> configuration
-  ; more here - this is ugly
+  ; more here - this is ugly.  It also does not catch "unbound identifiers" since I use symbols.
+  ; I considered several other solutions:
+  ; - write the compound unit multiple times (no abstraction)
+  ; - use opt-lambda and pass in 'please-use-the-default for unchanged flags
+  ; - write three different functional updaters and re-compound the unit 1--3 times
   (define (update-configuration configuration flags)
     (compound-unit/sig
      (import)

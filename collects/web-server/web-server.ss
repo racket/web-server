@@ -4,7 +4,31 @@
            "sig.ss"
            "web-server-unit.ss"
 	   "configuration.ss")
+  (provide serve)
   
-  '(provide-signature-elements web-server^)
+  ; : configuration [nat] [(U str #f)] -> -> void
+  (define serve
+    (case-lambda
+      [(config)
+       (run-the-server config)]
+      [(config port)
+       (run-the-server (update-configuration config `((port . ,port))))]
+      [(config port listen-ip)
+       (run-the-server (update-configuration config `((port . ,port) (ip-address . ,listen-ip))))]))
   
-  '(define-values/invoke-unit/sig web-server^ web-server@ #f net:tcp^))
+  ; : configuration -> -> void
+  (define (run-the-server config)
+    (invoke-unit/sig
+     (compound-unit/sig
+       (import (t : net:tcp^))
+       (link
+        [c : web-config^ (config)]
+        [s : web-server^ (web-server@ t c)]
+        [m : () ((unit/sig ()
+                   (import web-server^)
+                   (serve))
+                 s)])
+       (export))
+     net:tcp^))
+
+)

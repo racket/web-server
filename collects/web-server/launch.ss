@@ -32,7 +32,7 @@
 	 ("Use an alternate network port." "port")]
 	[("-a" "--ip-address")
 	 ,(lambda (flag ip-address)
-					; note the double backslash I initially left out.  That's a good reason to use Olin's regexps.
+            ; note the double backslash I initially left out.  That's a good reason to use Olin's regexps.
 	    (let ([addr (pregexp-split "\\." ip-address)])
 	      (if (and (= 4 (length addr))
 		       (andmap (lambda (s)
