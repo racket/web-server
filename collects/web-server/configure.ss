@@ -269,8 +269,9 @@
             (let* ([paths (host-table-paths new)]
                    [password-path
                     ;; build-path-unless-absolute is defined in configuration.ss
-                    (build-path-unless-absolute (build-path-unless-absolute web-base (paths-host-base paths))
-                                      (paths-passwords paths))])
+                    (build-path-unless-absolute
+                     (build-path-unless-absolute web-base (paths-host-base paths))
+                     (paths-passwords paths))])
               (unless (file-exists? password-path)
                 (write-to-file password-path ''()))
               (configure-passwords password-path)))

@@ -13,7 +13,6 @@
            (lib "date.ss"))
 
   (provide complete-configuration
-           ;build-path-unless-absolute
            build-developer-configuration
            default-configuration-table-path
            update-configuration
@@ -281,10 +280,5 @@
                  expanded-virtual-host-table)
           default-host)))
 
-  ;; build-path-unless-absolute : str str -> str
-  (define (build-path-unless-absolute base path)
-    (if (absolute-path? path)
-        path
-        (build-path base path)))
 
   )
