@@ -109,9 +109,10 @@
                       (configure-top-level configuration-path)
                       (send/finish (permission-error-page configuration-path))))
                 (begin (send/suspend (copy-configuration-file configuration-path))
-                       (let-values ([(base name must-be-dir) (split-path configuration-path)])
-                         (ensure-directory-shallow base))
-                       (copy-file default-configuration-path configuration-path)
+                       (with-handlers ([exn:i/o:filesystem? send-exn])
+                         (let-values ([(base name must-be-dir) (split-path configuration-path)])
+                           (ensure-directory-shallow base))
+                         (copy-file default-configuration-path configuration-path))
                        (loop))))))
       
       ; copy-configuration-file : str -> html
@@ -149,8 +150,7 @@
       
       ; configure-top-level : str -> doesn't
       (define (configure-top-level configuration-path)
-        (with-handlers (;[void (lambda (exn) (send/back (exception-error-page exn)))]
-                        )
+        (with-handlers ([exn:i/o:filesystem? send-exn])
           (let loop ([configuration (read-configuration configuration-path)])
             (let* ([update-bindings (interact (request-new-configuration-table configuration))]
                    [form-configuration
@@ -175,6 +175,10 @@
                       [else form-configuration])])
               (write-configuration new-configuration configuration-path)
               (loop new-configuration)))))
+      
+      ; send-exn : tst -> doesn't
+      (define (send-exn exn)
+        (send/back (exception-error-page exn)))
       
       ; reverse-assoc : a (listof (cons b a)) -> (U #f (cons b a))
       (define (reverse-assoc x lst)
@@ -282,9 +286,9 @@
            (table
             ,(make-tr-num "Port" 'port (configuration-table-port old))
             ,(make-tr-num "Maximum Waiting Connections"
-                               'waiting (configuration-table-max-waiting old))
+                          'waiting (configuration-table-max-waiting old))
             ,(make-tr-num "Initial Connection Timeout (seconds)" 'time-initial
-                               (configuration-table-initial-connection-timeout old)))
+                          (configuration-table-initial-connection-timeout old)))
            (hr)
            (h2 "Host Name Configuration")
            (p "The Web server accepts requests on behalf of multiple " (em "hosts")
@@ -400,29 +404,29 @@
              (table 
               (tr (th ([colspan "2"]) "Paths"))
               ,(make-tr-str "Log file" 
-                             'path-log (build-path-maybe host-root (paths-log paths)))
+                            'path-log (build-path-maybe host-root (paths-log paths)))
               ,(make-tr-str "Web document root" 
-                             'path-htdocs (build-path-maybe host-root (paths-htdocs paths)))
+                            'path-htdocs (build-path-maybe host-root (paths-htdocs paths)))
               ,(make-tr-str "Servlet root" 
-                             'path-servlet (build-path-maybe host-root (paths-servlet paths)))
+                            'path-servlet (build-path-maybe host-root (paths-servlet paths)))
               ,(make-tr-str "Password File"
-                             'path-password (build-path-maybe host-root (paths-passwords paths)))
+                            'path-password (build-path-maybe host-root (paths-passwords paths)))
               (tr (td ([colspan "2"])
                       ,(make-field "submit" 'edit-passwords "Edit Passwords")))
               (tr (td ([colspan "2"]) (hr)))
               (tr (th ([colspan "2"]) "Message Paths"))
               ,(make-tr-str "Servlet error" 'path-servlet-message
-                             (build-path-maybe conf (messages-servlet m)))
+                            (build-path-maybe conf (messages-servlet m)))
               ,(make-tr-str "Access Denied" 'path-access-message
-                             (build-path-maybe conf (messages-authentication m)))
+                            (build-path-maybe conf (messages-authentication m)))
               ,(make-tr-str "Servlet cache refreshed" 'path-servlet-refresh-message
-                             (build-path-maybe conf (messages-servlets-refreshed m)))
+                            (build-path-maybe conf (messages-servlets-refreshed m)))
               ,(make-tr-str "Password cache refreshed" 'path-password-refresh-message
-                             (build-path-maybe conf (messages-passwords-refreshed m)))
+                            (build-path-maybe conf (messages-passwords-refreshed m)))
               ,(make-tr-str "File not found" 'path-not-found-message
-                             (build-path-maybe conf (messages-file-not-found m)))
+                            (build-path-maybe conf (messages-file-not-found m)))
               ,(make-tr-str "Protocol error" 'path-protocol-message
-                             (build-path-maybe conf (messages-protocol m)))
+                            (build-path-maybe conf (messages-protocol m)))
               (tr (td ([colspan "2"]) (hr)))
               (tr (th ([colspan "2"]) "Timeout Seconds"))
               ,(make-tr-num "Default Servlet" 'time-default-servlet (timeouts-default-servlet timeouts))
