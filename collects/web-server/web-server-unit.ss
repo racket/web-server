@@ -1,9 +1,8 @@
 (module web-server-unit mzscheme
   (require "sig.ss"
            "connection-manager.ss"
-           "request-parsing.ss"
+           (all-except "request-parsing.ss" request-bindings)
            "configuration-structures.ss"
-           (all-except "servlet-helpers.ss" request-bindings)
            "util.ss"
            "response.ss"
            "servlet-tables.ss"
