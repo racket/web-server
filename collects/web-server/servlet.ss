@@ -7,11 +7,14 @@
            "servlet-helpers.ss"
            "xexpr-callback.ss")
 
+  ;; Weak contracts: the input is checked in output-response, and a message is
+  ;; sent directly to the client (Web browser) instead of the terminal/log.
   (provide/contract
-    (send/back (response? . -> . any))
-    (send/finish (response? . -> . any))
-    (send/suspend ((string? . -> . response?) . -> . request?))
-    (send/forward ((string? . -> . response?) . -> . request?))
+    (send/back (any? . -> . any))
+    (send/finish (any? . -> . any))
+    (send/suspend ((string? . -> . any?) . -> . request?))
+    (send/forward ((string? . -> . any?) . -> . request?))
+    ;;; validate-xexpr/callback is not checked anywhere:
     (send/suspend/callback (xexpr/callback? . -> . any))
     )
 

@@ -1,8 +1,10 @@
 (module response mzscheme
-  (require (lib "xml.ss" "xml")
-           (lib "list.ss")
+  (require (lib "list.ss")
            (lib "contract.ss")
            (lib "port.ss")
+           (lib "pretty.ss")
+           (lib "xml.ss" "xml")
+           (lib "13.ss" "srfi")
            "connection-manager.ss")
 
   ;; **************************************************
@@ -45,6 +47,8 @@
         (and (pair? x) (xexpr? x))))
 
 
+  ;; Weak contracts for output-response because the response? is checked inside
+  ;; output-response, handled, etc.
   (provide/contract
    [struct (response/full response/basic)
            ([code number?]
@@ -54,7 +58,6 @@
                   [extras (listof (cons/p symbol? string?))]
                   [body (listof (union string?
                                        bytes?))])]
-
    [struct (response/incremental response/basic)
            ([code number?]
             [message string?]
@@ -65,7 +68,7 @@
                         . any)]
             )]
    [response? (any? . -> . boolean?)]
-   [output-response (connection? response? . -> . any)]
+   [output-response (connection? any? . -> . any)]
    [output-response/method (connection? response? symbol? . -> . any)]
    [output-file (connection? path? symbol? bytes? . -> . any)]
    [TEXT/HTML-MIME-TYPE bytes?]
@@ -197,9 +200,15 @@
      [else
       ;; TODO: make a real exception for this.
       (with-handlers
-          ([exn? (lambda (exn)
+          ([exn:invalid-xexpr?
+            (lambda (exn)
+              (output-response/method
+                conn
+                (xexpr-exn->response exn resp)
+                'ignored))]
+           [exn? (lambda (exn)
                    (raise exn))])
-        (let ([str (xexpr->string resp)])
+        (let ([str (and (validate-xexpr resp) (xexpr->string resp))])
           (output-response/basic
            conn
            (make-response/basic 200
@@ -300,4 +309,47 @@
       (lambda (xtra)
         (list (symbol->string (car xtra)) ": " (cdr xtra)))
       (response/basic-extras r/bas)))
+
+  ;; Turn an exn:invalid-xexpr into a response.
+  (define (xexpr-exn->response exn x)
+    ;;; Does it matter what number I use for pretty-print-size-hook?
+    (pretty-print-size-hook (lambda (v display? op) 20))
+    (pretty-print-print-hook (pretty-print-hook/web-errors
+                               (exn:invalid-xexpr-code exn)))
+    (make-response/full
+      500 "Servlet Error"
+      (current-seconds)
+      #"text/html"
+      '()
+      (list
+        (string-append
+          "<html><head><title>Erroneous Xexpr</title></head>"
+          "<body><h1>Erroneous Xexpr</h1>"
+          "<p>An Xexpr in the servlet is malformed. The exact error is</p>"
+          "<pre>" (exn-message exn) "</pre>"
+          "<h2>The Full Xexpr Is</h2>"
+          "<pre>"
+          (let ((o (open-output-string)))
+            (pretty-print x o)
+            (get-output-string o))
+          "</pre>"))))
+
+  ;; Format everything normally, except for the erroneous data.
+  (define (pretty-print-hook/web-errors err)
+    (letrec ((f-aux (lambda (v)
+                      (cond
+                        ((equal? v err)
+                         (format
+                           (string-append
+                             "<span style='font-weight: bold; "
+                             "color: red; background-color: white;'>"
+                             "~a</span>") v))
+                        ((list? v) (string-append "("
+                                                  (string-join (map f-aux v)
+                                                               " ")
+                                                  ")"))
+                        (else (format "~a" v))))))
+      (lambda (v display? op)
+        ((if display? display write) (f-aux v) op))))
+
   )
