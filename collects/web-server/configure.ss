@@ -439,8 +439,9 @@
         (let* ([eb (lambda (tag) (extract-binding/single tag bindings))]
                [paths (host-table-paths old)]
                [host-root (paths-host-base paths)]
-               [conf (build-path-maybe host-root (paths-conf paths))]
-               [ubp (un-build-path host-root)]
+               [expanded-host-root (build-path-maybe (collection-path "web-server") host-root)]
+               [conf (build-path-maybe expanded-host-root (paths-conf paths))]
+               [ubp (un-build-path expanded-host-root)]
                [eb-host-root (lambda (tag) (ubp (eb tag)))]
                [ubp-conf (un-build-path conf)]
                [eb-conf (lambda (tag) (ubp-conf (eb tag)))])

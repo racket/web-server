@@ -472,7 +472,7 @@
         (output-headers out 200 "Okay" (current-seconds) TEXT/HTML-MIME-TYPE null)
         (let ([binds
                (case meth
-                 [(get) (parse-bindings (url-query uri))]
+                 [(get) (url-query uri)]
                  [(post)
                   (let ([content-type (assq 'content-type headers)])
                     (cond
@@ -484,8 +484,7 @@
                                          (apply string-append (cdr part))))
                                  (read-mime-multipart (cadr content-boundary) in)))]
                       [else
-                       (parse-bindings 
-                        (let ([len-str (assq 'content-length headers)])
+                       (let ([len-str (assq 'content-length headers)])
                           (if len-str
                               (cond
                                 [(string->number (cdr len-str))
@@ -496,7 +495,7 @@
                                        (let ([s (read-string INPUT-BUFFER-SIZE in)])
                                          (if (eof-object? s)
                                              null
-                                             (cons s (read-to-eof)))))))))]))]
+                                             (cons s (read-to-eof))))))))]))]
                  [else (raise "not implemented yet")])])
           ; more here - keep one channel per connection instead of creating new ones
           (let ([response (create-channel)])
@@ -699,29 +698,6 @@
                (url-path uri) params (url-query uri) 
                (url-fragment uri))))
   
-  ; parse-bindings : (U #f String) -> (listof (cons Symbol String))
-  (define (parse-bindings raw)
-    (if (string? raw)
-        (let ([len (string-length raw)])
-          (let loop ([start 0])
-            (let find= ([key-end start])
-              (if (>= key-end len)
-                  null
-                  (if (eq? (string-ref raw key-end) #\=)
-                      (let find-amp ([amp-end (add1 key-end)])
-                        (if (or (= amp-end len) (eq? (string-ref raw amp-end) #\&))
-                            (cons (cons (string->symbol (substring raw start key-end))
-                                        (translate-escapes 
-                                         (substring raw (add1 key-end) amp-end)))
-                                  (loop (add1 amp-end)))
-                            (find-amp (add1 amp-end))))
-                      (find= (add1 key-end)))))))
-        null))
-  
-  (define-struct servlet-error ())
-  (define-struct (invalid-%-suffix servlet-error) (chars))
-  (define-struct (incomplete-%-suffix invalid-%-suffix) ())
-  
   (define TIME-OUT-CODE 200)
   (define TIME-OUT-HEADERS null)
   
@@ -785,36 +761,6 @@
               (two-digits (date-hour date))
               (two-digits (date-minute date))
               (two-digits (date-second date)))))
-  
-  ; This comes from Shriram's collection, and should be exported form there. 
-  ; translate-escapes : String -> String
-  (define (translate-escapes raw)
-    (list->string
-     (let loop ((chars (string->list raw)))
-       (if (null? chars) null
-           (let ((first (car chars))
-                 (rest (cdr chars)))
-             (let-values (((this rest)
-                           (cond
-                             ((char=? first #\+)
-                              (values #\space rest))
-                             ((char=? first #\%)
-                              ; MF: I rewrote this code so that Spidey could eliminate all checks. 
-                              ; I am more confident this way that this hairy expression doesn't barf. 
-                              (if (pair? rest)
-                                  (let ([rest-rest (cdr rest)])
-                                    (if (pair? rest-rest)
-                                        (values (integer->char
-                                                 (or (string->number (string (car rest) (car rest-rest)) 16)
-                                                     (raise (make-invalid-%-suffix
-                                                             (if (string->number (string (car rest)) 16)
-                                                                 (car rest-rest)
-                                                                 (car rest))))))
-                                                (cdr rest-rest))
-                                        (raise (make-incomplete-%-suffix rest))))
-                                  (raise (make-incomplete-%-suffix rest))))
-                             (else (values first rest)))))
-               (cons this (loop rest))))))))
   
   ; more here - include doc.txt
   (define DEFAULT-ERROR "An error message configuration file is missing.")
