@@ -150,7 +150,7 @@
 	(display
 	  (format "~s~n"
 	    (list 'from client-ip 'to host-ip 'for (url->string uri) 'at 
-	      (date->string (seconds->date (current-seconds)))))
+	      (date->string (seconds->date (current-seconds)) #t)))
 	  out))))
   
   ; ignore-log : sym str -> str str sym url str -> str
