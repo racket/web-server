@@ -77,6 +77,8 @@
   ; FIX - abstract this out to a namespace library somewhere (ask Robby and Matthew)
   (define to-be-copied-module-specs
     '(mzscheme
+      ;; allow people to use MrEd primitives from servlets.
+      (lib "mred.ss" "mred")
       (lib "servlet-sig.ss" "web-server")
       ; internal structs needed for parameter
       (lib "internal-structs.ss" "web-server")))
