@@ -762,7 +762,7 @@
         (hash-table-put! instances invoke-id
                          (make-servlet-instance 0 (create-channel) (make-hash-table))))
       
-      ; gen-send/suspend : url sym instance-table (response -> void) (-> doesn't) -> (str -> response) -> request
+      ; gen-send/suspend : url sym instance-table (response -> void) (instance -> doesn't) -> (str -> response) -> request
       (define (gen-send/suspend uri invoke-id instances output-page resume-next-request)
         (lambda (page-maker)
           (let/cc k
