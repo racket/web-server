@@ -24,7 +24,7 @@
   ; -------------------------------------------------------------------------------
   ; The Server
   
-  ; serve : configuration [Nat] [str | #f] -> -> Void
+  ; serve : configuration [Nat | (-> iport oport)] [str | #f] -> -> Void
   ; to start the server on the given port and return an un-server to shut it down
   ; the optional port argument overrides the configuration's port
   ; the optional host argument only accepts connections from that host ip address
@@ -38,11 +38,15 @@
             [max-waiting (configuration-max-waiting configuration)]
             [custodian (make-custodian)])
         (parameterize ([current-custodian custodian])
-          (let ([listener (tcp-listen port max-waiting #t only-from-host)])
+          (let ([get-ports
+                 (if (number? port)
+                     (let ([listener (tcp-listen port max-waiting #t only-from-host)])
+                       (lambda () (tcp-accept listener)))
+                     port)])
             ; If tcp-listen fails, the exception will be raised in the caller's thread.
             (thread
              (lambda ()
-               (server-loop custodian listener
+               (server-loop custodian get-ports
                             (make-config virtual-hosts (make-hash-table)
                                          (make-hash-table) (make-hash-table))
                             (configuration-initial-connection-timeout configuration)
@@ -60,7 +64,7 @@
     (regexp-match METHOD:REGEXP x))
   ;:(define match-method (type: (str -> (union false (list str str str str str)))))
   
-  ; server-loop : custodian tcp-listener config num (-> void) -> void
+  ; server-loop : custodian (-> iport oport) config num (-> void) -> void
   (define (server-loop top-custodian listener tables init-timeout connection-lost)
     (let bigger-loop ()
       (with-handlers ([exn:i/o:tcp? (lambda (exn) (bigger-loop))]
@@ -70,7 +74,7 @@
         (let loop ()
           (let ([connection-cust (make-custodian)])
             (parameterize ([current-custodian connection-cust])
-              (let-values ([(ip op) (tcp-accept listener)]
+              (let-values ([(ip op) (listener)]
                            [(shutdown) (lambda () (custodian-shutdown-all connection-cust))])
                 (thread (lambda ()
                           (with-handlers ([exn:i/o:port:closed?
@@ -655,12 +659,17 @@
                        [exit-handler (lambda (x) (purge-table) (custodian-shutdown-all servlet-custodian))])
           (let* ([timer (start-timer time-out-seconds exit)]
                  [adjust-timeout! (lambda (n) (set! time-out-seconds n) (reset-timer timer n))]
-                 [send/suspend ; : (Url -> Page) -> (list Method Url Bindings Bindings)
-                  (gen-send/suspend uri invoke-id instances respond
-                                    (lambda () (reset-timer timer time-out-seconds)) 
-                                    ; channel -> void
-                                    (lambda (new-response)
-                                      (set! response new-response)))])
+                 [resume-next-request
+                  (gen-resume-next-request (lambda () (reset-timer timer time-out-seconds)) 
+                                           ; channel -> void
+                                           (lambda (new-response)
+                                             (set! response new-response)))]
+                 [send/suspend ; : (str[Url] -> Response) -> Request
+                  (gen-send/suspend uri invoke-id instances respond resume-next-request)]
+                 [send/forward ; : (str[Url] -> Response) -> Request
+                  (lambda (page-maker) (purge-table) (send/suspend page-maker))]
+                 [send/back ; : (Response -> doesn't)
+                  (lambda (page) (respond page) (resume-next-request (hash-table-get instances invoke-id)))])
             (thread
              (lambda ()
                (respond (with-handlers ([exn:i/o:filesystem:servlet-not-found?
@@ -725,8 +734,7 @@
                                     (response/full-extras page)))
                           close)
           (for-each (lambda (str) (display str out))
-                    (response/full-body page))])
-       ]
+                    (response/full-body page))])]
       [(string? (car page))
        (output-headers out 200 "Okay" (current-seconds) (car page)
                        `(("Content-length: " ,(apply + (map string-length (cdr page)))))
@@ -750,8 +758,8 @@
     (hash-table-put! instances invoke-id
                      (make-servlet-instance 0 (create-channel) (make-hash-table))))
   
-  ; gen-send/suspend : url sym instance-table (response -> void) (-> void) (channel -> void) -> (str -> response) -> request
-  (define (gen-send/suspend uri invoke-id instances output-page update-time! update-channel!)
+  ; gen-send/suspend : url sym instance-table (response -> void) (-> doesn't) -> (str -> response) -> request
+  (define (gen-send/suspend uri invoke-id instances output-page resume-next-request)
     (lambda (page-maker)
       (let/cc k
         (let* ([inst (hash-table-get instances invoke-id)]
@@ -762,12 +770,17 @@
           (set-servlet-instance-k-counter! inst k-count)
           (hash-table-put! cont-table (string->symbol k-id) k)
           (output-page (page-maker (update-params uri (format "~a*~a" invoke-id k-id))))
-          (let ([resume (channel-get c)])
-            ; set! - modeling things that change over time
-            (update-time!)
-            ; set! justified - communicating between threads
-            (update-channel! (car resume))
-            ((cadr resume) (caddr resume)))))))
+          (resume-next-request inst)))))
+  
+  ; :  (-> void) (channel -> void) -> instance -> doesn't
+  (define (gen-resume-next-request update-time! update-channel!)
+    (lambda (inst)
+      (let ([resume (channel-get (servlet-instance-channel inst))])
+        ; set! - modeling things that change over time
+        (update-time!)
+        ; set! justified - communicating between threads
+        (update-channel! (car resume))
+        ((cadr resume) (caddr resume)))))
   
   ; update-params : Url (U #f String) -> String
   ; to create a new url just like the old one, but with a different parameter part
