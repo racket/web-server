@@ -27,6 +27,7 @@
 
   ;; exn->string : (union exn any) -> string
   ;; builds an error message, including errortrace annotations (if present)
+  ;; TODO: do we really need this? Ask Robby about better ways to print exceptions.
   (define (exn->string exn)
     (if (exn? exn)
         (let ([op (open-output-string)])
@@ -137,8 +138,11 @@
         [(not base) (error 'directory-part "~a is a top-level directory" path)]
         [(path? base) base])))
 
+  (define myprint printf)
+  
   ; more here - ".." should probably raise an error instead of disappearing.
   (define (url-path->path base p)
+    (myprint "url-path->path p = ~s~n" p)
     (let ((path-elems (chop-string #\/ p)))
       ;;; Hardcoded, bad, and wrong
       (if (or (string=? (car path-elems) "servlets")
@@ -152,6 +156,7 @@
                                   (if (string=? (car path-elems) "")
                                     (cadr path-elems)
                                     (car path-elems)))))
+          (myprint "f = ~s~n" f)
           (cond
             ((null? p-e) f)
             ((directory-exists? f) (loop (cdr p-e) (build-path f (car p-e))))
