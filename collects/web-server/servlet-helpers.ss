@@ -2,7 +2,7 @@
   (require (lib "list.ss")
            (lib "etc.ss")
            "web-server.ss")
-  (provide extract-binding/single extract-bindings extract-user-pass build-suspender)
+  (provide extract-binding/single extract-bindings exists-binding? extract-user-pass build-suspender)
   
   ; extract-binding/single : sym (listof (cons sym str)) -> str
   (define (extract-binding/single name bindings)
@@ -16,6 +16,13 @@
   ; extract-bindings : sym (listof (cons sym str)) -> (listof str)
   (define (extract-bindings name bindings)
     (map cdr (filter (lambda (x) (eq? name (car x))) bindings)))
+  
+  ; exists-binding? : sym (listof (cons sym str)) -> bool
+  ; for checkboxes
+  (define (exists-binding? name bindings)
+    (if (assq name bindings)
+        #t
+        #f))
   
   ; build-suspender : (listof html) (listof html) [(listof (cons sym str))] [(listof (cons sym str))] -> str -> html
   (define build-suspender
