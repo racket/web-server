@@ -10,12 +10,13 @@
            (lib "file.ss")
            (rename (lib "configuration.ss" "web-server")
                    build-path-maybe build-path-maybe)
+           (rename (lib "configuration.ss" "web-server")
+                   default-configuration-table-path default-configuration-table-path)
            (lib "configuration-table-structs.ss" "web-server")
            (lib "parse-table.ss" "web-server")
            (lib "util.ss" "web-server"))
   
   ; FIX
-  ; - replace (collection-path "web-server") with the path of the directory containing the configuration file
   ; - fuss with changing absolute paths into relative ones internally
   ; - move old config files instead of copying default ones
   ;   - ask: - move exisiting (don't move defaults)
@@ -81,6 +82,8 @@
         request)
       
       (check-ip-address initial-request)
+      
+      (define web-base (directory-part default-configuration-path))
       
       ; more here - abstract with static pages?
       (define web-server-icon
@@ -274,8 +277,7 @@
           (when (assq 'edit-passwords bindings)
             (let* ([paths (host-table-paths new)]
                    [password-path
-                    (build-path-maybe (build-path-maybe (collection-path "web-server")
-                                                        (paths-host-base paths))
+                    (build-path-maybe (build-path-maybe web-base (paths-host-base paths))
                                       (paths-passwords paths))])
               (unless (file-exists? password-path)
                 (write-to-file password-path ''()))
@@ -341,8 +343,7 @@
       
       ; table->host-root : host-table -> str
       (define (table->host-root t)
-        (build-path-maybe (collection-path "web-server")
-                          (paths-host-base (host-table-paths t))))
+        (build-path-maybe web-base (paths-host-base (host-table-paths t))))
       
       ; gen-make-tr : nat -> xexpr sym str [xexpr ...] -> xexpr
       (define (gen-make-tr size-n)
@@ -366,7 +367,7 @@
       
       ; update-configuration : configuration-table bindings -> configuration-table
       (define (update-configuration old bindings)
-        (let ([ubp (un-build-path (collection-path "web-server"))])
+        (let ([ubp (un-build-path web-base)])
         (make-configuration-table
          (string->nat (extract-binding/single 'port bindings))
          (string->nat (extract-binding/single 'waiting bindings))
@@ -419,7 +420,7 @@
         (let* ([timeouts (host-table-timeouts old)]
                [paths (host-table-paths old)]
                [m (host-table-messages old)]
-               [host-root (build-path-maybe (collection-path "web-server") (paths-host-base paths))]
+               [host-root (build-path-maybe web-base (paths-host-base paths))]
                [conf (build-path-maybe host-root (paths-conf paths))])
           (build-suspender
            '("Configure Host")
@@ -468,7 +469,7 @@
         (let* ([eb (lambda (tag) (extract-binding/single tag bindings))]
                [paths (host-table-paths old)]
                [host-root (paths-host-base paths)]
-               [expanded-host-root (build-path-maybe (collection-path "web-server") host-root)]
+               [expanded-host-root (build-path-maybe web-base host-root)]
                [conf (build-path-maybe expanded-host-root (paths-conf paths))]
                [ubp (un-build-path expanded-host-root)]
                [eb-host-root (lambda (tag) (ubp (eb tag)))]
@@ -485,7 +486,7 @@
            (let ([old-paths (host-table-paths old)])
              (apply make-paths
                     (paths-conf old-paths)
-                    ((un-build-path (collection-path "web-server")) (paths-host-base old-paths))
+                    ((un-build-path web-base) (paths-host-base old-paths))
                     (map eb-host-root '(path-log path-htdocs path-servlet path-password)))))))
       
       ; un-build-path : str -> str -> str
@@ -499,9 +500,10 @@
                 [else path])))))
       
       ; list-extends : (listof a) (listof a) -> (U #f (listof a))
+      ; to return the extra elements in b after removing all elements from a in order
       (define (list-extends a b)
         (cond
-          [(null? a) b]
+          [(null? a) (if (null? b) #f b)]
           [else (cond
                   [(null? b) #f]
                   [else (and (equal? (car a) (car b))
@@ -690,14 +692,14 @@
       ; ensure-configuration-servlet : str host-table -> void
       (define (ensure-configuration-servlet configuration-path host)
         (let* ([paths (host-table-paths host)]
-               [root (build-path-maybe (collection-path "web-server")
+               [root (build-path-maybe web-base
                                        (paths-host-base paths))]
                [servlets-path
                 (build-path (build-path-maybe root (paths-servlet paths)) "servlets")])
           (ensure-config-servlet configuration-path servlets-path)
           (let ([defaults "Defaults"])
             (ensure* (collection-path "web-server" "default-web-root" "htdocs")
-                     (build-path (build-path-maybe root (paths-htdocs paths)))
+                     (build-path-maybe root (paths-htdocs paths))
                      defaults))))
       
       ; ensure-configuration-paths : configuration-table -> void
@@ -711,7 +713,7 @@
       ; to ensure that all the referenced config files exist for a virtual host
       (define (ensure-host-configuration host)
         (let* ([paths (host-table-paths host)]
-               [host-base (build-path-maybe (collection-path "web-server") (paths-host-base paths))]
+               [host-base (build-path-maybe web-base (paths-host-base paths))]
                [conf (build-path-maybe host-base (paths-conf paths))]
                [log (build-path-maybe host-base (paths-log paths))])
           ; skip passwords since a missing file is an okay default
@@ -839,4 +841,4 @@
       ; main
       (choose-configuration-file)))
   
-  (define servlet (servlet-maker (build-path (collection-path "web-server") "configuration-table"))))
+  (define servlet (servlet-maker default-configuration-table-path)))

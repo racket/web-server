@@ -1,6 +1,14 @@
 (module util mzscheme
-  (provide url-path->path prefix? provide-define-struct extract-flag path->list)
+  (provide url-path->path prefix? provide-define-struct extract-flag path->list directory-part)
   (require (lib "list.ss"))
+  
+  ; : str -> str
+  (define (directory-part path)
+    (let-values ([(base name must-be-dir) (split-path path)])
+      (cond
+        [(eq? 'relative base) (current-directory)]
+        [(not base) (error 'directory-part "~a is a top-level directory" path)]
+        [(string? base) base])))
   
   ; url-path->path : (Union 'same 'up String) String -> String
   ; more here - ".." should probably raise an error instead of disappearing.

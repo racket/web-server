@@ -11,7 +11,6 @@
            "util.ss"
            "parse-table.ss"
            (lib "url.ss" "net")
-           (lib "etc.ss")
 	   (lib "date.ss"))
   
   (define default-configuration-table-path
@@ -23,39 +22,41 @@
   
   ; load-configuration : str -> configuration
   (define (load-configuration table-file-name)
-    (complete-configuration (get-configuration table-file-name)))
+    (complete-configuration (directory-part table-file-name) (get-configuration table-file-name)))
   
   ; load-developer-configuration : str -> configuration
   (define (load-developer-configuration table-file-name)
-    (complete-developer-configuration (get-configuration table-file-name)))
+    (complete-developer-configuration (directory-part table-file-name) (get-configuration table-file-name)))
 
   ; build-developer-configuration : tst -> configuration-table
   (define (build-developer-configuration s-expr)
-    (complete-developer-configuration (parse-configuration-table s-expr)))
+    (complete-developer-configuration (directory-part default-configuration-table-path)
+                                      (parse-configuration-table s-expr)))
   
-  ; complete-configuration : configuration-table -> configuration
-  (define (complete-configuration table)
+  ; complete-configuration : str configuration-table -> configuration
+  (define (complete-configuration base table)
     (make-configuration
      (configuration-table-port table)
      (configuration-table-max-waiting table)
      (configuration-table-initial-connection-timeout table)
      (let ([default-host
             (apply-default-functions-to-host-table
-             (configuration-table-default-host table) gen-log-message)]
+             base (configuration-table-default-host table) gen-log-message)]
            [expanded-virtual-host-table
             (map (lambda (x)
                    (list (regexp (string-append (car x) "(:[0-9]*)?"))
-                         (apply-default-functions-to-host-table (cdr x) gen-log-message)))
+                         (apply-default-functions-to-host-table base (cdr x) gen-log-message)))
                  (configuration-table-virtual-hosts table))])
        (gen-virtual-hosts expanded-virtual-host-table default-host))))
   
-  ; complete-developer-configuration : configuration-table -> configuration
-  (define (complete-developer-configuration table)
+  ; complete-developer-configuration : str configuration-table -> configuration
+  (define (complete-developer-configuration base table)
     (make-configuration
      (configuration-table-port table)
      (configuration-table-max-waiting table)
      (configuration-table-initial-connection-timeout table)
      (gen-virtual-hosts null (apply-default-functions-to-host-table
+                              base
                               (configuration-table-default-host table) ignore-log))))
   
   (define TEXT/HTML-MIME-TYPE "text/html")
@@ -161,9 +162,9 @@
     (call-with-input-file path
       (lambda (in) (read-string (file-size path) in))))
   
-  ; apply-default-functions-to-host-table : host-table (sym str -> str str sym url str -> str) -> host
-  (define (apply-default-functions-to-host-table host-table gen-log-message-maybe)
-    (let ([paths (expand-paths (host-table-paths host-table))])
+  ; apply-default-functions-to-host-table : str host-table (sym str -> str str sym url str -> str) -> host
+  (define (apply-default-functions-to-host-table web-server-root host-table gen-log-message-maybe)
+    (let ([paths (expand-paths web-server-root (host-table-paths host-table))])
       (make-host
        (host-table-indices host-table)
        (gen-servlet-path (paths-servlet paths))
@@ -182,8 +183,8 @@
        (host-table-timeouts host-table)
        paths)))
   
-  ; expand-paths : paths -> paths
-  (define (expand-paths paths)
+  ; expand-paths : str paths -> paths
+  (define (expand-paths web-server-root paths)
     (let ([host-base (build-path-maybe web-server-root (paths-host-base paths))])
       (make-paths (build-path-maybe host-base (paths-conf paths))
                   host-base
@@ -191,8 +192,6 @@
                   (build-path-maybe host-base (paths-htdocs paths))
                   (build-path-maybe host-base (paths-servlet paths))
                   (build-path-maybe host-base (paths-passwords paths)))))
-  
-  (define web-server-root (collection-path "web-server"))
   
   ; gen-virtual-hosts : (listof (list regexp host)) host ->
   ; str -> host-configuration
