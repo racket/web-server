@@ -40,17 +40,26 @@
 
         ;; server-loop: custodian (-> i-port o-port) -> void
       ;; start a thread to handle each incoming connection
-      (define (server-loop server-custodian listener)
-        (let ([connection-cust (make-custodian)])
-          (parameterize ([current-custodian connection-cust])
-            (let-values ([(ip op) (listener)])
-              (thread
-               (lambda ()
-                 (serve-connection
-                  (new-connection config:initial-connection-timeout
-                                  ip op connection-cust #f))))
-              (server-loop server-custodian listener)))))
+      (define (server-loop server-custodian get-ports)
+        (let loop ()
+          (let ([connection-cust (make-custodian)])
+            (parameterize ([current-custodian connection-cust])
+              (let-values ([(ip op) (get-ports)])
+                (serve-ports ip op)
+                (loop))))))
 
+      ;; serve-ports : input-port output-port -> void
+      ;; returns immediately, spawning a thread to handle
+      ;; the connection
+      ;; NOTE: this doesn't use a connection manager since
+      ;;       connection managers don't do anything anyways. -robby
+      (define (serve-ports ip op)
+        (thread
+         (lambda ()
+           (serve-connection
+            (new-connection config:initial-connection-timeout
+                            ip op (current-custodian) #f)))))
+      
       ;; serve-connection: connection -> void
       ;; respond to all requests on this connection
       (define (serve-connection conn)
