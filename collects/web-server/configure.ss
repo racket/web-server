@@ -47,7 +47,7 @@
       
       (define doc-dir "Defaults/documentation")
       
-      (define edit-host-button-name "Edit Boring Details")
+      (define edit-host-button-name "Edit Minor Details")
       
       ; build-footer : str -> html
       (define (build-footer base)
