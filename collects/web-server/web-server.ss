@@ -65,8 +65,7 @@
                               (bigger-loop))])
         (let loop ()
           (let ([connection-cust (make-custodian)])
-            (parameterize ([current-custodian connection-cust]
-                           [read-case-sensitive #t])
+            (parameterize ([current-custodian connection-cust])
               (let-values ([(ip op) (tcp-accept listener)]
                            [(shutdown) (lambda () (custodian-shutdown-all connection-cust))])
                 (thread (lambda ()
@@ -619,6 +618,7 @@
            [respond (lambda (page) (channel-put response page))])
       (let ([servlet-custodian (make-custodian top-custodian)])
         (parameterize ([current-custodian servlet-custodian]
+                       [read-case-sensitive #t]
                        [exit-handler (lambda (x) (purge-table) (custodian-shutdown-all servlet-custodian))])
           (let* ([timer (start-timer time-out-seconds exit)]
                  [adjust-timeout! (lambda (n) (set! time-out-seconds n) (reset-timer timer n))]
