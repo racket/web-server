@@ -693,10 +693,10 @@
 			(respond page)
 			(if (hash-table-empty?
 			     (servlet-instance-cont-table
-			      (hash-table-get instances invoke-id)))
+			      (hash-table-get instances invoke-id (lambda () (exit)))))
 			    (exit)
 			    (resume-next-request
-			     (hash-table-get instances invoke-id))))]
+			     (hash-table-get instances invoke-id (lambda () (exit))))))]
 		     [send/finish ; : (Response -> doesn't)
 		      (lambda (page) (respond page) (exit))])
                 (thread

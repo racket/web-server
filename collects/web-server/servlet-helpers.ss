@@ -37,7 +37,7 @@
         #t
         #f))
   
-  ; build-suspender : (listof html) (listof html) [(listof (cons sym str))] [(listof (cons sym str))] -> str -> html
+  ; build-suspender : (listof html) (listof html) [(listof (cons sym str))] [(listof (cons sym str))] -> str -> response
   (define build-suspender
     (opt-lambda (title content [body-attributes '([bgcolor "white"])] [head-attributes null])
       (lambda (k-url)
