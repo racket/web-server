@@ -47,7 +47,6 @@
       ;; server-loop: (-> i-port o-port) -> void
       ;; start a thread to handle each incoming connection
       (define (server-loop get-ports)
-        (printf "started~n")
         (let loop ()
           (let ([connection-cust (make-custodian)])
             (parameterize ([current-custodian connection-cust])
@@ -598,9 +597,10 @@
           (cond
             [(load-servlet/path servlet-filename)
             => (lambda (svlt)
-                 (hash-table-put! (unbox config:scripts) servlet-filename
-                                  (make-servlet-program svlt (current-custodian)))
-                 svlt)]
+                 (let ([svt-prog  (make-servlet-program svlt (current-custodian))])
+                   (hash-table-put! (unbox config:scripts) servlet-filename
+                                    svt-prog)
+                   svt-prog))]
             [else
              (raise (make-exn:fail:filesystem:exists:servlet
                       (string->immutable-string (format "Couldn't find ~a" servlet-filename))
