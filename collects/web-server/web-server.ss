@@ -93,20 +93,35 @@
                [host-conf ((config-hosts tables) host)])
           ; more here - don't extract host-ip and client-ip twice (leakage)
           (let-values ([(host-ip client-ip) (tcp-addresses ip)])
-            ((host-log-message host-conf) host-ip client-ip method uri host))
-          (dispatch top-custodian method host-conf uri headers ip op tables timer)
-          (reset-timer timer init-timeout)
-          (unless (close-connection? headers (string->number major-version) (string->number minor-version))
-            (connection-loop))))))
+            ((host-log-message host-conf) host-ip client-ip method uri host)
+            (dispatch top-custodian method host-conf uri headers ip op tables timer)
+            (reset-timer timer init-timeout)
+            (unless (close-connection? headers
+                                       (string->number major-version)
+                                       (string->number minor-version)
+                                       client-ip)
+              (connection-loop)))))))
   
-  ; close-connection? : table nat nat -> bool
-  (define (close-connection? headers major minor)
+  ; close-connection? : table nat nat str -> bool
+  (define (close-connection? headers major minor client-ip)
     (or (< major 1)
         (and (= major 1) (= minor 0))
         (cond
           [(assq 'connection headers)
            => (lambda (x) (string-ci=? "close" (cdr x)))]
-          [else #f])))
+          [else #f])
+        (msie-6.0-from-local-machine? headers client-ip)))
+  
+  ; : table str -> bool
+  ; to work around a bug in MSIE 6.0 for documents < 265 bytes when connecting from the local
+  ; machine.  The server could pad the response as MSIIS does, but closing the connection works, too.
+  (define (msie-6.0-from-local-machine? headers client-ip)
+    (and (string=? "127.0.0.1" client-ip)
+         (cond
+           [(assq 'HTTP_USER_AGENT headers)
+            => (lambda (client) (regexp-match MSIE-6-regexp (cdr client)))]
+           [else #f])))
+  (define MSIE-6-regexp (regexp "MSIE 6"))
   
   ; read-request : iport oport -> Symbol String String String
   ; to read in the first line of an http request,
@@ -486,17 +501,17 @@
                                  (read-mime-multipart (cadr content-boundary) in)))]
                       [else
                        (let ([len-str (assq 'content-length headers)])
-                          (if len-str
-                              (cond
-                                [(string->number (cdr len-str))
-                                 => (lambda (len) (read-string len in))]
-                                [else (report-error out meth ((responders-protocol (host-responders host-info)) "Post request contained a non-numeric content-length"))])
-                              (apply string-append
-                                     (let read-to-eof ()
-                                       (let ([s (read-string INPUT-BUFFER-SIZE in)])
-                                         (if (eof-object? s)
-                                             null
-                                             (cons s (read-to-eof))))))))]))]
+                         (if len-str
+                             (cond
+                               [(string->number (cdr len-str))
+                                => (lambda (len) (read-string len in))]
+                               [else (report-error out meth ((responders-protocol (host-responders host-info)) "Post request contained a non-numeric content-length"))])
+                             (apply string-append
+                                    (let read-to-eof ()
+                                      (let ([s (read-string INPUT-BUFFER-SIZE in)])
+                                        (if (eof-object? s)
+                                            null
+                                            (cons s (read-to-eof))))))))]))]
                  [else (raise "not implemented yet")])])
           ; more here - keep one channel per connection instead of creating new ones
           (let ([response (create-channel)])
@@ -639,33 +654,30 @@
   (define (output-page/port page out)
     ; double check what happens on erronious servlet output
     ; it should output an error for this response
-    ; DELETE ME - remove this handler
-    (with-handlers ([exn:i/o:port:closed? (lambda (exn) (fprintf (current-output-port) "DEBUG! port closed~n")
-                                            (raise exn))])
-      (cond
-        [(response/full? page)
-         (output-headers out (response/full-code page) (response/full-message page)
-                         (response/full-seconds page) (response/full-mime page)
-                         `(("Content-length: " ,(apply + (map string-length (response/full-body page))))
-                           . ,(map (lambda (x) (list (symbol->string (car x)) ": " (cdr x)))
-                                   (response/full-extras page))))
-         (for-each (lambda (str) (display str out))
-                   (response/full-body page))]
-        [(string? (car page))
-         (output-headers out 200 "Okay" (current-seconds) (car page)
-                         `(("Content-length: " ,(apply + (map string-length (cdr page))))))
-         (for-each (lambda (str) (display str out))
-                   (cdr page))]
-        [else
-         (let ([str (with-handlers ([void (lambda (exn)
-                                            (if (exn? exn)
-                                                (exn-message exn)
-                                                (format "~s" exn)))])
-                      (xexpr->string page))])
-           (output-headers out 200 "Okay" (current-seconds) TEXT/HTML-MIME-TYPE
-                           `(("Content-length: " ,(add1 (string-length str)))))
-           (display str out) ; the newline is for an IE 6.0 bug workaround under MS windows 2000
-           (newline out))])))
+    (cond
+      [(response/full? page)
+       (output-headers out (response/full-code page) (response/full-message page)
+                       (response/full-seconds page) (response/full-mime page)
+                       `(("Content-length: " ,(apply + (map string-length (response/full-body page))))
+                         . ,(map (lambda (x) (list (symbol->string (car x)) ": " (cdr x)))
+                                 (response/full-extras page))))
+       (for-each (lambda (str) (display str out))
+                 (response/full-body page))]
+      [(string? (car page))
+       (output-headers out 200 "Okay" (current-seconds) (car page)
+                       `(("Content-length: " ,(apply + (map string-length (cdr page))))))
+       (for-each (lambda (str) (display str out))
+                 (cdr page))]
+      [else
+       (let ([str (with-handlers ([void (lambda (exn)
+                                          (if (exn? exn)
+                                              (exn-message exn)
+                                              (format "~s" exn)))])
+                    (xexpr->string page))])
+         (output-headers out 200 "Okay" (current-seconds) TEXT/HTML-MIME-TYPE
+                         `(("Content-length: " ,(add1 (string-length str)))))
+         (display str out) ; the newline is for an IE 5.5 bug workaround
+         (newline out))]))
   
   ; add-new-instance : sym instance-table -> void
   (define (add-new-instance invoke-id instances)
