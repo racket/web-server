@@ -5,8 +5,6 @@
            (lib "port.ss")
            "connection-manager.ss")
 
-  (define myprint printf)
-
   ;; **************************************************
   ;; DATA DEF for response
   ;; (make-response/basic number string (listof (cons symbol string)) number string)
@@ -162,7 +160,6 @@
   ;; **************************************************
   ;; output-response: connection response -> void
   (define (output-response conn resp)
-    (myprint "output-response~n")
     (cond
      [(response/full? resp)
       (output-response/basic
@@ -188,7 +185,6 @@
           (lambda (str) (display str o-port))
           (cdr resp))))]
      [else
-      (myprint "else clause~n")
       ;; TODO: make a real exception for this.
       (with-handlers
           ([exn? (lambda (exn)
@@ -249,7 +245,6 @@
   ;; output-response/basic: connection response number (o-port -> void) -> void
   ;; Write a normal response to an output port
   (define (output-response/basic conn resp size responder)
-    (myprint "output-response/basic~n")
     (output-headers/response conn resp
                              `(("Content-length: " ,size)
                                . ,(extras->strings resp)))
