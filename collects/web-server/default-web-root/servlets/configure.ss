@@ -12,7 +12,10 @@
            (lib "etc.ss")
            (lib "pretty.ss")
            (lib "file.ss")
-           (rename (lib "host-configuration-table-language.ss" "web-server") build-path-maybe build-path-maybe))
+           (rename (lib "configuration.ss" "web-server")
+                   build-path-maybe build-path-maybe)
+           (lib "configuration-table-structures.ss" "web-server")
+           (lib "parse-table.ss" "web-server"))
   
   (define servlet
     (unit/sig ()
@@ -22,18 +25,6 @@
       
       (adjust-timeout! (* 12 60 60))
       (error-print-width 800) ; 10-ish lines
-      
-      ; top-configuration : (make-top-configuration nat nat nat host-configuration (listof (cons str host-configuration)))
-      (define-struct top-configuration (port waiting initial-timeout default-host hosts))
-      
-      ; host-configuration = (make-host-configuration timeouts paths)
-      (define-struct host-configuration (timeouts paths))
-      
-      ; timeouts = (make-timeouts nat^5)
-      (define-struct timeouts (default-servlet password servlet-connection file-per-byte file-base))
-      
-      ; paths = (make-paths str^12)
-      (define-struct paths (host-root log htdocs servlet passwords message-root servlet-message access-message servlet-refresh-message password-refresh-message not-found-message protocol-message))
       
       ; passwords = (listof realm)
       ; realm = (make-realm str str (listof user-pass))
@@ -104,8 +95,8 @@
       ; configure-top-level : -> responose
       (define (configure-top-level)
         (with-handlers ([void (lambda (exn) (send/back (exception-error-page exn)))])
-          (let loop ([configuration (read-configuration)])
-            (let* ([update-bindings (interact (request-new-top-configuration configuration))]
+          (let loop ([configuration (read-configuration configuration-path)])
+            (let* ([update-bindings (interact (request-new-configuration-table configuration))]
                    [form-configuration
                     (delete-hosts (update-configuration configuration update-bindings)
                                   (extract-bindings 'deactivate update-bindings))]
@@ -125,19 +116,19 @@
               (write-configuration new-configuration)
               (loop new-configuration)))))
       
-      ; add-virtual-host : top-configuration (listof str) -> top-configuration
+      ; add-virtual-host : configuration-table (listof str) -> configuration-table
       (define (add-virtual-host conf existing-prefixes)
         (update-hosts conf (cons (cons "my-host.my-domain.org"
-                                       (top-configuration-default-host conf))
-                                 (top-configuration-hosts conf))))
+                                       (configuration-table-default-host conf))
+                                 (configuration-table-virtual-hosts conf))))
       
-      ; update-hosts : top-configuration (listof (cons str host-configuration))
+      ; update-hosts : configuration-table (listof (cons str host-table))
       (define (update-hosts conf new-hosts)
-        (make-top-configuration
-         (top-configuration-port conf)
-         (top-configuration-waiting conf)
-         (top-configuration-initial-timeout conf)
-         (top-configuration-default-host conf)
+        (make-configuration-table
+         (configuration-table-port conf)
+         (configuration-table-max-waiting conf)
+         (configuration-table-initial-connection-timeout conf)
+         (configuration-table-default-host conf)
          new-hosts))
       
       ; write-to-file : str TST -> void
@@ -146,15 +137,15 @@
 	  (lambda (out) (pretty-print x out))
           'truncate))
       
-      ; delete-hosts : top-configuration (listof str) -> top-configuration
-      ; pre: (>= (length (top-configuration-hosts conf)) (max to-delete))
+      ; delete-hosts : configuration-table (listof str) -> configuration-table
+      ; pre: (>= (length (configuration-table-virtual-hosts conf)) (max to-delete))
       (define (delete-hosts conf to-delete)
         ; the if is not needed, it just avoids some work
         (if (null? to-delete)
             conf
             (update-hosts
              conf
-             (drop (top-configuration-hosts conf) to-delete))))
+             (drop (configuration-table-virtual-hosts conf) to-delete))))
       
       ; drop : (listof a) (listof str) -> (listof a)
       ; pre: (apply < to-delete)
@@ -167,7 +158,7 @@
                       (loop (cdr to-filter) (cdr to-delete) (add1 i))
                       (cons (car to-filter) (loop (cdr to-filter) to-delete (add1 i))))])))
       
-      ; configure-hosts : top-configuration (U #f nat) -> top-configuration
+      ; configure-hosts : configuration-table (U #f nat) -> configuration-table
       (define (configure-hosts old n)
         (if n
             (update-hosts old
@@ -179,23 +170,23 @@
                                  (if (= n this-n)
                                      (cons (car host) (configure-host (cdr host)))
                                      host))
-                               (top-configuration-hosts old)
-                               (build-list (length (top-configuration-hosts old)) (lambda (x) x))))
-            (make-top-configuration
-             (top-configuration-port old)
-             (top-configuration-waiting old)
-             (top-configuration-initial-timeout old)
-             (configure-host (top-configuration-default-host old))
-             (top-configuration-hosts old))))
+                               (configuration-table-virtual-hosts old)
+                               (build-list (length (configuration-table-virtual-hosts old)) (lambda (x) x))))
+            (make-configuration-table
+             (configuration-table-port old)
+             (configuration-table-max-waiting old)
+             (configuration-table-initial-connection-timeout old)
+             (configure-host (configuration-table-default-host old))
+             (configuration-table-virtual-hosts old))))
       
-      ; configure-host : host-configuration -> host-configuration
+      ; configure-host : host-table -> host-table
       (define (configure-host old)
-        (let* ([bindings (interact (request-new-host-configuration old))]
-               [new (update-host-configuration old bindings)])
+        (let* ([bindings (interact (request-new-host-table old))]
+               [new (update-host-table old bindings)])
           (when (assq 'edit-passwords bindings)
-            (let ([paths (host-configuration-paths new)])
+            (let ([paths (host-table-paths new)])
               (configure-passwords (build-path-maybe (build-path-maybe (collection-path "web-server")
-                                                                       (paths-host-root paths))
+                                                                       (paths-host-base paths))
                                                      (paths-passwords paths)))))
           new))
       
@@ -203,8 +194,8 @@
         `((h3 (font ([color "red"]) "Restart the Web server to use the new settings."))
           "You may need to choose a different port or wait a while before restarting."))
       
-      ; request-new-top-configuration : top-configuration -> str -> html
-      (define (request-new-top-configuration old)
+      ; request-new-configuration-table : configuration-table -> str -> html
+      (define (request-new-configuration-table old)
         (build-suspender
          '("PLT Web Server Configuration")
          `((h1 "PLT Web Server Configuration Management")
@@ -212,43 +203,43 @@
            "copyright 2001 by Paul Graunke and PLT"
            (hr)
            (table ([width "90%"])
-            (tr (td ,@restart-message)
-                (td ([align "right"]) (input ([type "submit"] [name "configure"] [value "Update Configuration"])))))    
+                  (tr (td ,@restart-message)
+                      (td ([align "right"]) (input ([type "submit"] [name "configure"] [value "Update Configuration"])))))    
            (hr)
            (h2 "Basic Configuration")
            (table
             ; more-here - make left-hand sides links to help
             ;(tr (th ([colspan "2"]) "Basic Configuration"))
-            ,(make-table-row "Port" 'port (top-configuration-port old))
+            ,(make-table-row "Port" 'port (configuration-table-port old))
             ,(make-table-row "Maximum Waiting Connections"
-                             'waiting (top-configuration-waiting old))
+                             'waiting (configuration-table-max-waiting old))
             ,(make-table-row "Initial Connection Timeout (seconds)" 'time-initial
-                             (top-configuration-initial-timeout old)))
+                             (configuration-table-initial-connection-timeout old)))
            (hr)
            (h2 "Host Name Configuration")
            (p "The Web server accepts requests on behalf of multiple " (em "hosts")
               " each corresponding to a domain name."
               " The table below maps domain names to host specific configurations.")
            (table ([width "50%"])
-            ;(tr (th ([colspan "2"]) "Host Configuration"))
-            (tr (th ([align "left"]) "Name") ;(th "Host configuration path")
-                (th "Delete")
-                (th "Edit"))
-            (tr (td ,"Default Host")
-                (td nbsp)
-                (td ([align "center"])
-                    (input ([type "radio"] [name "edit-which-host"] [value "default"]))))
-            ,@(map (lambda (host n)
-                     `(tr (td ,(make-field "text" 'host-regexps (car host)))
-                          (td ([align "center"])
-                              (input ([type "checkbox"] [name "deactivate"] [value ,n])))
-                          (td ([align "center"])
-                              (input ([type "radio"] [name "edit-which-host"] [value ,n])))))
-                   (top-configuration-hosts old)
-                   (build-list (length (top-configuration-hosts old)) number->string))
-            (tr (td (input ([type "submit"] [name "add-host"] [value "Add Host"])))
-                (td nbsp); (input ([type "submit"] [name "configure"] [value "Delete"]))
-                (td (input ([type "submit"] [name "edit-host-details"] [value "Edit"])))))
+                  ;(tr (th ([colspan "2"]) "Host Configuration"))
+                  (tr (th ([align "left"]) "Name") ;(th "Host configuration path")
+                      (th "Delete")
+                      (th "Edit"))
+                  (tr (td ,"Default Host")
+                      (td nbsp)
+                      (td ([align "center"])
+                          (input ([type "radio"] [name "edit-which-host"] [value "default"]))))
+                  ,@(map (lambda (host n)
+                           `(tr (td ,(make-field "text" 'host-regexps (car host)))
+                                (td ([align "center"])
+                                    (input ([type "checkbox"] [name "deactivate"] [value ,n])))
+                                (td ([align "center"])
+                                    (input ([type "radio"] [name "edit-which-host"] [value ,n])))))
+                         (configuration-table-virtual-hosts old)
+                         (build-list (length (configuration-table-virtual-hosts old)) number->string))
+                  (tr (td (input ([type "submit"] [name "add-host"] [value "Add Host"])))
+                      (td nbsp); (input ([type "submit"] [name "configure"] [value "Delete"]))
+                      (td (input ([type "submit"] [name "edit-host-details"] [value "Edit"])))))
            (hr)
            ,footer)))
       
@@ -262,16 +253,16 @@
       (define (make-field type label value)
         `(input ([type ,type] [name ,(symbol->string label)] [value ,value] [size "30"])))
       
-      ; update-configuration : top-configuration bindings -> top-configuration
+      ; update-configuration : configuration-table bindings -> configuration-table
       (define (update-configuration old bindings)
-        (make-top-configuration
+        (make-configuration-table
          (string->nat (extract-binding/single 'port bindings))
          (string->nat (extract-binding/single 'waiting bindings))
          (string->nat (extract-binding/single 'time-initial bindings))
-         (top-configuration-default-host old)
+         (configuration-table-default-host old)
          (map (lambda (h pattern)
                 (cons pattern (cdr h)))
-              (top-configuration-hosts old)
+              (configuration-table-virtual-hosts old)
               (extract-bindings 'host-regexps bindings))))
       
       ; string->nat : str -> nat
@@ -281,10 +272,11 @@
               n
               (error 'string->nat "~s is not exactly a natural number" str))))
       
-      ; request-new-host-configuration : host-configuration -> str -> response
-      (define (request-new-host-configuration old)
-        (let ([timeouts (host-configuration-timeouts old)]
-              [paths (host-configuration-paths old)])
+      ; request-new-host-table : host-table -> str -> response
+      (define (request-new-host-table old)
+        (let ([timeouts (host-table-timeouts old)]
+              [paths (host-table-paths old)]
+              [m (host-table-messages old)])
           (build-suspender
            '("Configure Host")
            `((h1 "PLT Web Server Host configuration")
@@ -300,7 +292,7 @@
                     (tr (th ([colspan "2"]) "Paths") (th ([width "50%"]) nbsp))
                     ; more here - add links to descriptions, esp. what's relative to what
                     ,(make-dir-row "Host root" (collection-path "web-server")
-                                   'path-host-root (paths-host-root paths))
+                                   'path-host-root (paths-host-base paths))
                     ,(make-dir-row "Log file" "Host root" 'path-log (paths-log paths))
                     ,(make-dir-row "Web document root" "Host root"
                                    'path-htdocs (paths-htdocs paths))
@@ -313,19 +305,19 @@
                     (tr (td ([colspan "3"]) (hr)))
                     (tr (th ([colspan "2"]) "Message Paths") (th ([width "50%"]) nbsp))
                     ,(make-dir-row "Message root" "Host root"
-                                   'path-message-root (paths-message-root paths))
+                                   'path-message-root (paths-conf paths))
                     ,(make-dir-row "Servlet error" "Message root"
-                                   'path-servlet-message (paths-servlet-message paths))
-                    ,(make-dir-row "Access Denied" "Message root" 'path-access-message (paths-access-message paths))
+                                   'path-servlet-message (messages-servlet m))
+                    ,(make-dir-row "Access Denied" "Message root" 'path-access-message (messages-authentication m))
                     ,(make-dir-row "Servlet cache refreshed" "Message root"
-                                   'path-servlet-refresh-message (paths-servlet-refresh-message paths))
+                                   'path-servlet-refresh-message (messages-servlets-refreshed m))
                     ,(make-dir-row "Password cache refreshed" "Message root"
                                    'path-password-refresh-message
-                                   (paths-password-refresh-message paths))
+                                   (messages-passwords-refreshed m))
                     ,(make-dir-row "File not found" "Message root"
-                                   'path-not-found-message (paths-not-found-message paths))
+                                   'path-not-found-message (messages-file-not-found m))
                     ,(make-dir-row "Protocol error" "Message root"
-                                   'path-protocol-message (paths-protocol-message paths)))
+                                   'path-protocol-message (messages-protocol m)))
              (hr)
              (input ([type "submit"] [value "Save Configuration"]))
              ,footer))))
@@ -338,9 +330,9 @@
       (define (make-3columns label tag default-text)
         (make-table-row label tag default-text '(td nbsp)))
       
-      ; update-host-configuration : host-configuration (listof (cons sym str)) -> host-configuration
-      (define (update-host-configuration old bindings)
-        (make-host-configuration
+      ; update-host-table : host-table (listof (cons sym str)) -> host-table
+      (define (update-host-table old bindings)
+        (make-host-table
          (apply make-timeouts
                 (map (lambda (tag) (string->number (extract-binding/single tag bindings)))
                      '(time-default-servlet time-password time-servlet-connection time-file-per-byte time-file-base)))
@@ -507,113 +499,33 @@
       
       ; io
       
-      ; read-configuration : -> top-configuration
-      ; This assumes that the module is well-formed once it sees the module is written in the right language.
-      (define (read-configuration)
-        (let ([configuration (call-with-input-file configuration-path read)])
-          (unless (and (pair? configuration) (eq? 'module (car configuration))
-                       (pair? (cdr configuration)) (pair? (cddr configuration))
-                       (equal? configuration-table-language (caddr configuration)))
-            (error 'read-configuration
-                   "The top level configuration file is not a module in the configuration-table-language"))
-          (let ([body (cdddr configuration)])
-            (make-top-configuration
-             (extract-definition 'port body)
-             (extract-definition 'max-waiting body)
-             (extract-definition 'initial-connection-timeout body)
-             (parse-host-configuration (extract-definition 'default-host-table body))
-             (map (lambda (x)
-                    (unless (and (pair? x) (eq? 'cons (car x))
-                                 (pair? (cdr x)) (string? (cadr x)))
-                      (error 'read-configuration "expected `(cons ,str ,host-configuration-syntax) received ~s" x))
-                    (cons (cadr x)
-                          (parse-host-configuration (caddr x))))
-                  ; skip the symbol 'list
-                  (cdr (extract-definition 'virtual-host-table body)))))))
+      ; read-configuration : str -> configuration-table
+      (define (read-configuration configuration-path)
+        (parse-configuration-table (call-with-input-file configuration-path read)))
       
-      ; parse-host-configuartion : s-expr -> host-configuration
-      ; more here - better error checking
-      (define (parse-host-configuration x)
-        (unless (and (pair? x) (eq? (car x) 'let*) (pair? (cdr x)) (list? (cadr x)) (pair? (cddr x)))
-          (error 'parse-host-configuration "malformed host table: expected a let*, given ~s" x))
-        (let* ([bindings (cadr x)]
-               [gen-check-bindings
-                (lambda (binding-ok? expected)
-                  (lambda (name)
-                    (let ([binding (assq name bindings)])
-                      (unless binding
-                        (error 'parse-host-configuration
-                               "missing binding for ~a in ~s" name bindings))
-                      (let ([v (cadr binding)])
-                        (unless (binding-ok? v)
-                          (error 'parse-host-configuration
-                                 "expected ~a for ~a, received ~s"
-                                 expected
-                                 name v))
-                        v))))])
-          (make-host-configuration
-           (apply make-timeouts
-                  (map (gen-check-bindings number? "a literal number")
-                       '(default-servlet-timeout
-                         password-connection-timeout
-                         servlet-connection-timeout
-                         file-per-byte-connection-timeout
-                         file-base-connection-timeout)))
-           (apply make-paths (map (compose caddr
-                                           (gen-check-bindings build-path-maybe? "a build-path-maybe expression"))
-                                  '(host-root
-                                    log-file-path
-                                    file-root
-                                    servlet-root
-                                    password-authentication
-                                    configuration-root
-                                    servlet-message
-                                    authentication-message
-                                    servlets-refreshed
-                                    passwords-refreshed
-                                    file-not-found-message
-                                    protocol-message))))))
-      
-      ; build-path-maybe? : tst -> bool
-      (define (build-path-maybe? x)
-        (and (pair? x) (eq? (car x) 'build-path-maybe)
-             (pair? (cdr x)) (symbol? (cadr x))
-             (pair? (cddr x)) (string? (caddr x))
-             (null? (cdddr x))))
-      
-      ; write-configuration : top-configuration -> void
+      ; write-configuration : configuration-table -> void
       ; writes out the new configuration file and
       ; also copies the configure.ss servlet to the default-host's servlet directory
       (define (write-configuration new)
-        (ensure-configuration-servlet (top-configuration-default-host new))
+        (ensure-configuration-servlet (configuration-table-default-host new))
         (let ([new-module
-               `(module configuration-table
-                  ,configuration-table-language
-                  (provide
-                   port
-                   max-waiting
-                   initial-connection-timeout
-                   virtual-host-table
-                   default-host-table)
-                  
-                  (define port ,(top-configuration-port new))
-                  (define max-waiting ,(top-configuration-waiting new))
-                  (define initial-connection-timeout ,(top-configuration-initial-timeout new))
-                  
-                  (define default-host-table
-                    ,(format-host (top-configuration-default-host new)))
-                  
-                  (define virtual-host-table
-                    ,(cons 'list (map (lambda (h)
-                                        `(cons ,(car h) ,(format-host (cdr h))))
-                                      (top-configuration-hosts new)))))])
+               `((port ,(configuration-table-port new))
+                 (max-waiting ,(configuration-table-max-waiting new))
+                 (initial-connection-timeout ,(configuration-table-initial-connection-timeout new))
+                 (default-host-table
+                  ,(format-host (configuration-table-default-host new)))
+                 (virtual-host-table
+                  . ,(map (lambda (h) (list (car h) (format-host (cdr h))))
+                          (configuration-table-virtual-hosts new))))])
           (write-to-file configuration-path new-module)))
       
-      ; ensure-configuration-servlet : host-configuration -> void
+      
+      
+      ; ensure-configuration-servlet : host-table -> void
       (define (ensure-configuration-servlet host)
-        (let* ([paths (host-configuration-paths host)]
+        (let* ([paths (host-table-paths host)]
                [root (build-path-maybe (collection-path "web-server")
-                                       (paths-host-root paths))]
+                                       (paths-host-base paths))]
                [servlets-path
                 (build-path (build-path-maybe root (paths-servlet paths)) "servlets")])
           (ensure-file (collection-path "web-server" "default-web-root" "servlets")
@@ -652,57 +564,36 @@
           ; race condition - someone else could make the directory
           (make-directory* to)))
       
-      ; format-host : host-configuration
+      ; format-host : host-table
       (define (format-host host)
-        (let ([t (host-configuration-timeouts host)]
-              [p (host-configuration-paths host)])
-          `(let* ([host-root (build-path-maybe web-server-collection ,(paths-host-root p))]
-                  [log-file-path (build-path-maybe host-root ,(paths-log p))]
-                  [file-root (build-path-maybe host-root ,(paths-htdocs p))]
-                  [servlet-root (build-path-maybe host-root ,(paths-servlet p))]
-                  [configuration-root (build-path-maybe host-root ,(paths-message-root p))]
-                  [default-indices (list "index.html" "index.htm")] ; more here - configure
-                  [log-format 'parenthesized-default] ; more here - configure
-                  [password-authentication (build-path-maybe host-root ,(paths-passwords p))]
-                  [servlet-message (build-path-maybe configuration-root ,(paths-servlet-message p))]
-                  ;[servlet-loading-responder ...]
-                  [authentication-message (build-path-maybe configuration-root ,(paths-access-message p))]
-                  [servlets-refreshed (build-path-maybe configuration-root
-                                                        ,(paths-servlet-refresh-message p))]
-                  [passwords-refreshed (build-path-maybe configuration-root
-                                                         ,(paths-password-refresh-message p))]
-                  [file-not-found-message (build-path-maybe configuration-root
-                                                            ,(paths-not-found-message p))]
-                  [protocol-message (build-path-maybe configuration-root ,(paths-protocol-message p))]
-                  [default-servlet-timeout ,(timeouts-default-servlet t)]
-                  [password-connection-timeout ,(timeouts-password t)]
-                  [servlet-connection-timeout ,(timeouts-servlet-connection t)]
-                  [file-per-byte-connection-timeout ,(timeouts-file-per-byte t)]
-                  [file-base-connection-timeout ,(timeouts-file-base t)])
-             (make-host-table
-              default-indices
-              servlet-root
-              log-format
-              password-authentication
-              (make-messages
-               servlet-message
-               ; servlet-loading-responder
-               authentication-message
-               servlets-refreshed
-               passwords-refreshed
-               file-not-found-message
-               protocol-message)
-              (make-timeouts
-               default-servlet-timeout
-               password-connection-timeout
-               servlet-connection-timeout
-               file-per-byte-connection-timeout
-               file-base-connection-timeout)
-              (make-paths
-               host-root
-               log-file-path
-               file-root
-               servlet-root)))))
+        (let ([t (host-table-timeouts host)]
+              [p (host-table-paths host)]
+              [m (host-table-messages host)])
+          `(host-table
+            ; more here - configure
+            (default-indices "index.html" "index.htm")
+            ; more here - configure
+            (log-format parenthesized-default)
+            (messages
+             (servlet-message ,(messages-servlet m))
+             (authentication-message ,(messages-authentication m))
+             (servlets-refreshed ,(messages-servlets-refreshed m))
+             (passwords-refreshed ,(messages-passwords-refreshed m))
+             (file-not-found-message ,(messages-file-not-found m))
+             (protocol-message ,(messages-protocol m)))
+            (timeouts
+             (default-servlet-timeout ,(timeouts-default-servlet t))
+             (password-connection-timeout ,(timeouts-password t))
+             (servlet-connection-timeout ,(timeouts-servlet-connection t))
+             (file-per-byte-connection-timeout ,(timeouts-file-per-byte t))
+             (file-base-connection-timeout ,(timeouts-file-base t)))
+            (paths
+             (configuration-root ,(paths-conf p))
+             (host-root ,(paths-host-base p))
+             (log-file-path ,(paths-log p))
+             (file-root ,(paths-htdocs p))
+             (servlet-root ,(paths-servlet p))
+             (password-authentication ,(paths-passwords p))))))
       
       (define configuration-table-language "configuration-table-language.ss")
       

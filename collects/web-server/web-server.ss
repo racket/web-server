@@ -16,8 +16,7 @@
            "util.ss"
            "servlet-sig.ss"
            "timer.ss"
-           "configuration-structures.ss"
-           "configuration.ss")
+           "configuration-structures.ss")
   
   ; Method = (U 'get 'post 'head 'put 'delete 'trace)
   
@@ -26,22 +25,24 @@
   ; -------------------------------------------------------------------------------
   ; The Server
   
-  ; serve : [Nat] [String -> host] [Nat] -> -> Void
+  ; serve : configuration [Nat] -> -> Void
   ; to start the server on the given port and return an un-server to shut it down
-  ; max-waiting is the maximum number of clients waiting for the acceptance of their connection.
+  ; the optional port argument overrides the configuration's port
   (define serve
     ; use default values from configuration.ss by default
-    (opt-lambda ([port port]
-                 [virtual-hosts virtual-hosts]
-                 [max-waiting max-waiting])
-      (let ([custodian (make-custodian)])
+    (opt-lambda (configuration [port (configuration-port configuration)])
+      (let ([virtual-hosts (configuration-virtual-hosts configuration)]
+            [max-waiting (configuration-max-waiting configuration)]
+            [custodian (make-custodian)])
         (parameterize ([current-custodian custodian])
           (let ([listener (tcp-listen port max-waiting)])
             ; If tcp-listen fails, the exception will be raised in the caller's thread.
-            (thread (lambda ()
-                      (server-loop custodian listener
-                                   (make-config virtual-hosts (make-hash-table)
-                                                (make-hash-table) (make-hash-table)))))))
+            (thread
+             (lambda ()
+               (server-loop custodian listener
+                            (make-config virtual-hosts (make-hash-table)
+                                         (make-hash-table) (make-hash-table))
+                            (configuration-initial-connection-timeout configuration))))))
         (lambda () (custodian-shutdown-all custodian)))))
   
   ; -------------------------------------------------------------------------------
@@ -54,10 +55,13 @@
     (regexp-match METHOD:REGEXP x))
   ;:(define match-method (type: (str -> (union false (list str str str str str)))))
   
-  ; server-loop : custodian tcp-listener config -> void
-  (define (server-loop top-custodian listener tables)
+  ; server-loop : custodian tcp-listener config num -> void
+  (define (server-loop top-custodian listener tables init-timeout)
     (let bigger-loop ()
-      (with-handlers ([void (lambda (exn) (bigger-loop))])
+      (with-handlers ([void (lambda (exn)
+                              (fprintf (current-error-port) "server-loop exn: ~a" exn)
+                              (bigger-loop))]
+                      [exn:i/o:tcp? (lambda (exn) (bigger-loop))])
         (let loop ()
           (let ([connection-cust (make-custodian)])
             (parameterize ([current-custodian connection-cust])
@@ -66,14 +70,15 @@
                 (thread (lambda ()
                           (finally (lambda ()
                                      (serve-connection top-custodian ip op tables
-                                                       (start-timer INITIAL-CONNECTION-TIMEOUT shutdown)))
+                                                       (start-timer init-timeout shutdown)
+                                                       init-timeout))
                                    shutdown))))))
           (loop)))))
   
-  ; serve-connection : custodian iport oport Tables timer -> Void
+  ; serve-connection : custodian iport oport Tables timer num -> Void
   ; to respond to all the requests on an http connection 
   ; (Currently only the first request is answered.)
-  (define (serve-connection top-custodian ip op tables timer)
+  (define (serve-connection top-custodian ip op tables timer init-timeout)
     (let connection-loop ()
       (let-values ([(method uri-string major-version minor-version) (read-request ip op)])
         (let* ([headers (read-headers ip)]
@@ -82,10 +87,10 @@
                [host-conf ((config-hosts tables) host)])
           ; more here - don't extract host-ip and client-ip twice (leakage)
           (let-values ([(host-ip client-ip) (tcp-addresses ip)])
-            (display (format-log-message host-ip client-ip method uri host)
+            (display ((host-format-log-message host-conf) host-ip client-ip method uri host)
                      (host-log host-conf)))
           (dispatch top-custodian method host-conf uri headers ip op tables timer)
-          (reset-timer timer INITIAL-CONNECTION-TIMEOUT)
+          (reset-timer timer init-timeout)
           (unless (close-connection? headers (string->number major-version) (string->number minor-version))
             (connection-loop))))))
   

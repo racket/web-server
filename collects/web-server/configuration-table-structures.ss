@@ -1,13 +1,18 @@
 (module configuration-table-structures mzscheme
   (require "util.ss")
-    
-  ; host-table = (make-host-table (listof str) str (str str -> (U #f str)) passwords messages timeouts paths)
-  (provide-define-struct host-table (indices servlet-root log-format passwords messages timeouts paths))
+  
+  ; configuration-table = (make-configuration-table nat nat num host-table (listof host-table))
+  (provide-define-struct
+   configuration-table
+   (port max-waiting initial-connection-timeout default-host virtual-hosts))
+  
+  ; host-table = (make-host-table (listof str) sym passwords messages timeouts paths)
+  (provide-define-struct host-table (indices log-format messages timeouts paths))
   
   ; passwords = (listof (list* relm:str protected-dir-regexp:str (listof (list user:sym password:str))))
   ; passwords moved back to a separate file
   
-  ; messages = (make-messages str^7)
+  ; messages = (make-messages str^6)
   (provide-define-struct messages
     (servlet ;servlet-loading
      authentication servlets-refreshed passwords-refreshed file-not-found protocol))
@@ -15,5 +20,5 @@
   ; timeouts = (make-timeouts nat^6)
   (provide-define-struct timeouts (default-servlet password servlet-connection file-per-byte file-base))
   
-  ; paths = (make-paths str^10)
-  (provide-define-struct paths (host-base log htdocs servlet)))
+  ; paths = (make-paths str^6)
+  (provide-define-struct paths (conf host-base log htdocs servlet passwords)))

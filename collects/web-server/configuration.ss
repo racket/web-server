@@ -1,16 +1,28 @@
 ; configuration language example
 (module configuration mzscheme
-  (provide virtual-hosts
-           default-host
-           format-log-message
-           (all-from-except "configuration-table.ss" default-host-table virtual-host-table))
-  (require "configuration-table.ss"
-           "configuration-structures.ss"
+  (provide complete-configuration build-path-maybe)
+  (require "configuration-structures.ss"
            "configuration-table-structures.ss"
            "servlet-sig.ss"
            "util.ss"
            (lib "url.ss" "net")
            (lib "etc.ss"))
+  
+  ; complete-configuration : configuration-table -> configuration
+  (define (complete-configuration table)
+    (make-configuration
+     (configuration-table-port table)
+     (configuration-table-max-waiting table)
+     (configuration-table-initial-connection-timeout table)
+     (let ([default-host
+            (apply-default-functions-to-host-table
+             (configuration-table-default-host table))]
+           [expanded-virtual-host-table
+            (map (lambda (x)
+                   (list (regexp (string-append (car x) "(:[0-9]*)?"))
+                         (apply-default-functions-to-host-table (cdr x))))
+                 (configuration-table-virtual-hosts table))])
+       (gen-virtual-hosts expanded-virtual-host-table default-host))))
   
   (define TEXT/HTML-MIME-TYPE "text/html")
   
@@ -92,13 +104,14 @@
   ; I never used.
   ; ...
   
-  ; format-log-message : str str sym url str -> str
+  ; gen-format-log-message : sym -> str str sym url str -> str
   ; more here - check apache log configuration formats
   ; other server's include the original request line,
   ; including the major and minor HTTP version numbers
   ; to produce a string that is displayed into the log file
-  (define (format-log-message host-ip client-ip method uri host)
-    (format "~s~n" (list 'from client-ip 'to host-ip 'for (url->string uri))))
+  (define (gen-format-log-message log-format)
+    (lambda (host-ip client-ip method uri host)
+      (format "~s~n" (list 'from client-ip 'to host-ip 'for (url->string uri)))))
   
   ; read-file : str -> str
   (define (read-file path)
@@ -107,38 +120,50 @@
   
   ; apply-default-functions-to-host-table : host-table -> host
   (define (apply-default-functions-to-host-table host-table)
-    (make-host
-     (host-table-indices host-table)
-     (gen-servlet-path (host-table-servlet-root host-table))
-     format-log-message
-     (host-table-passwords host-table)
-     (let ([m (host-table-messages host-table)])
-       (make-responders
-        (gen-servlet-responder (messages-servlet m))
-        servlet-loading-responder
-        (gen-authentication-responder (messages-authentication m))
-        (gen-servlets-refreshed (messages-servlets-refreshed m))
-        (gen-passwords-refreshed (messages-passwords-refreshed m))
-        (gen-file-not-found-responder (messages-file-not-found m))
-        (gen-protocol-responder (messages-protocol m))))
-     (host-table-timeouts host-table)
-     (host-table-paths host-table)
-     (open-output-file (paths-log (host-table-paths host-table)) 'append)))
+    (let ([paths (expand-paths (host-table-paths host-table))])
+      (make-host
+       (host-table-indices host-table)
+       (gen-servlet-path (paths-servlet paths))
+       (gen-format-log-message (host-table-log-format host-table))
+       (paths-passwords paths)
+       (let ([m (host-table-messages host-table)]
+             [conf (paths-conf paths)])
+         (make-responders
+          (gen-servlet-responder (build-path-maybe conf (messages-servlet m)))
+          servlet-loading-responder
+          (gen-authentication-responder (build-path-maybe conf (messages-authentication m)))
+          (gen-servlets-refreshed (build-path-maybe conf (messages-servlets-refreshed m)))
+          (gen-passwords-refreshed (build-path-maybe conf (messages-passwords-refreshed m)))
+          (gen-file-not-found-responder (build-path-maybe conf (messages-file-not-found m)))
+          (gen-protocol-responder (build-path-maybe conf (messages-protocol m)))))
+       (host-table-timeouts host-table)
+       paths
+       (open-output-file (paths-log paths) 'append))))
   
-  (define default-host (apply-default-functions-to-host-table default-host-table))
+  ; expand-paths : paths -> paths
+  (define (expand-paths paths)
+    (let ([host-base (build-path-maybe web-server-root (paths-host-base paths))])
+      (make-paths (build-path-maybe host-base (paths-conf paths))
+                  host-base
+                  (build-path-maybe host-base (paths-log paths))
+                  (build-path-maybe host-base (paths-htdocs paths))
+                  (build-path-maybe host-base (paths-servlet paths))
+                  (build-path-maybe host-base (paths-passwords paths)))))
   
-  ; expanded-virtual-host-table : (listof (list regexp str))
-  ; Replacing the map here 
-  (define expanded-virtual-host-table
-    (map (lambda (x)
-           (list (regexp (string-append (car x) "(:[0-9]*)?"))
-                 (apply-default-functions-to-host-table (cdr x))))
-         virtual-host-table))
+  (define web-server-root (collection-path "web-server"))
   
-  ; virtual-hosts : str -> host-configuration
-  (define (virtual-hosts host-name-possibly-followed-by-a-collon-and-a-port-number)
-    (or (ormap (lambda (x)
-                 (and (regexp-match (car x) host-name-possibly-followed-by-a-collon-and-a-port-number)
-                      (cadr x)))
-               expanded-virtual-host-table)
-        default-host)))
+  ; gen-virtual-hosts : (listof (list regexp host)) host ->
+  ; str -> host-configuration
+  (define (gen-virtual-hosts expanded-virtual-host-table default-host)
+    (lambda (host-name-possibly-followed-by-a-collon-and-a-port-number)
+      (or (ormap (lambda (x)
+                   (and (regexp-match (car x) host-name-possibly-followed-by-a-collon-and-a-port-number)
+                        (cadr x)))
+                 expanded-virtual-host-table)
+          default-host)))
+  
+  ; build-path-maybe : str str -> str
+  (define (build-path-maybe base path)
+    (if (absolute-path? path)
+        path
+        (build-path base path))))
