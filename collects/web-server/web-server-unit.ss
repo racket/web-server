@@ -16,6 +16,32 @@
            )
   (provide web-server@)
 
+  (define myprint
+    (lambda args
+      (apply fprintf (cons (current-error-port) args))))
+
+
+  ;; ****************************************
+  ;; stick this auxilliary outside the unit so
+  ;; I can get at it with require/expose
+
+  ;; get-host : Url (listof (cons Symbol String)) -> String
+  ;; host names are case insesitive---Internet RFC 1034
+  (define DEFAULT-HOST-NAME "<none>")
+  (define (get-host uri headers)
+    (let ([lower!
+           (lambda (s)
+             (string-lowercase! s)
+             s)])
+      (cond
+        [(url-host uri) => lower!]
+        [(assq 'host headers)
+         =>
+         (lambda (h) (lower! (bytes->string/utf-8 (cdr h))))]
+        [else DEFAULT-HOST-NAME])))
+
+  ;; ****************************************
+
   (define web-server@
     (unit/sig web-server^
       (import net:tcp^ (config : web-config^))
@@ -52,10 +78,10 @@
             (parameterize ([current-custodian connection-cust])
               (let-values ([(ip op) (get-ports)])
                 (thread
-                  (lambda ()
-                    (serve-connection
-                      (new-connection config:initial-connection-timeout
-                                      ip op (current-custodian) #f))))))
+                 (lambda ()
+                   (serve-connection
+                    (new-connection config:initial-connection-timeout
+                                    ip op (current-custodian) #f))))))
             (loop))))
 
       ;; serve-ports : input-port output-port -> void
@@ -91,23 +117,7 @@
                 [close? (kill-connection! conn)]
                 [else (connection-loop)])))))
 
-      (define DEFAULT-HOST-NAME "<none>")
 
-      ;; get-host : Url (listof (cons Symbol String)) -> String
-      ;; host names are case insesitive---Internet RFC 1034
-      (define (get-host uri headers)
-        (let ([lower!
-               (lambda (s)
-                 (string-lowercase! (bytes->string/utf-8 s))
-                 s)])
-          (cond
-           [(url-host uri) => lower!]
-           [(assq 'host headers) =>
-            (lambda (h) (lower! (cdr h)))]
-           [else DEFAULT-HOST-NAME])))
-
-      ;; Used in dispatch and loading code.
-      (define-struct servlet-program (unit custodian))
 
       ;; dispatch: connection request host -> void
       ;; NOTE: (GregP) I'm going to use the dispatch logic out of v208 for now.
@@ -129,11 +139,6 @@
              [(string=? "/conf/refresh-servlets" path)
               ;; more here - this is broken - only out of date or specifically mentioned
               ;; scripts should be flushed.  This destroys persistent state!
-              (let ((old-table (unbox config:scripts)))
-                (hash-table-for-each
-                  old-table
-                  (lambda (key svt-program)
-                    (custodian-shutdown-all (servlet-program-custodian svt-program)))))
               (set-box! config:scripts (make-hash-table 'equal))
               (output-response/method
                conn
@@ -434,7 +439,6 @@
                      [real-servlet-path (url-path->path
                                          (paths-servlet (host-paths host-info))
                                          (url-path->string (url-path uri)))]
-
                      [servlet-exit-handler (make-servlet-exit-handler inst)]
                      )
 
@@ -450,14 +454,10 @@
                                                  (host-timeouts host-info))
                                                 (lambda ()
                                                   (servlet-exit-handler #f)))]
-
-                        ;; Notes:
-                        ;; 1. Servlet is not loaded within the extent of
-                        ;;    servlet-custodian. (See reload-servlet-script)
-                        ;; 2. call to cached-load must be within extent of
-                        ;;    real-servlet-path for paths to work right.
-                        [servlet-program (cached-load real-servlet-path)]
-                        )
+                        ;; any resources (e.g. threads) created when the
+                        ;; servlet is loaded should be within the dynamic
+                        ;; extent of the servlet custodian
+                        [servlet-program (cached-load real-servlet-path)])
 
                     (with-handlers ([(lambda (x) #t)
                                      (make-servlet-exception-handler inst
@@ -491,8 +491,7 @@
           (kill-connection!
            (execution-context-connection
             (servlet-instance-context inst)))
-          (custodian-shutdown-all (servlet-instance-custodian inst))
-          ))
+          (custodian-shutdown-all (servlet-instance-custodian inst))))
 
       ;; make-servlet-exception-handler: host -> exn -> void
       ;; This exception handler traps all unhandled servlet exceptions
@@ -578,14 +577,12 @@
       ;; Paul's ugly loading code:
 
       ;; cached-load : str -> script
-      ;; timestamps are no longer checked for performance.  The cache must be
-      ;; explicitly refreshed (see dispatch).
+      ;; timestamps are no longer checked for performance.  The cache must be explicitly
+      ;; refreshed (see dispatch).
       (define (cached-load name)
-        (let ((svt-program (hash-table-get
-                             (unbox config:scripts)
-                             name
-                             (lambda () (reload-servlet-script name)))))
-          (servlet-program-unit svt-program)))
+        (hash-table-get (unbox config:scripts)
+                        name
+                        (lambda () (reload-servlet-script name))))
 
       ;; exn:i/o:filesystem:servlet-not-found =
       ;; (make-exn:fail:filesystem:exists:servlet str continuation-marks str sym)
@@ -595,23 +592,15 @@
       ;; reload-servlet-script : str -> script
       ;; The servlet is not cached in the servlet-table, so reload it from the filesystem.
       (define (reload-servlet-script servlet-filename)
-
-        ;; Resources created when the servlet is loaded are
-        ;; created within the dynamic extent of the
-        ;; servlet-program-custodian and will be shutdown only
-        ;; when the scripts are refreshed.
-        (parameterize ((current-custodian (make-servlet-custodian)))
-          (cond
-            [(load-servlet/path servlet-filename)
-            => (lambda (svlt)
-                 (let ([svt-prog  (make-servlet-program svlt (current-custodian))])
-                   (hash-table-put! (unbox config:scripts) servlet-filename
-                                    svt-prog)
-                   svt-prog))]
-            [else
-             (raise (make-exn:fail:filesystem:exists:servlet
-                      (string->immutable-string (format "Couldn't find ~a" servlet-filename))
-                      (current-continuation-marks) ))])))
+        (cond
+          [(load-servlet/path servlet-filename)
+           => (lambda (svlt)
+                (hash-table-put! (unbox config:scripts) servlet-filename svlt)
+                svlt)]
+          [else
+           (raise (make-exn:fail:filesystem:exists:servlet
+                   (string->immutable-string (format "Couldn't find ~a" servlet-filename))
+                   (current-continuation-marks) ))]))
 
        ;; load-servlet/path path -> (union #f signed-unit)
       ;; given a string path to a filename attempt to load a servlet
