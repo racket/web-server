@@ -764,7 +764,8 @@
 		    (display #\return out)
 		    (newline out))
 		  (list* `("HTTP/1.1 " ,code " " ,message)
-			 `("Date: " ,(seconds->gmt-string seconds))
+                         `("Date: " ,(seconds->gmt-string (current-seconds)))
+			 `("Last-Modified " ,(seconds->gmt-string seconds))
 			 `("Server: PLT Scheme")
 			 `("Content-type: " ,mime)
 			 ; more here - consider removing Connection fields from extras or raising an error
