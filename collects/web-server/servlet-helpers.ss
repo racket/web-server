@@ -57,7 +57,7 @@
   (define temporarily (make-redirection-status 302 "Moved Temporarily"))
   (define see-other (make-redirection-status 303 "See Other"))
   
-  ; : str -> response
+  ; : str [redirection-status] -> response
   (define redirect-to
     (opt-lambda (uri [perm/temp permanently])
       (make-response/full (redirection-status-code perm/temp)
