@@ -2,21 +2,32 @@
   (require (lib "contract.ss")
            (lib "string.ss")
            (lib "list.ss")
-           (lib "url.ss" "net"))
-  
-  (provide get-mime-type
-           update-params 
-           provide-define-struct
+           (lib "url.ss" "net")
+           (lib "errortrace-lib.ss" "errortrace"))
+
+  (provide provide-define-struct
            extract-flag
-           hash-table-empty?
-           lowercase-symbol!)
-  
-  (provide/contract 
+           hash-table-empty?)
+
+  (provide/contract
    [path->list  (path? . -> . (cons/p (union path? (symbols 'up 'same))
                                       (listof (union path? (symbols 'up 'same)))))]
    [url-path->path ((union (symbols 'up 'same) path?) string? . -> . path?)]
-   [directory-part (path? . -> . path?)])
+   [directory-part (path? . -> . path?)]
+   [lowercase-symbol! ((union string? bytes?) . -> . symbol?)]
+   [exn->string ((union exn? any?) . -> . string?)]
+   [get-mime-type (path? . -> . bytes?)])
 
+  ;; exn->string : (union exn any) -> string
+  ;; builds an error message, including errortrace annotations (if present)
+  (define (exn->string exn)
+    (if (exn? exn)
+        (let ([op (open-output-string)])
+          (display (exn-message exn) op)
+          (newline op)
+          (print-error-trace op exn)
+          (get-output-string op))
+        (format "~s\n" exn)))
 
     ; lowercase-symbol! : (union string bytes) -> symbol
   (define (lowercase-symbol! s)
@@ -25,7 +36,7 @@
                  s)])
       (string-lowercase! s)
       (string->symbol s)))
-  
+
   ; prefix? : str -> str -> bool
   ; more here - consider moving this to mzlib's string.ss
   ;; Notes: (GregP)
@@ -46,7 +57,6 @@
                                      (string (integer->char (add1 ascii))))])
             (lambda (x)
               (and (string<=? prefix x) (string<? x next)))))))
-  
 
 
   ;; get-mime-type: path -> bytes
@@ -63,10 +73,10 @@
                           (lowercase-symbol! sffx)
                           ;(string->symbol (bytes->string/utf-8 sffx))
                           (lambda () DEFAULT-MIME-TYPE))))))
-    
-  
+
+
   (define DEFAULT-MIME-TYPE #"text/plain")
-  
+
   (define MIME-TYPE-TABLE
     (let ([table (make-hash-table)])
       (for-each (lambda (x) (hash-table-put! table (car x) (cdr x)))
@@ -112,14 +122,14 @@
                   (tif  . #"image/tiff")
                   (pic  . #"image/x-pict")))
       table))
-  
+
   (define (directory-part path)
     (let-values ([(base name must-be-dir) (split-path path)])
       (cond
         [(eq? 'relative base) (current-directory)]
         [(not base) (error 'directory-part "~a is a top-level directory" path)]
         [(path? base) base])))
-  
+
   ; more here - ".." should probably raise an error instead of disappearing.
   (define (url-path->path base p)
     ; spidey can't check build-path's use of only certain symbols
@@ -132,19 +142,20 @@
                       [else (cons x acc)]))
                   null
                   (chop-string #\/ p))))
-  
+
   ; update-params : Url (U #f String) -> String
   ; to create a new url just like the old one, but with a different parameter part
-  (define (update-params uri params)
-    (url->string
-     (make-url (url-scheme uri)
-               (url-user uri)
-               (url-host uri)
-               (url-port uri)
-               (url-path uri)
-               params
-               (url-query uri) 
-               (url-fragment uri))))
+  ;; GREGP: this is broken! replace with the version from new-kernel
+;  (define (update-params uri params)
+;    (url->string
+;     (make-url (url-scheme uri)
+;               (url-user uri)
+;               (url-host uri)
+;               (url-port uri)
+;               (url-path uri)
+;               params
+;               (url-query uri)
+;               (url-fragment uri))))
 
   ; to convert a platform dependent path into a listof path parts such that
   ; (forall x (equal? (path->list x) (path->list (apply build-path (path->list x)))))
@@ -156,7 +167,7 @@
             [(string? base) (loop base new-acc)]
             [else ; conflate 'relative and #f
              new-acc])))))
-  
+
   ; chop-string : Char String -> (listof String)
   (define (chop-string separator s)
     (let ([p (open-input-string s)])
@@ -172,8 +183,8 @@
               (cond
                 [(eof-object? (read-char p)) null]
                 [else (extract-parts)])))))
-  
-  
+
+
   ; this should go somewhere that other collections can use it too
   (define-syntax provide-define-struct
     (lambda (stx)
@@ -184,7 +195,7 @@
         [(_ struct-name (field ...))
          (syntax (begin (define-struct struct-name (field ...))
                         (provide (struct struct-name (field ...)))))])))
-  
+
   ; this is used by launchers
   ; extract-flag : sym (listof (cons sym alpha)) alpha -> alpha
   (define (extract-flag name flags default)
@@ -192,7 +203,7 @@
       (if x
           (cdr x)
           default)))
-  
+
   ; hash-table-empty? : hash-table -> bool
   (define (hash-table-empty? table)
     (let/ec out

@@ -26,6 +26,5 @@
       (log-file-path "log")
       (file-root "htdocs")
       (servlet-root ".")
-      (servlet-root "/add/" "/Users/gregp/projects/TestWeb/")
       (password-authentication "passwords"))))
  (virtual-host-table))

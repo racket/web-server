@@ -1,28 +1,88 @@
 (module servlet-helpers mzscheme
   (require (lib "list.ss")
            (lib "etc.ss")
-	   "util.ss"
-           "min-servlet.ss"
+           "util.ss"
+           "response.ss"
+           "request-parsing.ss"
            (lib "xml.ss" "xml")
-           (lib "errortrace-lib.ss" "errortrace")
-	   (lib "base64.ss" "net"))
-  
+           (lib "base64.ss" "net"))
+
   (provide extract-binding/single
            extract-bindings
-	   exists-binding?
-	   extract-user-pass
-	   build-suspender
-	   make-html-response/incremental
+           exists-binding?
+           extract-user-pass
+           build-suspender
+           make-html-response/incremental
            report-errors-to-browser
-           ;anchor-case
-	   redirect-to
+           redirect-to
            permanently
            temporarily
            see-other
-           exn->string
-           ;let*-bindings
-           (all-from "min-servlet.ss")
+           (all-from-except "request-parsing.ss" request-bindings)
+           (rename request-bindings request-bindings/raw)
+           (rename get-parsed-bindings request-bindings)
            )
+
+  (define-struct servlet-error ())
+  (define-struct (invalid-%-suffix servlet-error) (chars))
+  (define-struct (incomplete-%-suffix invalid-%-suffix) ())
+
+  ; This comes from Shriram's collection, and should be exported form there.
+  ; translate-escapes : String -> String
+  (define (translate-escapes raw)
+    (list->string
+     (let loop ((chars (string->list raw)))
+       (if (null? chars) null
+           (let ((first (car chars))
+                 (rest (cdr chars)))
+             (let-values (((this rest)
+                           (cond
+                             ((char=? first #\+)
+                              (values #\space rest))
+                             ((char=? first #\%)
+                              ; MF: I rewrote this code so that Spidey could eliminate all checks.
+                              ; I am more confident this way that this hairy expression doesn't barf.
+                              (if (pair? rest)
+                                  (let ([rest-rest (cdr rest)])
+                                    (if (pair? rest-rest)
+                                        (values (integer->char
+                                                 (or (string->number (string (car rest) (car rest-rest)) 16)
+                                                     (raise (make-invalid-%-suffix
+                                                             (if (string->number (string (car rest)) 16)
+                                                                 (car rest-rest)
+                                                                 (car rest))))))
+                                                (cdr rest-rest))
+                                        (raise (make-incomplete-%-suffix rest))))
+                                  (raise (make-incomplete-%-suffix rest))))
+                             (else (values first rest)))))
+               (cons this (loop rest))))))))
+
+
+  ;; get-parsed-bindings : request -> (listof (cons sym str))
+  (define (get-parsed-bindings r)
+    (let ([x (request-bindings r)])
+      (if (list? x)
+          x
+          (parse-bindings x))))
+
+  ;; parse-bindings : (U #f String) -> (listof (cons Symbol String))
+  (define (parse-bindings raw)
+    (if (string? raw)
+        (let ([len (string-length raw)])
+          (let loop ([start 0])
+            (let find= ([key-end start])
+              (if (>= key-end len)
+                  null
+                  (if (eq? (string-ref raw key-end) #\=)
+                      (let find-amp ([amp-end (add1 key-end)])
+                        (if (or (= amp-end len) (eq? (string-ref raw amp-end) #\&))
+                            (cons (cons (string->symbol (substring raw start key-end))
+                                        (translate-escapes
+                                         (substring raw (add1 key-end) amp-end)))
+                                  (loop (add1 amp-end)))
+                            (find-amp (add1 amp-end))))
+                      (find= (add1 key-end)))))))
+        null))
 
   ; extract-binding/single : sym (listof (cons sym str)) -> str
   (define (extract-binding/single name bindings)
@@ -32,18 +92,18 @@
          (error 'extract-bindings/single "~a not found in ~a" name bindings)]
         [(null? (cdr lst)) (car lst)]
         [else (error 'extract-binding/single "~a occurs multiple times in ~a" name bindings)])))
-  
+
   ; extract-bindings : sym (listof (cons sym str)) -> (listof str)
   (define (extract-bindings name bindings)
     (map cdr (filter (lambda (x) (eq? name (car x))) bindings)))
-  
+
   ; exists-binding? : sym (listof (cons sym str)) -> bool
   ; for checkboxes
   (define (exists-binding? name bindings)
     (if (assq name bindings)
         #t
         #f))
-  
+
   ; build-suspender : (listof html) (listof html) [(listof (cons sym str))] [(listof (cons sym str))] -> str -> response
   (define build-suspender
     (opt-lambda (title content [body-attributes '([bgcolor "white"])] [head-attributes null])
@@ -56,14 +116,14 @@
                (body ,body-attributes
                      (form ([action ,k-url] [method "post"])
                            . ,content))))))
-  
+
   ; redirection-status = (make-redirection-status nat str)
   (define-struct redirection-status (code message))
-  
+
   (define permanently (make-redirection-status 301 "Moved Permanently"))
   (define temporarily (make-redirection-status 302 "Moved Temporarily"))
   (define see-other (make-redirection-status 303 "See Other"))
-  
+
   ; : str [redirection-status] -> response
   (define redirect-to
     (opt-lambda (uri [perm/temp permanently])
@@ -71,19 +131,19 @@
                           (redirection-status-message perm/temp)
                           (current-seconds) "text/html"
                           `((location . ,uri)) (list (redirect-page uri)))))
-  
+
   ; : str -> str
   (define (redirect-page url)
     (xexpr->string `(html (head (meta ((http-equiv "refresh") (url ,url)))
-				"Redirect to " ,url)
+                                "Redirect to " ,url)
                           (body (p "Redirecting to " (a ([href ,url]) ,url))))))
-  
+
   ; make-html-response/incremental : ((string -> void) -> void) -> response/incremental
   (define (make-html-response/incremental chunk-maker)
     (make-response/incremental
      200 "Okay" (current-seconds) "text/html" '()
      chunk-maker))
-  
+
   ; : (response -> doesn't) -> void
   ; to report exceptions that occur later to the browser
   ; this must be called at the begining of a servlet
@@ -95,58 +155,6 @@
                (body ([bgcolor "white"])
                      (p "The following error occured: "
                         (pre ,(exn->string exn)))))))))
-  
-  ;; exn->string : (union exn any) -> string
-  ;; builds an error message, including errortrace annotations (if present)
-  (define (exn->string exn)
-    (if (exn? exn)
-        (let ([op (open-output-string)])
-          (display (exn-message exn) op)
-          (newline op)
-          (print-error-trace op exn)
-          (get-output-string op))
-        (format "~s\n" exn)))
-  
-;  (define-syntax let*-bindings
-;    (lambda (stx)
-;      (syntax-case stx ()
-;        [(let*-bindings-stx ([(field ...) bindings]
-;                             clauses ...)
-;                            body0 body ...)
-;         (syntax
-;          (let ([b bindings])
-;            (let ([field (extract-binding/single 'field b)] ...)
-;              (let*-bindings-stx (clauses ...)
-;                                 body0 body ...))))]
-;        [(let*-bindings-stx () body0 body ...)
-;         (syntax (begin body0 body ...))])))
-    
-;  (define-syntax anchor-case
-;    (lambda (stx)
-;      (syntax-case stx ()
-;        [(src-anchor-case
-;          page
-;          ((anchor-pattern anchor-patterns ...) body bodies ...) ...)
-;         ; FIX - catching send/suspend from the unit is messy.
-;         (with-syntax ([send/suspend (syntax (eval 'send/suspend))])
-;           (syntax (let ([format-href (lambda (k-url id) (format "~a?link=~a" k-url id))])
-;                     ; Format-href should check that gensym only generates okay characters, but gensym always does.
-;                     (let ([request
-;                            (send/suspend
-;                             (lambda (k-url)
-;                               ; FIX provide k-url somehow for forms?
-;                               ;     add an else clause for form submission
-;                               (let-values ([(anchor-pattern anchor-patterns ...)
-;                                             (values (format-href k-url 'anchor-pattern)
-;                                                     (format-href k-url 'anchor-patterns) ...)]
-;                                            ...)
-;                                 page)))])
-;                       (let ([link (string->symbol (extract-binding/single 'link (request-bindings request)))])
-;                         (case link
-;                           [(anchor-pattern anchor-patterns ...)
-;                            body bodies ...]
-;                           ...
-;                           [else (error 'src-anchor-case "unmatched response ~s" link)]))))))])))
 
   ; Authentication
 
@@ -164,15 +172,15 @@
   (define (extract-user-pass headers)
     (let ([pass-pair (assq 'authorization headers)])
       (and pass-pair
-	   (let ([basic-credentials (cdr pass-pair)])
-	     (cond
-	      [(and (basic? basic-credentials)
-		    (match-authentication
+           (let ([basic-credentials (cdr pass-pair)])
+             (cond
+              [(and (basic? basic-credentials)
+                    (match-authentication
                      (base64-decode (subbytes basic-credentials 6 (bytes-length basic-credentials))))
                      )
-	       => (lambda (user-pass)
-		    (cons (cadr user-pass) (caddr user-pass)))]
-	      [else #f])))))
+               => (lambda (user-pass)
+                    (cons (cadr user-pass) (caddr user-pass)))]
+              [else #f])))))
 
   ;; basic?: bytes -> (union (listof bytes) #f)
   ;; does the second part of the authorization header start with #"Basic "

@@ -1,11 +1,11 @@
 (module timer mzscheme
-  (provide start-timer reset-timer)
-  
+  (provide timer? start-timer reset-timer)
+
   ; BUG: reducing the timeout is ineffective
   ; efficiency: too many threads
-  
+
   (define-struct timer (expire-seconds))
-  
+
   ; start-timer : num (-> void) -> timer
   ; to make a timer that calls to-do after msec from make-timer's application
   (define (start-timer sec to-do)
@@ -21,7 +21,7 @@
                             (snooze)])))])
         (thread snooze))
       timer))
-  
+
   ; reset-timer : timer num -> void
   ; to cause timer to expire after sec from the adjust-msec-to-live's application
   (define (reset-timer timer sec)
