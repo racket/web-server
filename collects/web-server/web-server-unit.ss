@@ -12,6 +12,7 @@
 	   "util.ss"
 	   "servlet-sig.ss"
 	   "servlet.ss"
+	   "servlet-tables.ss"
 	   "timer.ss"
 	   "internal-structs.ss"
 	   "configuration-structures.ss")
@@ -675,7 +676,7 @@
 				       (adjust-timeout! timeout)
 				       (start initial-request)))]
 				  [(typed-model-split-store-0)
-				   (let ([constained (dynamic-require module-name 'type)]
+				   (let ([constrained (dynamic-require module-name 'type)]
 					 [the-servlet (dynamic-require module-name 'servlet)])
 					; more here - check constraints
 				     the-servlet)]
@@ -755,7 +756,7 @@
 			(add-new-instance invoke-id instances)
 			(with-handlers ([void (lambda (exn)
 						(decapitate method ((responders-servlet (host-responders host-info)) uri exn)))])
-			  (invoke-unit/sig servlet-program servlet^))))))))))))
+                          (invoke-unit/sig servlet-program servlet^))))))))))))
 
       ; response = (cons str (listof str)), where the first str is a mime-type
       ;          | x-expression
@@ -768,7 +769,8 @@
 	(or (response/full? page)
 	  ; this could fail for dotted lists - rewrite andmap
 	  (and (pair? page) (pair? (cdr page)) (andmap string? page))
-	  (xexpr? page)))
+	  ; insist the xexpr has a root element
+	  (and (pair? page) (xexpr? page))))
 
       ; output-page/port : response oport bool -> void
       (define (output-page/port page out close)
@@ -811,7 +813,7 @@
 			      close)
 	      (for-each (lambda (str) (display str out))
 			(response/full-body page))])]
-	  [(string? (car page))
+	  [(and (pair? page) (string? (car page)))
 	   (output-headers out 200 "Okay" (current-seconds) (car page)
 			   `(("Content-length: " ,(apply + (map string-length (cdr page)))))
 			   close)
