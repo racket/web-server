@@ -11,7 +11,8 @@
            "util.ss"
            "parse-table.ss"
            (lib "url.ss" "net")
-           (lib "etc.ss"))
+           (lib "etc.ss")
+	   (lib "date.ss"))
   
   (define default-configuration-table-path
     (build-path (collection-path "web-server") "configuration-table"))
@@ -146,8 +147,11 @@
     (let ([out (open-output-file log-path 'append)])
       (lambda (host-ip client-ip method uri host)
         ; do the display all at once by formating first
-	(display (format "~s~n" (list 'from client-ip 'to host-ip 'for (url->string uri)))
-		 out))))
+	(display
+	  (format "~s~n"
+	    (list 'from client-ip 'to host-ip 'for (url->string uri) 'at 
+	      (date->string (seconds->date (current-seconds)))))
+	  out))))
   
   ; ignore-log : sym str -> str str sym url str -> str
   (define (ignore-log log-format log-path) void)
