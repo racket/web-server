@@ -75,6 +75,9 @@
 
   ; begin stolen from commander.ss, which was stolen from private/drscheme/eval.ss
   ; FIX - abstract this out to a namespace library somewhere (ask Robby and Matthew)
+  
+  ; JBC : added error-handler hack; the right answer is only to transfer the 'mred' 
+  ; module binding when asked to, e.g. by a field in the configuration file.
   (define to-be-copied-module-specs
     '(mzscheme
       ;; allow people to use MrEd primitives from servlets.
@@ -82,7 +85,11 @@
       (lib "servlet-sig.ss" "web-server")
       ; internal structs needed for parameter
       (lib "internal-structs.ss" "web-server")))
-  (for-each (lambda (x) (dynamic-require x #f)) to-be-copied-module-specs)
+  (for-each (lambda (x) (with-handlers ([not-break-exn? (lambda (exn) 'dont-care)]) 
+                          ; dynamic-require will fail when running web-server-text.
+                          ; maybe a warning message in the exception-handler?
+                          (dynamic-require x #f))) 
+            to-be-copied-module-specs)
 
   ;; get the names of those modules.
   (define to-be-copied-module-names
