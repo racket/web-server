@@ -27,7 +27,11 @@
   (define (response? x)
     (or (response/basic? x)
                                         ; this could fail for dotted lists - rewrite andmap
-        (and (pair? x) (pair? (cdr x)) (andmap string? x))
+        (and (pair? x) (pair? (cdr x)) (andmap
+                                        (lambda (x)
+                                          (or (string? x)
+                                              (bytes? x)))
+                                        x))
                                         ; insist that the xexpr has a root element
         (and (pair? x) (xexpr? x))))
 
@@ -41,7 +45,7 @@
                                                                      (string? (cdr p)))))]
                                            [seconds number?]
                                            [mime string?]
-                                           [body (listof string?)])]
+                                           [body (listof (union string? bytes?))])]
    [struct (response/incremental response/basic)
            ([code number?]
             [message string?]
@@ -54,7 +58,6 @@
             [generator ((() (listof (union bytes? string?)) . ->* . any) . -> . any)])]
    [response? (any? . -> . boolean?)]
    [output-response (connection? response? . -> . any)]
-   [output-response/incremental (connection? response/incremental? . -> . any)]
    [output-response/method (connection? response? symbol? . -> . any)]
    [output-file (connection? path? symbol? string? . -> . any)]
    [TEXT/HTML-MIME-TYPE string?]
@@ -114,9 +117,8 @@
       (for-each
        (lambda (line)
          (for-each
-          (lambda (word) (display (if (string? word)
-                                      (string->bytes/utf-8 word)
-                                      word) o-port)) line)
+          (lambda (word) (display word o-port))
+          line)
          (fprintf o-port "\r\n"))
        (list* `("HTTP/1.1 " ,code " " ,message)
               `("Date: " ,(seconds->gmt-string (current-seconds)))
@@ -160,6 +162,7 @@
   ;; **************************************************
   ;; output-response: connection response -> void
   (define (output-response conn resp)
+    (myprint "output-response~n")
     (cond
      [(response/full? resp)
       (output-response/basic
@@ -170,28 +173,44 @@
           (response/full-body resp))))]
      [(response/incremental? resp)
       (output-response/incremental conn resp)]
-     [(pair? resp)
+     [(and (pair? resp) (string? (car resp)))
       (output-response/basic
+       conn
        (make-response/basic 200 "Okay" '() (current-seconds) (car resp))
-       (apply + (map string-length (cdr resp)))
+       (apply + (map
+                 (lambda (c)
+                   (if (string? c)
+                       (string-length c)
+                       (bytes-length c)))
+                 (cdr resp)))
        (lambda (o-port)
          (for-each
           (lambda (str) (display str o-port))
           (cdr resp))))]
      [else
+      (myprint "else clause~n")
       ;; TODO: make a real exception for this.
       (with-handlers
           ([exn? (lambda (exn)
                    (raise exn))])
         (let ([str (xexpr->string resp)])
-          (make-response/basic 200 "Okay" '() (current-seconds) TEXT/HTML-MIME-TYPE)
-          (add1 (string-length str))
-          (lambda (o-port) (display str o-port))))]))
+          (output-response/basic
+           conn
+           (make-response/basic 200 "Okay" '() (current-seconds) TEXT/HTML-MIME-TYPE)
+           (add1 (string-length str))
+           (lambda (o-port)
+             (display str o-port)
+             (newline o-port)))))]))
 
   ;; response/full->size: response/full -> number
   ;; compute the size for a response/full
   (define (response/full->size resp/f)
-    (apply + (map string-length (response/full-body resp/f))))
+    (apply + (map
+              (lambda (c)
+                (if (string? c)
+                    (string-length c)
+                    (bytes-length c)))
+              (response/full-body resp/f))))
 
   ;; **************************************************
   ;; output-file: connection path symbol string -> void
@@ -230,6 +249,7 @@
   ;; output-response/basic: connection response number (o-port -> void) -> void
   ;; Write a normal response to an output port
   (define (output-response/basic conn resp size responder)
+    (myprint "output-response/basic~n")
     (output-headers/response conn resp
                              `(("Content-length: " ,size)
                                . ,(extras->strings resp)))
