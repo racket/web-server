@@ -142,8 +142,11 @@
             [else (error 'read-request "malformed request ~a" line)]))))
   
   ; get-host : Url (listof (cons Symbol String)) -> String
+  ; host names are case insesitive---Internet RFC 1034
   (define (get-host uri headers)
-    (or (url-host uri) (cdr (or (assq 'host headers) (cons 'dummy DEFAULT-HOST-NAME)))))
+    (let ([s (or (url-host uri) (cdr (or (assq 'host headers) (cons 'dummy DEFAULT-HOST-NAME))))])
+      (string-lowercase! s)
+      s))
   
   (define COLON:REGEXP (regexp (format "^([^:]*):[ ~a]*(.*)" #\tab)))
   
@@ -231,7 +234,6 @@
   
   ; ----------------------------------------------------------------------------
   
-  
   (empty-tag-shorthand html-empty-tags)
   
   ; --------------------------------------------------------------------------
@@ -290,9 +292,10 @@
             ; scripts should be flushed.  This destroys persistant state!
             (set-config-scripts! config (make-hash-table))
             (report-error out method ((responders-servlets-refreshed (host-responders host-info))) close)]
-           ; more here - FIX password/configuration reloading
            [(string=? "/conf/refresh-passwords" path)
-            (set-config-access! config (make-hash-table))
+            ;(set-config-access! config (make-hash-table))
+            ; more here - send a nice error page
+            (hash-table-put! (config-access config) host-info (read-passwords host-info))
             (report-error out method ((responders-passwords-refreshed (host-responders host-info))) close)]
            [else (report-error out method (responders-file-not-found uri) close)])]
         [(servlet-bin? path)
@@ -318,29 +321,44 @@
            (hash-table-get
             access-table host-info
             (lambda ()
-              ; if there's no password file, everything is allowed
-              (let ([f (with-handlers ([void (lambda (exn) (lambda (req user pass) #f))])
-                         (let ([passwords
-                                (let ([raw (load (host-passwords host-info))])
-                                  (unless (password-list? raw)
-                                    (raise "malformed passwords"))
-                                  (map (lambda (x) (make-pass-entry (car x) (regexp (cadr x)) (cddr x)))
-                                       raw))])
-                           ; str sym str -> (+ false str)
-                           (lambda (request-path user-name password)
-                             (ormap (lambda (x)
-                                      (and (regexp-match (pass-entry-pattern x) request-path)
-                                           (let ([name-pass (assq user-name (pass-entry-users x))])
-                                             (if (and name-pass (string=? (cadr name-pass) password))
-                                                 #f
-                                                 (pass-entry-domain x)))))
-                                    passwords))))])
+              ; more here - a malformed password file will kill the connection
+              (let ([f (read-passwords host-info)])
                 (hash-table-put! access-table host-info f)
                 f)))])
       (let ([user-pass (extract-user-pass headers)])
         (if user-pass
             (denied? (url-path uri) (lowercase-symbol! (car user-pass)) (cdr user-pass))
             (denied? (url-path uri) fake-user "")))))
+  
+  (define-struct (exn:password-file exn) ())
+  
+  ; : host -> (str sym str -> (U str #f))
+  ; to produce a function that checks if a given url path is accessible by a given user with a given
+  ; password.  If not, the produced function returns a string, prompting for the password.
+  ; If the password file does not exist, all accesses are allowed.  If the file is malformed, an
+  ; exn:password-file is raised.
+  (define (read-passwords host-info)
+    (let ([password-path (host-passwords host-info)])
+      (with-handlers ([void (lambda (exn)
+                              (raise (make-exn:password-file (format "could not load password file ~a" password-path)
+                                                             (current-continuation-marks))))])
+        (if (and (file-exists? password-path) (memq 'read (file-or-directory-permissions password-path)))
+            (let ([passwords
+                   (let ([raw (load password-path)])
+                     (unless (password-list? raw)
+                       (raise "malformed passwords"))
+                     (map (lambda (x) (make-pass-entry (car x) (regexp (cadr x)) (cddr x)))
+                          raw))])
+              ; str sym str -> (+ false str)
+              (lambda (request-path user-name password)
+                (ormap (lambda (x)
+                         (and (regexp-match (pass-entry-pattern x) request-path)
+                              (let ([name-pass (assq user-name (pass-entry-users x))])
+                                (if (and name-pass (string=? (cadr name-pass) password))
+                                    #f
+                                    (pass-entry-domain x)))))
+                       passwords)))
+            (lambda (req user pass) #f)))))
   
   ; extract-user-pass : (listof (cons sym str)) -> (U #f (cons str str))
   (define (extract-user-pass headers)
@@ -570,7 +588,7 @@
     ; This is easier than removing the slash that may or may not
     ; be there and is not platform specific.
     (string->symbol (build-path path "a")))
-
+  
   ; exn:i/o:filesystem:servlet-not-found = 
   ; (make-exn:i/o:filesystem:servlet-not-found str continuation-marks str sym)
   (define-struct (exn:i/o:filesystem:servlet-not-found exn:i/o:filesystem) ())
@@ -588,9 +606,9 @@
                             (raise (format "looking up a script didn't yield a unit/sig: ~e" s))))))
                paths)
         (raise (make-exn:i/o:filesystem:servlet-not-found
-		    (format "Couldn't find ~a" original-name)
-		    (current-continuation-marks)
-		    original-name 'ill-formed-path))))
+                (format "Couldn't find ~a" original-name)
+                (current-continuation-marks)
+                original-name 'ill-formed-path))))
   
   (define URL-PARAMS:REGEXP (regexp "([^\\*]*)\\*(.*)"))
   
