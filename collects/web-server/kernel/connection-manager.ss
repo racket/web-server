@@ -2,7 +2,8 @@
   (require (lib "contract.ss")
            "server-resource-manager.ss")
 
-  ;(provide (struct connection (i-port o-port custodian close?)))
+  ;; TODO: Need some kind of adjust timeout.
+
   (define-struct (connection server-resource) (i-port o-port custodian close?)
     (make-inspector))
 
@@ -13,7 +14,8 @@
             [close? boolean?])]
    [start-connection-manager (custodian? . -> . void)]
    [new-connection (number? input-port? output-port? custodian? boolean? . -> . connection?)]
-   [kill-connection! (connection? . -> . void)])
+   [kill-connection! (connection? . -> . void)]
+   [adjust-connection-timeout! (connection? number? . -> . void)])
 
   (define the-connection-manager #f)
 
@@ -37,4 +39,9 @@
   ;; kill this connection
   (define (kill-connection! conn-demned)
     (kill-server-resource! the-connection-manager conn-demned))
+
+  ;; adjust-connection-timeout!: connection number -> void
+  ;; change the expiration time for this connection
+  (define (adjust-connection-timeout! conn time)
+    (error "adjust-connection-timeout is not implemented"))
   )
