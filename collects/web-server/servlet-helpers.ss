@@ -84,7 +84,7 @@
                       (find= (add1 key-end)))))))
         null))
 
-  ; extract-binding/single : sym (listof (cons sym str)) -> str
+  ; extract-binding/single : sym (listof (cons str str)) -> str
   (define (extract-binding/single name bindings)
     (let ([lst (extract-bindings name bindings)])
       (cond
@@ -93,9 +93,9 @@
         [(null? (cdr lst)) (car lst)]
         [else (error 'extract-binding/single "~a occurs multiple times in ~a" name bindings)])))
 
-  ; extract-bindings : sym (listof (cons sym str)) -> (listof str)
+  ; extract-bindings : sym (listof (cons str str)) -> (listof str)
   (define (extract-bindings name bindings)
-    (map cdr (filter (lambda (x) (eq? name (car x))) bindings)))
+    (map cdr (filter (lambda (x) (equal? name (car x))) bindings)))
 
   ; exists-binding? : sym (listof (cons sym str)) -> bool
   ; for checkboxes
