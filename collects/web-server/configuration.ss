@@ -90,9 +90,8 @@
       ;; GregP: putting mred.ss here is a bad idea because it will cause
       ;; web-server-text to have a dependency on mred
       ;(lib "mred.ss" "mred")
-      (lib "servlet.ss" "web-server")
-      ; internal structs needed for parameter
-      (lib "internal-structs.ss" "web-server")))
+      (lib "servlet.ss" "web-server")))
+
 
   ; JBC : added error-handler hack; the right answer is only to transfer the 'mred'
   ; module binding when asked to, e.g. by a field in the configuration file.
