@@ -89,7 +89,7 @@
     (let ([lst (extract-bindings name bindings)])
       (cond
         [(null? lst)
-         (error 'extract-bindings/single "~a not found in ~a" name bindings)]
+         (error 'extract-binding/single "~a not found in ~a" name bindings)]
         [(null? (cdr lst)) (car lst)]
         [else (error 'extract-binding/single "~a occurs multiple times in ~a" name bindings)])))
 
