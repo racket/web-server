@@ -440,7 +440,7 @@
                   ;; response.
                   (let ((r (invoke-unit/sig servlet-program servlet^)))
                     (when (response? r)
-                      (output-response conn r)))))))))
+                      (send/back r)))))))))
 
       ;; path -> path
       ;; The actual servlet's parent directory.
