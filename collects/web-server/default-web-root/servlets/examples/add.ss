@@ -22,9 +22,7 @@
                          (input ([type "text"] [name "number"] [value ""]))
                          (input ([type "submit"] [name "enter"] [value "Enter"])))))))
   
-  (send/suspend
-   (lambda (k-url)
-     `(html (head (title "Sum"))
-            (body ([bgcolor "white"])
-                  (p "The sum is "
-                     ,(number->string (+ (request-number "first") (request-number "second")))))))))
+  `(html (head (title "Sum"))
+         (body ([bgcolor "white"])
+               (p "The sum is "
+	          ,(number->string (+ (request-number "first") (request-number "second")))))))
