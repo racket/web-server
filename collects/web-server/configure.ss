@@ -528,8 +528,8 @@
                            (td ,(make-field "radio" 'edit n))))
                     passwords
                     (build-list (length passwords) number->string)))
-           ,(make-field "submit" 'submit "Add Realm")
-           ,(make-field "submit" 'submit "Edit")
+           ,(make-field "submit" 'add "Add Realm")
+           ,(make-field "submit" 'edit-button "Edit")
            ,footer)))
       
       ; edit-realm : realm -> realm
