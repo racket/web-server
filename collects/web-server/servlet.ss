@@ -10,10 +10,10 @@
   ;; Weak contracts: the input is checked in output-response, and a message is
   ;; sent directly to the client (Web browser) instead of the terminal/log.
   (provide/contract
-    (send/back (any? . -> . any))
-    (send/finish (any? . -> . any))
-    (send/suspend ((string? . -> . any?) . -> . request?))
-    (send/forward ((string? . -> . any?) . -> . request?))
+    (send/back (any/c . -> . any))
+    (send/finish (any/c . -> . any))
+    (send/suspend ((string? . -> . any/c) . -> . request?))
+    (send/forward ((string? . -> . any/c) . -> . request?))
     ;;; validate-xexpr/callback is not checked anywhere:
     (send/suspend/callback (xexpr/callback? . -> . any))
     )
