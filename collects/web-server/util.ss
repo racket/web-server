@@ -19,10 +19,10 @@
    [get-mime-type (path? . -> . bytes?)]
    [build-path-unless-absolute (path? (union string? path?) . -> . path?)])
 
-  ;; build-path-unless-absolute : str str -> str
+  ;; build-path-unless-absolute : path (union string? path?) -> path?
   (define (build-path-unless-absolute base path)
     (if (absolute-path? path)
-        path
+        (build-path path)
         (build-path base path)))
 
   ;; exn->string : (union exn any) -> string
