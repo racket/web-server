@@ -55,7 +55,7 @@
                   [message string?]
                   [seconds number?]
                   [mime bytes?]
-                  [extras (listof (cons/p symbol? string?))]
+                  [extras (listof (cons/c symbol? string?))]
                   [body (listof (union string?
                                        bytes?))])]
    [struct (response/incremental response/basic)
@@ -63,7 +63,7 @@
             [message string?]
             [seconds number?]
             [mime bytes?]
-            [extras (listof (cons/p symbol? string?))]
+            [extras (listof (cons/c symbol? string?))]
             [generator ((() (listof (union bytes? string?)) . ->* . any) . ->
                         . any)]
             )]

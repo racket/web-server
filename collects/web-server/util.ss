@@ -10,7 +10,7 @@
            hash-table-empty?)
 
   (provide/contract
-   [path->list  (path? . -> . (cons/p (union path? (symbols 'up 'same))
+   [path->list  (path? . -> . (cons/c (union path? (symbols 'up 'same))
                                       (listof (union path? (symbols 'up 'same)))))]
    [url-path->path ((union (symbols 'up 'same) path?) string? . -> . path?)]
    [directory-part (path? . -> . path?)]
