@@ -335,7 +335,7 @@
                   (write-to-file which-one (format-passwords new-passwords))
                   (edit-passwords which-one new-passwords))])
           (cond
-            [(assq 'edit bindings)
+            [(and (assq 'edit-realm bindings) (assq 'edit bindings))
              => (lambda (edit)
                   (again (drop (map (let ([to-edit (string->number (cdr edit))])
                                       (lambda (r n)
@@ -345,10 +345,10 @@
                                     passwords
                                     (build-list (length passwords) (lambda (x) x)))
                                to-deactivate)))]
-            [(assq 'add bindings)
+            [(assq 'add-realm bindings)
              (again (cons (make-realm "new realm" "" null)
                           (drop passwords to-deactivate)))]
-            [else (drop passwords to-deactivate)])))
+            [else (write-to-file which-one (format-passwords (drop passwords to-deactivate)))])))
       
       ; password-updates : str passwords -> request
       (define (password-updates which-one passwords)
@@ -357,7 +357,7 @@
          `((h1 "Updating Passwords for ")
            (h3 ,which-one)
            (h2 "You may wish to " (font ([color "red"]) "backup") " this password file.")
-           (p "Each authentication " (em "realm") " password protects URLs that match a pattern."
+           (p "Each authentication " (em "realm") " password protects URLs that match a pattern. "
               "Choose a realm to edit below:")
            (table
             (tr (th "Realm Name") (th "Delete") (th "Edit"))
@@ -367,8 +367,9 @@
                            (td ,(make-field "radio" 'edit n))))
                     passwords
                     (build-list (length passwords) number->string)))
-           ,(make-field "submit" 'submit "Add Realm")
-           ,(make-field "submit" 'submit "Edit")
+           ,(make-field "submit" 'add-realm "Add Realm")
+           ,(make-field "submit" 'update-realm "Update")
+           ,(make-field "submit" 'edit-realm "Edit")
            ,footer)))
       
       ; edit-realm : realm -> realm
