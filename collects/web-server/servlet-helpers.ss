@@ -1,8 +1,11 @@
 (module servlet-helpers mzscheme
   (require (lib "list.ss")
            (lib "etc.ss")
-           "web-server.ss")
-  (provide extract-binding/single extract-bindings exists-binding? extract-user-pass build-suspender)
+           "web-server.ss"
+           (lib "servlet-sig.ss" "web-server"))
+  
+  (provide extract-binding/single extract-bindings exists-binding? extract-user-pass build-suspender
+           anchor-case)
   
   ; extract-binding/single : sym (listof (cons sym str)) -> str
   (define (extract-binding/single name bindings)
@@ -35,4 +38,31 @@
                      (title . ,title))
                (body ,body-attributes
                      (form ([action ,k-url] [method "post"])
-                           . ,content)))))))
+                           . ,content))))))
+  
+  (define-syntax anchor-case
+    (lambda (stx)
+      (syntax-case stx ()
+        [(src-anchor-case
+          page
+          ((anchor-pattern anchor-patterns ...) body bodies ...) ...)
+         ; FIX - catching send/suspend from the unit is messy.
+         (with-syntax ([send/suspend (syntax (eval 'send/suspend))])
+           (syntax (let ([format-href (lambda (k-url id) (format "~a?link=~a" k-url id))])
+                     ; Format-href should check that gensym only generates okay characters, but gensym always does.
+                     (let ([request
+                            (send/suspend
+                             (lambda (k-url)
+                               ; FIX provide k-url somehow for forms?
+                               ;     add an else clause for form submission
+                               (let-values ([(anchor-pattern anchor-patterns ...)
+                                             (values (format-href k-url 'anchor-pattern)
+                                                     (format-href k-url 'anchor-patterns) ...)]
+                                            ...)
+                                 page)))])
+                       (let ([link (string->symbol (extract-binding/single 'link (request-bindings request)))])
+                         (case link
+                           [(anchor-pattern anchor-patterns ...)
+                            body bodies ...]
+                           ...
+                           [else (error 'src-anchor-case "unmatched response ~s" link)]))))))]))))
