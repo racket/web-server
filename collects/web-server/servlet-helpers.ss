@@ -16,7 +16,8 @@
 	   redirect-to
            permanently
            temporarily
-           see-other)
+           see-other
+           let*-bindings)
   
   ; extract-binding/single : sym (listof (cons sym str)) -> str
   (define (extract-binding/single name bindings)
@@ -91,6 +92,20 @@
                         ,(if (exn? exn)
                              (exn-message exn)
                              (format "~e" exn)))))))))
+  
+  (define-syntax let*-bindings
+    (lambda (stx)
+      (syntax-case stx ()
+        [(let*-bindings-stx ([(field ...) bindings]
+                             clauses ...)
+                            body0 body ...)
+         (syntax
+          (let ([b bindings])
+            (let ([field (extract-binding/single 'field b)] ...)
+              (let*-bindings-stx (clauses ...)
+                                 body0 body ...))))]
+        [(let*-bindings-stx () body0 body ...)
+         (syntax (begin body0 body ...))])))
     
   (define-syntax anchor-case
     (lambda (stx)
