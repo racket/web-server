@@ -1,4 +1,4 @@
-(module configuration-table-structures mzscheme
+(module configuration-table-structs mzscheme
   (require "util.ss")
   
   ; configuration-table = (make-configuration-table nat nat num host-table (listof (cons str host-table)))

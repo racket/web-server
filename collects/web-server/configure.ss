@@ -10,7 +10,7 @@
            (lib "file.ss")
            (rename (lib "configuration.ss" "web-server")
                    build-path-maybe build-path-maybe)
-           (lib "configuration-table-structures.ss" "web-server")
+           (lib "configuration-table-structs.ss" "web-server")
            (lib "parse-table.ss" "web-server")
            (lib "util.ss" "web-server"))
   

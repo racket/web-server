@@ -5,7 +5,7 @@
            load-configuration
            load-developer-configuration)
   (require "configuration-structures.ss"
-           "configuration-table-structures.ss"
+           "configuration-table-structs.ss"
            "servlet-sig.ss"
            "util.ss"
            "parse-table.ss"

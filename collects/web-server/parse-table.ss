@@ -1,6 +1,6 @@
 (module parse-table mzscheme
   (require (lib "match.ss")
-           "configuration-table-structures.ss")
+           "configuration-table-structs.ss")
   (provide parse-configuration-table)
     
   ; parse-configuration-table : tst -> configuration-table
