@@ -4,15 +4,7 @@
            "util.ss"
            "web-server.ss"
            "configuration.ss"
-           "configuration-structures.ss"
-           "parse-table.ss")
-  
-  (define default-configuration-table-path
-    (build-path (collection-path "web-server") "configuration-table"))
-  
-  ; load-configuration : str -> configuration
-  (define (load-configuration table-file-name)
-    (complete-configuration (parse-configuration-table (call-with-input-file table-file-name read))))
+           "configuration-structures.ss")
   
   (parse-command-line
    "web-server"

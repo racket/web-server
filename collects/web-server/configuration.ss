@@ -1,12 +1,22 @@
 ; configuration language example
 (module configuration mzscheme
-  (provide complete-configuration build-path-maybe)
+  (provide complete-configuration build-path-maybe
+           default-configuration-table-path
+           load-configuration)
   (require "configuration-structures.ss"
            "configuration-table-structures.ss"
            "servlet-sig.ss"
            "util.ss"
+           "parse-table.ss"
            (lib "url.ss" "net")
            (lib "etc.ss"))
+  
+  (define default-configuration-table-path
+    (build-path (collection-path "web-server") "configuration-table"))
+  
+  ; load-configuration : str -> configuration
+  (define (load-configuration table-file-name)
+    (complete-configuration (parse-configuration-table (call-with-input-file table-file-name read))))
   
   ; complete-configuration : configuration-table -> configuration
   (define (complete-configuration table)
