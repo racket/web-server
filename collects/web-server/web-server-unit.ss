@@ -693,14 +693,17 @@
 					 (decapitate method ((responders-file-not-found (host-responders host-info)) uri)))]
 				      [void (lambda (exn)
 					      (decapitate method ((responders-servlet-loading (host-responders host-info)) uri exn)))])
-				     (let ([servlet-program
-					    (cached-load (url-path->path (paths-servlet (host-paths host-info))
-									 (url-path uri)))]
-					   [initial-request (make-request method uri headers bindings host-ip client-ip)])
+				     (let* ([real-servlet-path (url-path->path (paths-servlet (host-paths host-info))
+                                                                               (url-path uri))]
+                                            [servlet-program (cached-load real-servlet-path)]
+                                            [initial-request (make-request method uri headers bindings host-ip client-ip)])
 				       (add-new-instance invoke-id config:instances)
-				       (with-handlers ([void (lambda (exn)
-							       (decapitate method ((responders-servlet (host-responders host-info)) uri exn)))])
-						      (invoke-unit/sig servlet-program servlet^)))))))))))))
+                                       (let-values ([(base name must-be-dir?) (split-path real-servlet-path)])
+                                         (parameterize ([current-directory
+                                                         (if must-be-dir? real-servlet-path base)])
+                                           (with-handlers ([void (lambda (exn)
+                                                                   (decapitate method ((responders-servlet (host-responders host-info)) uri exn)))])
+                                             (invoke-unit/sig servlet-program servlet^)))))))))))))))
 
       ; output-page/port : response oport bool -> void
       (define (output-page/port page out close)
