@@ -2,7 +2,8 @@
   (require (lib "list.ss")
            (lib "etc.ss")
            "web-server.ss"
-           (lib "servlet-sig.ss" "web-server"))
+           (lib "servlet-sig.ss" "web-server")
+           (lib "xml.ss" "xml"))
   
   (provide extract-binding/single
            extract-bindings
@@ -11,7 +12,10 @@
 	   build-suspender
 	   make-html-response/incremental
            ;anchor-case
-	   )
+	   redirect-to
+           permanently
+           temporarily
+           see-other)
   
   ; extract-binding/single : sym (listof (cons sym str)) -> str
   (define (extract-binding/single name bindings)
@@ -45,6 +49,26 @@
                (body ,body-attributes
                      (form ([action ,k-url] [method "post"])
                            . ,content))))))
+  
+  ; redirection-status = (make-redirection-status nat str)
+  (define-struct redirection-status (code message))
+  
+  (define permanently (make-redirection-status 301 "Moved Permanently"))
+  (define temporarily (make-redirection-status 302 "Moved Temporarily"))
+  (define see-other (make-redirection-status 303 "See Other"))
+  
+  ; : str -> response
+  (define redirect-to
+    (opt-lambda (uri [perm/temp permanently])
+      (make-response/full (redirection-status-code perm/temp)
+                          (redirection-status-message perm/temp)
+                          (current-seconds) "text/html"
+                          `((location . ,uri)) (list (redirect-page uri)))))
+  
+  ; : str -> str
+  (define (redirect-page url)
+    (xexpr->string `(html (head "Redirect to " ,url)
+                          (body (p "Redirecting to " (a ([href ,url]) ,url))))))
   
   ; make-html-response/incremental : ((string -> void) -> void) -> response/incremental
   (define (make-html-response/incremental chunk-maker)
