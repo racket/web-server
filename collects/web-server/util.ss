@@ -15,7 +15,7 @@
    [url-path->path ((union (symbols 'up 'same) path?) string? . -> . path?)]
    [directory-part (path? . -> . path?)]
    [lowercase-symbol! ((union string? bytes?) . -> . symbol?)]
-   [exn->string ((union exn? any?) . -> . string?)]
+   [exn->string ((union exn? any/c) . -> . string?)]
    [get-mime-type (path? . -> . bytes?)]
    [build-path-unless-absolute (path? (union string? path?) . -> . path?)])
 

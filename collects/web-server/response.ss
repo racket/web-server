@@ -67,8 +67,8 @@
             [generator ((() (listof (union bytes? string?)) . ->* . any) . ->
                         . any)]
             )]
-   [response? (any? . -> . boolean?)]
-   [output-response (connection? any? . -> . any)]
+   [response? (any/c . -> . boolean?)]
+   [output-response (connection? any/c . -> . any)]
    [output-response/method (connection? response? symbol? . -> . any)]
    [output-file (connection? path? symbol? bytes? . -> . any)]
    [TEXT/HTML-MIME-TYPE bytes?]
