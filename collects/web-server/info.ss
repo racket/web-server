@@ -6,6 +6,12 @@
   (define mred-launcher-libraries (list "gui-launch.ss"))
   (define mred-launcher-names (list "web-server"))
   
-  (define tools (list (list "servlet-builder.ss")))
-  (define tool-names (list "Servlet Builder"))
-  (define tool-icons (list #f)))
+  ; GregP commenting out while developing new better tools
+;  (define tools (list (list "servlet-builder.ss")))
+;  (define tool-names (list "Servlet Builder"))
+;  (define tool-icons (list #f))
+  
+  (define tools (list (list "servlet-language.ss")))
+  (define tool-names (list #f))
+  (define tool-icons (list #f))
+  )

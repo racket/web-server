@@ -19,6 +19,31 @@
 	   "configuration-structures.ss")
 
   ; Method = (U 'get 'post 'head 'put 'delete 'trace)
+  
+  ;; count-table!: hash-table format-string ->
+  ;; for counting resources stored in tables.
+;  (define (count-table! a-table format-str)
+;    (let ([n 0])
+;      (hash-table-for-each
+;       a-table
+;       (lambda (key val)
+;         (set! n (add1 n))))
+;      (printf format-str n)))
+  
+  ;; count-ks!: (hash-table-of servlet-instance) ->
+;  (define (count-ks! inst-table)
+;    (let ([insts 0]
+;          [ks 0])
+;      (hash-table-for-each
+;       inst-table
+;       (lambda (key val)
+;         (hash-table-for-each
+;          (servlet-instance-cont-table val)
+;          (lambda (key val)
+;            (set! ks (add1 ks))))
+;         (set! insts (add1 insts))))
+;      (printf "count-ks!:~n     # of instances = ~a~n     # of continuations = ~a~n"
+;              insts ks)))
 
   (define DEFAULT-HOST-NAME "<none>")
 
@@ -564,25 +589,9 @@
       ; timestamps are no longer checked for performance.  The cache must be explicitly
       ; refreshed (see dispatch).
       (define (cached-load name)
-	(let ([paths (build-path-list name)])
-	  (lookup-path paths (lambda () (reload-servlet-script name paths)))))
-
-      ; build-path-list : str -> (listof str)
-      ; to build a list of paths from most specific to least specific containing
-      ; directories starting with the given path
-      (define (build-path-list path)
-	(let-values ([(base extra dir?) (split-path path)])
-	  (if (string? base)
-	      (cons path (build-path-list base))
-	      (list path))))
-
-      ; lookup-path : (listof str) (-> script) -> script
-      (define (lookup-path path-lst fail)
-	(cond
-	  [(null? path-lst) (fail)]
-	  [else (hash-table-get (unbox config:scripts)
-				(hash-path (car path-lst))
-				(lambda () (lookup-path (cdr path-lst) fail)))]))
+        (hash-table-get (unbox config:scripts)
+                        (hash-path name)
+                        (lambda () (reload-servlet-script name))))
 
       ; hash-path : str -> sym
       ; path must not be the empty string
@@ -597,55 +606,79 @@
       ; (make-exn:i/o:filesystem:servlet-not-found str continuation-marks str sym)
       (define-struct (exn:i/o:filesystem:servlet-not-found exn:i/o:filesystem) ())
 
-      ; reload-servlet-script : str (listof str) -> script
-      (define (reload-servlet-script original-name paths)
-	(let* ([install-servlet
-		(lambda (name s)
-		  (hash-table-put! (unbox config:scripts) (hash-path original-name) s)
-		  (hash-table-put! (unbox config:scripts) (hash-path name) s)
-		  s)]
-	       [load-servlet-path
-; : str -> (U script #f)
-		(lambda (name)
-		  (and (file-exists? name)
-; MF: I'd also like to test that s has the correct import signature.
-		       (let ([s (load/use-compiled name)])
-			 (install-servlet
-			  name
-			  (cond
-			   [(unit/sig? s) s]
-; FIX - reason about exceptions from dynamic require (catch and report if not already)
-			   [(void? s)
-			    (parameterize ([current-namespace (config:make-servlet-namespace)])
-			      (let* ([module-name `(file ,name)]
-				     [version (dynamic-require module-name 'interface-version)])
-				(case version
-				  [(v1)
-				   (let ([timeout (dynamic-require module-name 'timeout)]
-					 [start (dynamic-require module-name 'start)])
-				     (unit/sig ()
-				       (import servlet^)
-				       (adjust-timeout! timeout)
-				       (start initial-request)))]
-				  [(typed-model-split-store-0)
-				   (let ([constrained (dynamic-require module-name 'type)]
-					 [the-servlet (dynamic-require module-name 'servlet)])
-					; more here - check constraints
-				     the-servlet)]
-				  [else (raise (format "unknown sevlet version ~e" version))])))]
-			   [(response? s)
-			    (letrec ([go (lambda ()
-					   (begin
-					     (set! go (lambda () (load/use-compiled name)))
-					     s))])
-			      (unit/sig () (import servlet^) (go)))]
-			   [else
-			    (raise (format "Loading ~e produced ~n~e~n instead of a servlet." name s))])))))])
-	  (or (ormap load-servlet-path paths)
-	      (raise (make-exn:i/o:filesystem:servlet-not-found
-		      (format "Couldn't find ~a" original-name)
-		      (current-continuation-marks)
-		      original-name 'ill-formed-path)))))
+
+      ;; reload-servlet-script : str -> script
+      ;; The servlet is not cached in the servlet-table, so reload it from the filesystem.
+      (define (reload-servlet-script servlet-filename)
+        (cond
+          [(load-servlet/path servlet-filename)
+           => (lambda (svlt)
+                (hash-table-put! (unbox config:scripts) (hash-path servlet-filename) svlt)
+                svlt)]
+          [else
+           (raise (make-exn:i/o:filesystem:servlet-not-found
+                   (format "Couldn't find ~a" servlet-filename)
+                   (current-continuation-marks)
+                   servlet-filename 'ill-formed-path))]))
+      
+      ;; servlet-resolver: x y z -> symbol
+      ;; Search help-desk to get a contract for a current-module-name-resolver
+      ;; This is the name resolver to install into a servlet namespace
+      ;; so that the right version of servlet-library.ss is grabbed when the servlet
+      ;; is loaded from the server.
+      (define servlet-resolver
+        (let ([cr (current-module-name-resolver)])
+          (lambda (x y z)
+            (if (equal? x '(lib "servlet-library.ss" "web-server"))
+                (cr '(lib "servlet-library-internal.ss" "web-server") y #f)
+                (cr x y z)))))
+      
+      ;; load-servlet/path string -> (union #f signed-unit)
+      ;; given a string path to a filename attempt to load a servlet
+      ;; A servlet-file will contain either
+      ;;;; A signed-unit-servlet
+      ;;;; A module servlet
+      ;;;;;; (two versions, 'v1 and I don't know what 'typed-model-split-store0 is)
+      ;;;; A response
+      (define (load-servlet/path name)
+        (and (file-exists? name)
+             (let ([s (load/use-compiled name)])
+               (cond
+                 ;; signed-unit servlet
+                 ; MF: I'd also like to test that s has the correct import signature.
+                 [(unit/sig? s) s]
+                 ; FIX - reason about exceptions from dynamic require (catch and report if not already)
+                 ;; module servlet
+                 [(void? s) 
+                  (parameterize ([current-namespace (config:make-servlet-namespace)])
+                    (eval `(current-module-name-resolver ,servlet-resolver))
+                    (let* ([module-name `(file ,name)]
+                           [version (dynamic-require module-name 'interface-version)])
+                      (case version
+                        [(v1)
+                         (let ([timeout (dynamic-require module-name 'timeout)]
+                               [start (dynamic-require module-name 'start)])
+                           (unit/sig ()
+                             (import servlet^)
+                             (adjust-timeout! timeout)
+                             (start initial-request)))]
+                        [(typed-model-split-store-0)
+                         (let ([constrained (dynamic-require module-name 'type)]
+                               [the-servlet (dynamic-require module-name 'servlet)])
+                           ; more here - check constraints
+                           the-servlet)]
+                        [else (raise (format "unknown sevlet version ~e" version))])))]
+                 ;; response
+                 [(response? s)
+                  (letrec ([go (lambda ()
+                                 (begin
+                                   (set! go (lambda () (load/use-compiled name)))
+                                   s))])
+                    (unit/sig () (import servlet^) (go)))]
+                 [else
+                  (raise (format "Loading ~e produced ~n~e~n instead of a servlet." name s))]))))
+      
+     
 
       (define URL-PARAMS:REGEXP (regexp "([^\\*]*)\\*(.*)"))
 

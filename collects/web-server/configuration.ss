@@ -79,20 +79,24 @@
   ; begin stolen from commander.ss, which was stolen from private/drscheme/eval.ss
   ; FIX - abstract this out to a namespace library somewhere (ask Robby and Matthew)
   
-  ; JBC : added error-handler hack; the right answer is only to transfer the 'mred' 
-  ; module binding when asked to, e.g. by a field in the configuration file.
+  
   (define to-be-copied-module-specs
     '(mzscheme
-      ;; allow people to use MrEd primitives from servlets.
-      (lib "mred.ss" "mred")
+      ;; allow people (SamTH) to use MrEd primitives from servlets.
+      ;; GregP: Put this back in if Sam's code is broken.
+      ;(lib "mred.ss" "mred")
       (lib "servlet-sig.ss" "web-server")
       ; internal structs needed for parameter
       (lib "internal-structs.ss" "web-server")))
-  (for-each (lambda (x) (with-handlers ([not-break-exn? (lambda (exn) 'dont-care)]) 
-                          ; dynamic-require will fail when running web-server-text.
-                          ; maybe a warning message in the exception-handler?
-                          (dynamic-require x #f))) 
-            to-be-copied-module-specs)
+  
+  ; JBC : added error-handler hack; the right answer is only to transfer the 'mred' 
+  ; module binding when asked to, e.g. by a field in the configuration file.
+  ; GregP: put this back in if Sam's code breaks
+  ;  (for-each (lambda (x) (with-handlers ([not-break-exn? (lambda (exn) 'dont-care)]) 
+  ;                          ; dynamic-require will fail when running web-server-text.
+  ;                          ; maybe a warning message in the exception-handler?
+  ;                          (dynamic-require x #f))) 
+  ;            to-be-copied-module-specs)
 
   ;; get the names of those modules.
   (define to-be-copied-module-names
@@ -103,7 +107,7 @@
 		 ((current-module-name-resolver) spec #f #f)))])
       (map get-name to-be-copied-module-specs)))
   ; end stolen
-
+  
   (define (the-make-servlet-namespace)
     (let ([server-namespace (current-namespace)]
 	  [new-namespace (make-namespace)])
