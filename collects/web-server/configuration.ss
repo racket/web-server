@@ -14,6 +14,7 @@
 
   (provide complete-configuration
            build-developer-configuration
+           build-developer-configuration/vhosts ;; added 2/3/05 by Jacob
            default-configuration-table-path
            update-configuration
            )
@@ -44,6 +45,26 @@
     (complete-developer-configuration (directory-part default-configuration-table-path)
                                       (parse-configuration-table s-expr)))
 
+  ;; added 2/3/05 by Jacob -- Help Desk needs to support virtual hosts
+  ; build-developer-configuration/vhosts : tst -> configuration-table
+  (define (build-developer-configuration/vhosts s-expr)
+    (complete-developer-configuration/vhosts (directory-part default-configuration-table-path)
+                                             (parse-configuration-table s-expr)))
+  
+  ; : str configuration-table/vhosts -> configuration
+  (define (complete-developer-configuration/vhosts base table)
+    (build-configuration
+     table     
+     (let ([default-host
+             (apply-default-functions-to-host-table
+              base (configuration-table-default-host table) ignore-log)]
+           [expanded-virtual-host-table
+            (map (lambda (x)
+                   (list (regexp (string-append (car x) "(:[0-9]*)?"))
+                         (apply-default-functions-to-host-table base (cdr x) ignore-log)))
+                 (configuration-table-virtual-hosts table))])
+       (gen-virtual-hosts expanded-virtual-host-table default-host))))
+  
   ; : str configuration-table -> configuration
   (define (complete-configuration base table)
     (build-configuration
