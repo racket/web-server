@@ -1,8 +1,21 @@
 (module util mzscheme
-  (provide get-mime-type update-params url-path->path prefix? provide-define-struct extract-flag path->list directory-part hash-table-empty?)
-  (require (lib "list.ss")
+  (require (lib "contract.ss")
+           (lib "list.ss")
            (lib "url.ss" "net"))
-
+  
+  (provide get-mime-type
+           update-params 
+           prefix?
+           provide-define-struct
+           extract-flag
+           hash-table-empty?)
+  
+  (provide/contract 
+   [path->list  (path? . -> . (cons/p (union path? (symbols 'up 'same))
+                                      (listof (union path? (symbols 'up 'same)))))]
+   [url-path->path ((union (symbols 'up 'same) string?) . -> . path?)]
+   [directory-part (path? . -> . path?)])
+  
   ; prefix? : str -> str -> bool
   ; more here - consider moving this to mzlib's string.ss
   (define (prefix? prefix)
@@ -98,15 +111,13 @@
                   (pic  . "image/x-pict")))
       table))
   
-  ; : str -> str
   (define (directory-part path)
     (let-values ([(base name must-be-dir) (split-path path)])
       (cond
         [(eq? 'relative base) (current-directory)]
         [(not base) (error 'directory-part "~a is a top-level directory" path)]
-        [(string? base) base])))
+        [(path? base) base])))
   
-  ; url-path->path : (Union 'same 'up String) String -> String
   ; more here - ".." should probably raise an error instead of disappearing.
   (define (url-path->path base p)
     ; spidey can't check build-path's use of only certain symbols
@@ -127,8 +138,7 @@
      (make-url (url-scheme uri) (url-host uri) (url-port uri) 
                (url-path uri) params (url-query uri) 
                (url-fragment uri))))
-  
-  ; path->list : str -> (cons (U str 'up 'same) (listof (U str 'up 'same)))
+
   ; to convert a platform dependent path into a listof path parts such that
   ; (forall x (equal? (path->list x) (path->list (apply build-path (path->list x)))))
   (define (path->list p)

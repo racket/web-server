@@ -71,7 +71,7 @@
       (define virtual-hosts the-virtual-hosts)
       (define access (make-hash-table))
       (define instances (make-hash-table))
-      (define scripts (box (make-hash-table)))
+      (define scripts (box (make-hash-table 'equal)))
       (define make-servlet-namespace the-make-servlet-namespace)))
 
 

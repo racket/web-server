@@ -154,7 +154,7 @@
                [(string=? "/conf/refresh-servlets" path)
                 ; more here - this is broken - only out of date or specifically mentioned
                 ; scripts should be flushed.  This destroys persistent state!
-                (set-box! config:scripts (make-hash-table))
+                (set-box! config:scripts (make-hash-table 'equal))
                 (kill-all-sessions! instance-queue)
                 (report-error conn method ((responders-servlets-refreshed (host-responders host-info))))]
                [(string=? "/conf/refresh-passwords" path)
@@ -200,17 +200,8 @@
       ; refreshed (see dispatch).
       (define (cached-load name)
         (hash-table-get (unbox config:scripts)
-                        (hash-path name)
+                        name
                         (lambda () (reload-servlet-script name))))
-      
-      ; hash-path : str -> sym
-      ; path must not be the empty string
-      (define (hash-path path)
-	; Don't use normalize-path because it doesn't work for non-existant paths.
-	; Stick "a" on the end so that it doesn't end in slash.
-	; This is easier than removing the slash that may or may not
-	; be there and is not platform specific.
-	(string->symbol (build-path path "a")))
       
       ; exn:i/o:filesystem:servlet-not-found =
       ; (make-exn:i/o:filesystem:servlet-not-found str continuation-marks str sym)
@@ -223,7 +214,7 @@
         (cond
           [(load-servlet/path servlet-filename)
            => (lambda (svlt)
-                (hash-table-put! (unbox config:scripts) (hash-path servlet-filename) svlt)
+                (hash-table-put! (unbox config:scripts) servlet-filename svlt)
                 svlt)]
           [else
            (raise (make-exn:i/o:filesystem:servlet-not-found
