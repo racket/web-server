@@ -42,7 +42,9 @@
                (server-loop custodian listener
                             (make-config virtual-hosts (make-hash-table)
                                          (make-hash-table) (make-hash-table))
-                            (configuration-initial-connection-timeout configuration))))))
+                            (configuration-initial-connection-timeout configuration)
+                            ; more here - log the connection close? optionally?
+                            void)))))
         (lambda () (custodian-shutdown-all custodian)))))
   
   ; -------------------------------------------------------------------------------
@@ -55,24 +57,28 @@
     (regexp-match METHOD:REGEXP x))
   ;:(define match-method (type: (str -> (union false (list str str str str str)))))
   
-  ; server-loop : custodian tcp-listener config num -> void
-  (define (server-loop top-custodian listener tables init-timeout)
+  ; server-loop : custodian tcp-listener config num (-> void) -> void
+  (define (server-loop top-custodian listener tables init-timeout connection-lost)
     (let bigger-loop ()
-      (with-handlers ([void (lambda (exn)
+      (with-handlers ([exn:i/o:tcp? (lambda (exn) (bigger-loop))]
+                      [void (lambda (exn)
                               (fprintf (current-error-port) "server-loop exn: ~a" exn)
-                              (bigger-loop))]
-                      [exn:i/o:tcp? (lambda (exn) (bigger-loop))])
+                              (bigger-loop))])
         (let loop ()
           (let ([connection-cust (make-custodian)])
             (parameterize ([current-custodian connection-cust])
               (let-values ([(ip op) (tcp-accept listener)]
                            [(shutdown) (lambda () (custodian-shutdown-all connection-cust))])
                 (thread (lambda ()
-                          (finally (lambda ()
-                                     (serve-connection top-custodian ip op tables
-                                                       (start-timer init-timeout shutdown)
-                                                       init-timeout))
-                                   shutdown))))))
+                          (with-handlers ([exn:i/o:port:closed?
+                                           (lambda (exn)
+                                             (connection-lost)
+                                             (shutdown))]
+                                          [void (lambda (exn) (shutdown))])
+                            (serve-connection top-custodian ip op tables
+                                              (start-timer init-timeout shutdown)
+                                              init-timeout)
+                            (shutdown)))))))
           (loop)))))
   
   ; serve-connection : custodian iport oport Tables timer num -> Void
@@ -518,10 +524,6 @@
       (lookup-path scripts paths
                    (lambda () (reload-servlet-script scripts name paths)))))
   
-  '(define (cached-load scripts name)
-     (let ([sname (string->symbol name)])
-       (hash-table-get scripts sname (lambda () (reload-servlet-script scripts name sname)))))
-  
   ; build-path-list : str -> (listof str)
   ; to build a list of paths from most specific to least specific containing
   ; directories starting with the given path
@@ -562,58 +564,6 @@
         (raise (make-exn:i/o:filesystem (format "Couldn't find ~a" original-name)
                                         (current-continuation-marks)
                                         original-name 'ill-formed-path))))
-  
-  ; reload-servlet-script : Script-table string sym -> script
-  ; to reload a script into the hashtable
-  ; (eq? (string->symbol original-name) sname)
-  ; this didn't work right since it reloaded the file for each url
-  '(define (reload-servlet-script scripts original-name sname)
-     (let loop ([name original-name])
-       (cond
-         [(file-exists? name)
-          (let ([s (load name)])
-            (if (unit/sig? s)
-                ; MF: I'd also like to test that s has the correct import signature.
-                (begin (hash-table-put! scripts sname s)
-                       s)
-                (raise (format "looking up a script didn't yield a unit/sig: ~e" s))))]
-         [else
-          (let-values ([(base extra dir?) (split-path name)])
-            (if (string? base)
-                (loop base)
-                (raise (make-exn:i/o:filesystem (format "Couldn't find ~a" original-name)
-                                                (current-continuation-marks)
-                                                original-name 'ill-formed-path))))])))
-  
-  ; this implements the old association list interface
-  '(define (reload-servlet-script scripts name sname)
-     (if (file-exists? name)
-         (let ([s (load name)])
-           (if (unit/sig? s)
-               ; MF: I'd also like to test that s has the correct import signature. 
-               (begin (hash-table-put! scripts sname s)
-                      s)
-               (raise (format "looking up a script didn't yield a unit/sig: ~e" s))))
-         (let-values ([(base name dir?) (split-path name)])
-           (if (string? base)
-               (if (string? name)
-                   (let* ([base-file  (substring base 0 (sub1 (string-length base)))]
-                          [progs      (load base-file)])
-                     (if (list? progs)
-                         (if (andmap (lambda (x) (and (symbol? (car x)) (unit/sig? (cdr x)))) progs)
-                             (for-each (lambda (prog)
-                                         (hash-table-put! scripts
-                                                          (string->symbol 
-                                                           (string-append 
-                                                            base 
-                                                            (symbol->string (car prog))))
-                                                          (cdr prog)))
-                                       progs)
-                             (raise "script file isn't an assoc list from names to unit/sigs"))
-                         (raise "script file isn't an assoc list"))
-                     (hash-table-get scripts (string->symbol name)))
-                   (raise "name not a string"))
-               (raise "name not a string")))))
   
   (define URL-PARAMS:REGEXP (regexp "([^\\*]*)\\*(.*)"))
   
@@ -691,30 +641,32 @@
   (define (output-page/port page out)
     ; double check what happens on erronious servlet output
     ; it should output an error for this response
-    (cond
-      [(response/full? page)
-       (output-headers out (response/full-code page) (response/full-message page)
-                       (response/full-seconds page) (response/full-mime page)
-                       `(("Content-length: " ,(apply + (map string-length (response/full-body page))))
-                         . ,(map (lambda (x) (list (symbol->string (car x)) ": " (cdr x)))
-                                 (response/full-extras page))))
-       (for-each (lambda (str) (display str out))
-                 (response/full-body page))]
-      [(string? (car page))
-       (output-headers out 200 "Okay" (current-seconds) (car page)
-                       `(("Content-length: " ,(apply + (map string-length (cdr page))))))
-       (for-each (lambda (str) (display str out))
-                 (cdr page))]
-      ; more here - disallow this.  The xexpr must be converted elsewhere so the right thread is blamed
-      [else
-       (let ([str (with-handlers ([void (lambda (exn)
-                                          (if (exn? exn)
-                                              (exn-message exn)
-                                              (format "~s" exn)))])
-                    (xexpr->string page))])
-         (output-headers out 200 "Okay" (current-seconds) TEXT/HTML-MIME-TYPE
-                         `(("Content-length: " ,(string-length str))))
-         (display str out))]))
+    ; DELETE ME - remove this handler
+    (with-handlers ([exn:i/o:port:closed? (lambda (exn) (fprintf (current-output-port) "DEBUG! port closed~n")
+                                            (raise exn))])
+      (cond
+        [(response/full? page)
+         (output-headers out (response/full-code page) (response/full-message page)
+                         (response/full-seconds page) (response/full-mime page)
+                         `(("Content-length: " ,(apply + (map string-length (response/full-body page))))
+                           . ,(map (lambda (x) (list (symbol->string (car x)) ": " (cdr x)))
+                                   (response/full-extras page))))
+         (for-each (lambda (str) (display str out))
+                   (response/full-body page))]
+        [(string? (car page))
+         (output-headers out 200 "Okay" (current-seconds) (car page)
+                         `(("Content-length: " ,(apply + (map string-length (cdr page))))))
+         (for-each (lambda (str) (display str out))
+                   (cdr page))]
+        [else
+         (let ([str (with-handlers ([void (lambda (exn)
+                                            (if (exn? exn)
+                                                (exn-message exn)
+                                                (format "~s" exn)))])
+                      (xexpr->string page))])
+           (output-headers out 200 "Okay" (current-seconds) TEXT/HTML-MIME-TYPE
+                           `(("Content-length: " ,(string-length str))))
+           (display str out))])))
   
   ; add-new-instance : sym instance-table -> void
   (define (add-new-instance invoke-id instances)
@@ -770,7 +722,6 @@
   (define-struct servlet-error ())
   (define-struct (invalid-%-suffix servlet-error) (chars))
   (define-struct (incomplete-%-suffix invalid-%-suffix) ())
-  
   
   (define TIME-OUT-CODE 200)
   (define TIME-OUT-HEADERS null)
