@@ -81,7 +81,7 @@
                         (list "Servlet didn't load.\n"
                               (if (exn? exn)
                                   (exn-message exn)
-                                  (format "~s" exn)))))
+                                  (format "~s~n" exn)))))
   
   ; gen-servlet-not-found : str -> url -> response
   (define (gen-servlet-not-found file-not-found-file)
@@ -92,7 +92,7 @@
   (define (gen-servlet-responder servlet-error-file)
     (lambda (url exn)
       ; more here - use separate log file
-      (printf "Servlet exception: ~s"
+      (printf "Servlet exception: ~s~n"
               (if (exn? exn) (exn-message exn) exn))
       (error-response 500 "Servlet error" servlet-error-file)))
   
