@@ -55,8 +55,8 @@
                  (lambda ()
                    (serve-connection
                     (new-connection config:initial-connection-timeout
-                                    ip op (current-custodian) #f)))))
-              (loop)))))
+                                    ip op (current-custodian) #f))))))
+            (loop))))
 
       ;; serve-ports : input-port output-port -> void
       ;; returns immediately, spawning a thread to handle
