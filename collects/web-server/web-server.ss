@@ -663,8 +663,9 @@
                                                 (format "~s" exn)))])
                       (xexpr->string page))])
            (output-headers out 200 "Okay" (current-seconds) TEXT/HTML-MIME-TYPE
-                           `(("Content-length: " ,(string-length str))))
-           (display str out))])))
+                           `(("Content-length: " ,(add1 (string-length str)))))
+           (display str out) ; the newline is for an IE 6.0 bug workaround under MS windows 2000
+           (newline out))])))
   
   ; add-new-instance : sym instance-table -> void
   (define (add-new-instance invoke-id instances)
