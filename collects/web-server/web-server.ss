@@ -669,21 +669,31 @@
     (cond
       [(response/full? page)
        (cond
-         ; more here - the incremental should be disallowed for 1.0 clients that don't support chunked
          [(response/incremental? page)
           (output-headers out (response/full-code page) (response/full-message page)
                           (response/full-seconds page) (response/full-mime page)
-                          `(("Transfer-Encoding: chunked")
-                            . ,(map (lambda (x) (list (symbol->string (car x)) ": " (cdr x)))
-                                    (response/full-extras page)))
+                          (if close
+                              null
+                              `(("Transfer-Encoding: chunked")
+                                . ,(map (lambda (x) (list (symbol->string (car x)) ": " (cdr x)))
+                                        (response/full-extras page))))
                           close)
-          ((response/full-body page)
-           (lambda chunks
-             (fprintf out "~x\r\n" (foldl (lambda (c acc) (+ (string-length c) acc)) 0 chunks))
-             (for-each (lambda (chunk) (display chunk out)) chunks)
-             (fprintf out "\r\n")))
-          ; one \r\n ends the last (empty) chunk and the second \r\n ends the (non-existant) trailers
-          (fprintf out "0\r\n\r\n")]
+          (if close
+              ; WARNING: This is unreliable because the client can not distinguish between
+              ; a dropped connection and the end of the file.  This is an inherit limitation
+              ; of HTTP/1.0.  Other cases where we close the connection correspond to work arounds
+              ; for buggy IE versions, at least some of which don't support chunked either.
+              ((response/full-body page)
+               (lambda chunks
+                 (for-each (lambda (chunk) (display chunk out)) chunks)))
+              (begin 
+                ((response/full-body page)
+                 (lambda chunks
+                   (fprintf out "~x\r\n" (foldl (lambda (c acc) (+ (string-length c) acc)) 0 chunks))
+                   (for-each (lambda (chunk) (display chunk out)) chunks)
+                   (fprintf out "\r\n")))
+                ; one \r\n ends the last (empty) chunk and the second \r\n ends the (non-existant) trailers
+                (fprintf out "0\r\n\r\n")))]
          [else 
           (output-headers out (response/full-code page) (response/full-message page)
                           (response/full-seconds page) (response/full-mime page)
