@@ -97,13 +97,13 @@
           ; more here - don't extract host-ip and client-ip twice (leakage)
           (let-values ([(host-ip client-ip) (tcp-addresses ip)])
             ((host-log-message host-conf) host-ip client-ip method uri host)
-            (dispatch top-custodian method host-conf uri headers ip op tables timer)
-            (reset-timer timer init-timeout)
-            (unless (close-connection? headers
-                                       (string->number major-version)
-                                       (string->number minor-version)
-                                       client-ip host-ip)
-              (connection-loop)))))))
+            (let ([close (close-connection? headers
+                                            (string->number major-version)
+                                            (string->number minor-version)
+                                            client-ip host-ip)])
+              (dispatch top-custodian method host-conf uri headers ip op tables timer close)
+              (reset-timer timer init-timeout)
+              (unless close (connection-loop))))))))
   
   ; close-connection? : table nat nat str str -> bool
   (define (close-connection? headers major minor client-ip host-ip)
@@ -113,18 +113,20 @@
           [(assq 'connection headers)
            => (lambda (x) (string-ci=? "close" (cdr x)))]
           [else #f])
-        (msie-6.0-from-local-machine? headers client-ip)))
+        (msie-from-local-machine? headers client-ip host-ip)))
   
   ; : table str str -> bool
-  ; to work around a bug in MSIE 6.0 for documents < 265 bytes when connecting from the local
+  ; to work around a bug in MSIE for documents < 265 bytes when connecting from the local
   ; machine.  The server could pad the response as MSIIS does, but closing the connection works, too.
-  (define (msie-6.0-from-local-machine? headers client-ip host-ip)
+  ; We do not check for version numbers since IE 6 under windows is 5.2 under macosX
+  (define (msie-from-local-machine? headers client-ip host-ip)
     (and (string=? host-ip client-ip)
          (cond
-           [(assq 'HTTP_USER_AGENT headers)
-            => (lambda (client) (regexp-match MSIE-6-regexp (cdr client)))]
+           [(or (assq 'HTTP_USER_AGENT headers)
+                (assq 'user-agent headers))
+            => (lambda (client) (regexp-match MSIE-regexp (cdr client)))]
            [else #f])))
-  (define MSIE-6-regexp (regexp "MSIE 6"))
+  (define MSIE-regexp (regexp "MSIE"))
   
   ; read-request : iport oport -> Symbol String String String
   ; to read in the first line of an http request,
@@ -273,31 +275,31 @@
   ; script-table : (hashtable-of sym script)
   ; script = (unit servlet^ -> response)
   
-  ; dispatch : custodian Method Host URL x-table iport oport Configuration timer -> Void
-  (define (dispatch top-custodian method host-info uri headers in out config timer)
+  ; dispatch : custodian Method Host URL x-table iport oport Configuration timer bool -> Void
+  (define (dispatch top-custodian method host-info uri headers in out config timer close)
     (let ([path (url-path uri)])
       (cond
         [(access-denied? method uri headers host-info (config-access config)) =>
          (lambda (realm)
            (reset-timer timer (timeouts-password (host-timeouts host-info)))
-           (request-authentication method uri in out host-info realm))] 
+           (request-authentication method uri in out host-info realm close))] 
         [(conf-prefix? path)
          (cond
            [(string=? "/conf/refresh-servlets" path)
             ; more here - this is broken - only out of date or specifically mentioned
             ; scripts should be flushed.  This destroys persistant state!
             (set-config-scripts! config (make-hash-table))
-            (report-error out method ((responders-servlets-refreshed (host-responders host-info))))]
+            (report-error out method ((responders-servlets-refreshed (host-responders host-info))) close)]
            ; more here - FIX password/configuration reloading
            [(string=? "/conf/refresh-passwords" path)
             (set-config-access! config (make-hash-table))
-            (report-error out method ((responders-passwords-refreshed (host-responders host-info))))]
-           [else (report-error out method (responders-file-not-found uri))])]
+            (report-error out method ((responders-passwords-refreshed (host-responders host-info))) close)]
+           [else (report-error out method (responders-file-not-found uri) close)])]
         [(servlet-bin? path)
          (reset-timer timer (timeouts-servlet-connection (host-timeouts host-info)))
 	 ; more here - make timeout proportional to size of bindings
-         (servlet-content-producer top-custodian method uri headers in out host-info (config-scripts config) (config-instances config))]
-        [else (file-content-producer method uri headers in out host-info timer)])))
+         (servlet-content-producer top-custodian method uri headers in out host-info (config-scripts config) (config-instances config) close)]
+        [else (file-content-producer method uri headers in out host-info timer close)])))
   
   ; --------------------------------------------------------------------------
   ; ACCESS CONTROL
@@ -374,30 +376,31 @@
                                 (cddr domain))))
                  passwords)))
   
-  ; request-authentication : Method URL iport oport host str -> bool
-  (define (request-authentication method uri in out host-info realm)
+  ; request-authentication : Method URL iport oport host str bool -> bool
+  (define (request-authentication method uri in out host-info realm close)
     (report-error out method
                   ((responders-authentication (host-responders host-info))
-                   uri `(WWW-Authenticate . ,(string-append " Basic realm=\"" realm "\"")))))
+                   uri `(WWW-Authenticate . ,(string-append " Basic realm=\"" realm "\"")))
+                  close))
   
   ; --------------------------------------------------------------------------
   ; SERVING FILES 
   
-  ; file-content-producer : Method URL x-table iport oport host timer -> Void
-  (define (file-content-producer method uri headers in out host-info timer)
-    (serve-file method uri out host-info timer))
+  ; file-content-producer : Method URL x-table iport oport host timer bool -> Void
+  (define (file-content-producer method uri headers in out host-info timer close)
+    (serve-file method uri out host-info timer close))
   
   ; looks-like-directory : str -> bool
   ; to determine if is url style path looks like it refers to a directory
   (define (looks-like-directory? path)
     (eq? #\/ (string-ref path (sub1 (string-length path)))))
   
-  ; serve-file : Method url oport host timer -> void
+  ; serve-file : Method url oport host timer bool -> void
   ; to find the file, including searching for implicit index files, and serve it otu
-  (define (serve-file method uri out host-info timer)
+  (define (serve-file method uri out host-info timer close)
     (let ([path (url-path->path (paths-htdocs (host-paths host-info)) (url-path uri))])
       (cond
-        [(file-exists? path) (output-file method path out timer host-info)]
+        [(file-exists? path) (output-file method path out timer host-info close)]
         [(directory-exists? path)
          (let loop ([dir-defaults (host-indices host-info)])
            (cond 
@@ -406,30 +409,33 @@
                 (if (file-exists? full-name)
                     (cond
                       [(looks-like-directory? (url-path uri))
-                       (output-file method full-name out timer host-info)]
+                       (output-file method full-name out timer host-info close)]
                       [else
                        ; more here - look into serving the file _and_ providing a Location header or
                        ; was it a content-location header?
-                       (output-headers out 301 "Moved Permanently" (current-seconds) TEXT/HTML-MIME-TYPE `(("Location: " ,(url-path uri) "/")))
+                       (output-headers out 301 "Moved Permanently" (current-seconds) TEXT/HTML-MIME-TYPE `(("Location: " ,(url-path uri) "/")) close)
                        (when (eq? method 'get)
                          (write-xml/content
                           (xexpr->xml `(html (head (title "Add a Slash"))
                                              (body "Please use " (a ([href ,(string-append (url-path uri) "/")]) "this url") " instead.")))
                           out))])
                     (loop (cdr dir-defaults))))]
-             [else (report-error out method ((responders-file-not-found (host-responders host-info)) uri))]))]
-        [else (report-error out method ((responders-file-not-found (host-responders host-info)) uri))])))
+             [else (report-error out method ((responders-file-not-found (host-responders host-info)) uri)
+                                 close)]))]
+        [else (report-error out method ((responders-file-not-found (host-responders host-info)) uri)
+                            close)])))
   
-  ; output-file : Method str oport timer host -> void
+  ; output-file : Method str oport timer host bool -> void
   ; to serve out the file
-  (define (output-file method path out timer host-info)
+  (define (output-file method path out timer host-info close)
     (let ([size (file-size path)]
           [timeouts (host-timeouts host-info)])
       (reset-timer timer (+ (timeouts-file-base timeouts) (* size (timeouts-file-per-byte timeouts))))
       (output-headers out 200 "Okay" 
                       (file-or-directory-modify-seconds path)
                       (get-mime-type path)
-                      `(("Content-length: " ,size))))
+                      `(("Content-length: " ,size))
+                      close))
     (when (eq? method 'get)
       (call-with-input-file path (lambda (in) (copy-port in out)))))
   
@@ -484,11 +490,11 @@
   
   (define FILE-FORM-REGEXP (regexp "multipart/form-data; *boundary=(.*)"))
   
-  ; servlet-content-producer : custodian Method URL Bindings iport oport host Script-table Instance-table -> Void
+  ; servlet-content-producer : custodian Method URL Bindings iport oport host Script-table Instance-table bool -> Void
   ; to find and run a servlet program, wait for the result, and output the page
-  (define (servlet-content-producer custodian meth uri headers in out host-info scripts instances)
+  (define (servlet-content-producer custodian meth uri headers in out host-info scripts instances close)
     (if (eq? meth 'head)
-        (output-headers out 200 "Okay" (current-seconds) TEXT/HTML-MIME-TYPE null)
+        (output-headers out 200 "Okay" (current-seconds) TEXT/HTML-MIME-TYPE null close)
         (let ([binds
                (case meth
                  [(get) (url-query uri)]
@@ -508,7 +514,7 @@
                              (cond
                                [(string->number (cdr len-str))
                                 => (lambda (len) (read-string len in))]
-                               [else (report-error out meth ((responders-protocol (host-responders host-info)) "Post request contained a non-numeric content-length"))])
+                               [else (report-error out meth ((responders-protocol (host-responders host-info)) "Post request contained a non-numeric content-length") close)])
                              (apply string-append
                                     (let read-to-eof ()
                                       (let ([s (read-string INPUT-BUFFER-SIZE in)])
@@ -523,7 +529,7 @@
                custodian
                response
                meth uri headers binds host-info scripts instances host-ip client-ip))
-            (output-page/port (channel-get response) out)))))
+            (output-page/port (channel-get response) out close)))))
   
   ; get-field-name : str -> sym
   (define (get-field-name rhs)
@@ -653,45 +659,48 @@
   ; response = (cons str (listof str)), where the first str is a mime-type
   ;          | x-expression
   ;          | (make-response/full nat str nat str (listof (cons sym str)) (listof str))
-
+  
   ; incremental output is not supported for the 200 release
   ;          | (make-response/incremental nat str nat str (listof (cons sym str))
   ;              ((str -> void) -> void))
   
-  ; output-page/port : response oport -> void
-  (define (output-page/port page out)
+  ; output-page/port : response oport bool -> void
+  (define (output-page/port page out close)
     ; double check what happens on erronious servlet output
     ; it should output an error for this response
     (cond
       [(response/full? page)
-;       (cond
-;         ; more here - the incremental should be disallowed for 1.0 clients that don't support chunked
-;         [(response/incremental? page)
-;          (output-headers out (response/full-code page) (response/full-message page)
-;                          (response/full-seconds page) (response/full-mime page)
-;                          `(("Transfer-Encoding: chunked")
-;                            . ,(map (lambda (x) (list (symbol->string (car x)) ": " (cdr x)))
-;                                    (response/full-extras page))))
-;          ((response/full-body page)
-;           (lambda chunks
-;             (fprintf out "~x\r\n" (foldl (lambda (c acc) (+ (string-length c) acc)) 0 chunks))
-;             (for-each (lambda (chunk) (display chunk out)) chunks)
-;             (fprintf out "\r\n")))
-;          ; one \r\n ends the last (empty) chunk and the second \r\n ends the (non-existant) trailers
-;          (fprintf out "0\r\n\r\n")]
-;         [else 
-          (output-headers out (response/full-code page) (response/full-message page)
-                          (response/full-seconds page) (response/full-mime page)
-                          `(("Content-length: " ,(apply + (map string-length (response/full-body page))))
-                            . ,(map (lambda (x) (list (symbol->string (car x)) ": " (cdr x)))
-                                    (response/full-extras page))))
-          (for-each (lambda (str) (display str out))
-                    (response/full-body page))
-;])
-]
+       ;       (cond
+       ;         ; more here - the incremental should be disallowed for 1.0 clients that don't support chunked
+       ;         [(response/incremental? page)
+       ;          (output-headers out (response/full-code page) (response/full-message page)
+       ;                          (response/full-seconds page) (response/full-mime page)
+       ;                          `(("Transfer-Encoding: chunked")
+       ;                            . ,(map (lambda (x) (list (symbol->string (car x)) ": " (cdr x)))
+       ;                                    (response/full-extras page)))
+       ;                          close)
+       ;          ((response/full-body page)
+       ;           (lambda chunks
+       ;             (fprintf out "~x\r\n" (foldl (lambda (c acc) (+ (string-length c) acc)) 0 chunks))
+       ;             (for-each (lambda (chunk) (display chunk out)) chunks)
+       ;             (fprintf out "\r\n")))
+       ;          ; one \r\n ends the last (empty) chunk and the second \r\n ends the (non-existant) trailers
+       ;          (fprintf out "0\r\n\r\n")]
+       ;         [else 
+       (output-headers out (response/full-code page) (response/full-message page)
+                       (response/full-seconds page) (response/full-mime page)
+                       `(("Content-length: " ,(apply + (map string-length (response/full-body page))))
+                         . ,(map (lambda (x) (list (symbol->string (car x)) ": " (cdr x)))
+                                 (response/full-extras page)))
+                       close)
+       (for-each (lambda (str) (display str out))
+                 (response/full-body page))
+       ;])
+       ]
       [(string? (car page))
        (output-headers out 200 "Okay" (current-seconds) (car page)
-                       `(("Content-length: " ,(apply + (map string-length (cdr page))))))
+                       `(("Content-length: " ,(apply + (map string-length (cdr page)))))
+                       close)
        (for-each (lambda (str) (display str out))
                  (cdr page))]
       [else
@@ -701,7 +710,8 @@
                                               (format "~s" exn)))])
                     (xexpr->string page))])
          (output-headers out 200 "Okay" (current-seconds) TEXT/HTML-MIME-TYPE
-                         `(("Content-length: " ,(add1 (string-length str)))))
+                         `(("Content-length: " ,(add1 (string-length str))))
+                         close)
          (display str out) ; the newline is for an IE 5.5 bug workaround
          (newline out))]))
   
@@ -765,8 +775,8 @@
   ; --------------------------------------------------------------------------
   ; COMMON LIBRARY FUNCTIONS: 
   
-  ; output-headers : oport Nat String Nat String (listof (listof String)) -> Void
-  (define (output-headers out code message seconds mime extras)
+  ; output-headers : oport Nat String Nat String (listof (listof String)) bool -> Void
+  (define (output-headers out code message seconds mime extras close)
     (for-each (lambda (line)
                 (for-each (lambda (word) (display word out)) line)
                 (display #\return out)
@@ -775,8 +785,10 @@
                      `("Date: " ,(seconds->gmt-string seconds))
                      `("Server: PLT Scheme")
                      `("Content-type: " ,mime)
-                     ;`("Connection: close")
-                     extras))
+                     ; more here - consider removing Connection fields from extras or raising an error
+                     (if close
+                         (cons `("Connection: close") extras)
+                         extras)))
     (display #\return out)
     (newline out))
   
@@ -804,9 +816,9 @@
   ; more here - include doc.txt
   (define DEFAULT-ERROR "An error message configuration file is missing.")
   
-  ; report-error : oport method response -> void
-  (define (report-error out method response)
-    (output-page/port (decapitate method response) out))
+  ; report-error : oport method response bool -> void
+  (define (report-error out method response close)
+    (output-page/port (decapitate method response) out close))
   
   ; decapitate : method response -> response
   ; to remove the body if the method is 'head
