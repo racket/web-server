@@ -15,7 +15,6 @@
    [url-path->path ((union (symbols 'up 'same) path?) string? . -> . path?)]
    [directory-part (path? . -> . path?)])
 
-  (define myprint printf)
 
   ; prefix? : str -> str -> bool
   ; more here - consider moving this to mzlib's string.ss
@@ -26,7 +25,6 @@
   ;;    will involve bytes while the others may involve strings. So
   ;;    I will just use regular expressions and get on with life.
   (define (prefix?-old prefix)
-    (myprint "prefix? prefix = ~s~n" prefix)
     (let* ([len (string-length prefix)]
            [last (string-ref prefix (sub1 len))]
            [ascii (char->integer last)])

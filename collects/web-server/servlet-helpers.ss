@@ -20,8 +20,6 @@
            see-other
            let*-bindings)
 
-  (define myprint printf)
-  
   ; extract-binding/single : sym (listof (cons sym str)) -> str
   (define (extract-binding/single name bindings)
     (let ([lst (extract-bindings name bindings)])
@@ -151,7 +149,6 @@
   ;; 2. Headers should be read as bytes and then translated to unicode as appropriate.
   ;; 3. The Authorization header should have bytes (i.e. (cdr pass-pair) is bytes
   (define (extract-user-pass headers)
-    (myprint "extract-user-pass~n")
     (let ([pass-pair (assq 'authorization headers)])
       (and pass-pair
 	   (let ([basic-credentials (cdr pass-pair)])

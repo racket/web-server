@@ -19,19 +19,28 @@
            (lib "tcp-sig.ss" "net")
            (lib "url.ss" "net")
            )
-;  (define DEFAULT-HOST-NAME "<none>")
-
-  (define myprint printf)
-  
-  
   
   (define web-server@
     (unit/sig web-server^
       (import net:tcp^ (config : web-config^))
+   
+      ;; session collections
+      ;; for timeout model:
+      (define-values (create-connection-session kill-all-connections!)
+        (make-session-collection))
+      (define-values (create-instance-session kill-all-instances!)
+        (make-session-collection))
       
-      (define the-memory-threshold 45000000)
-      (define instance-queue (new-session-queue the-memory-threshold))
-      (define connection-queue (new-session-queue the-memory-threshold))
+      ;; for session-queue model:
+      ;; just a prototype
+      ;      (define the-memory-threshold 45000000)
+      ;      (define-values (create-connection-session kill-all-connections!)
+      ;        (make-session-collection the-memory-threshold))
+      ;      (define-values (create-instance-session kill-all-instances!)
+      ;        (make-session-collection the-memory-threshold))
+
+
+
       
       ; -------------------------------------------------------------------------------
       ; The Server
@@ -40,7 +49,6 @@
       ; to start the server and return a thunk to shut it down
       ; If tcp-listen fails, the exception will be raised in the caller's thread.
       (define (serve)
-        (myprint "serve~n")
         (let ([server-custodian (make-custodian)])
           (parameterize ([current-custodian server-custodian])
             (let ([get-ports
@@ -61,12 +69,10 @@
       ; server-loop : custodian (-> iport oport) (-> void) -> void
       ; note - connection-lost is used by the development environment
       (define (server-loop top-custodian listener connection-lost)
-        (myprint "server-loop~n")
         (let exception-loop ()
           (with-handlers ([exn:i/o:tcp? (lambda (exn) (exception-loop))]
                           [void (lambda (exn)
                                   (fprintf (current-error-port) "server-loop exn: ~a" exn)
-                                  (raise exn)
                                   (exception-loop))])
             (let listener-loop ()
               (let ([connection-cust (make-custodian)])
@@ -77,9 +83,10 @@
                               (close-input-port ip) ; DEBUG - pipes
                               (close-output-port op) ; DEBUG - pipes
                               (custodian-shutdown-all connection-cust))]
-                           [ses (create-session connection-queue
-                                                config:initial-connection-timeout (make-connection ip op #f) shutdown)]
-                           [kill-this-session (lambda () (extract-session/kill! ses connection-queue))])
+                           [ses (create-connection-session
+                                 config:initial-connection-timeout
+                                 (make-connection ip op #f) shutdown)]
+                           [kill-this-session (lambda () (kill-session! ses))])
                       (if ses
                           (thread (lambda ()
                                     (with-handlers ([exn:i/o:port:closed?
@@ -88,7 +95,6 @@
                                                        (kill-this-session))]
                                                     [exn?
                                                      (lambda (exn)
-                                                       (raise exn)
                                                        (kill-this-session)
                                                        )])
                                       (serve-connection top-custodian ses)
@@ -100,20 +106,17 @@
       ; to respond to all the requests on an http connection
       ; (Currently only the first request is answered.)
       (define (serve-connection top-custodian ses)
-        (myprint "serve-connection~n")
-        (let* ([conn (session-payload ses)]
+        (let* ([conn (session->resource ses)]
                [ip (connection-i-port conn)])
           (let connection-loop ()
             (let-values ([(method uri-string major-version minor-version)
                           (read-request-line ip)])
-              (myprint "   after read-request-line~n")          
               (let* ([headers (read-headers ip)]
                      [uri     (decode-some-url-parts
                                (string->url
                                 (bytes->string/utf-8 uri-string)))]
                      [host    (get-host uri headers)]
                      [host-conf (config:virtual-hosts host)])
-                (myprint "   headers = ~s~n" headers)
                 ; more here - don't extract host-ip and client-ip twice (leakage)
                 (let-values ([(host-ip client-ip) (tcp-addresses ip)])
                   ((host-log-message host-conf) host-ip client-ip method uri host)
@@ -123,7 +126,7 @@
                                                   client-ip host-ip)])
                     (set-connection-close?! conn close)
                     (dispatch top-custodian method host-conf uri headers ses)
-                    (renew-session! ses connection-queue config:initial-connection-timeout)
+                    (renew-session! ses config:initial-connection-timeout)
                     (unless close (connection-loop)))))))))
       
       ; --------------------------------------------------------------------------
@@ -138,36 +141,31 @@
       ; dispatch : custodian Method Host URL x-table session -> Void
       ; to respond to an HTTP request
       (define (dispatch top-custodian method host-info uri headers ses)
-        (myprint "dispatch~n")
         (let ([path (url-path uri)]
-              [conn (session-payload ses)])
+              [conn (session->resource ses)])
           (cond
             [(access-denied? method uri headers host-info config:access)
              => (lambda (realm)
-                  (myprint "   access-denied?~n")
-                  (renew-session! ses connection-queue (timeouts-password (host-timeouts host-info)))
+                  (renew-session! ses (timeouts-password (host-timeouts host-info)))
                   (request-authentication conn method uri host-info realm))]
             
             [((host-dispatcher host-info) path)
              => (lambda (a-resource)
                   (cond
                     [(static-resource? a-resource)
-                     (myprint "   static-resource~n")
                      (file-content-producer a-resource method uri headers ses host-info)]
                     [(dynamic-resource? a-resource)
-                     (myprint "   dynamic-resource~n")
-                     (renew-session! ses connection-queue (timeouts-servlet-connection (host-timeouts host-info)))
+                     (renew-session! ses (timeouts-servlet-connection (host-timeouts host-info)))
                      ; more here - make timeout proportional to size of bindings
                      (servlet-content-producer a-resource top-custodian method uri headers conn host-info)]))]
             
             [(conf-prefix? path)
-             (myprint "   conf-prefix?~n")
              (cond
                [(string=? "/conf/refresh-servlets" path)
                 ; more here - this is broken - only out of date or specifically mentioned
                 ; scripts should be flushed.  This destroys persistent state!
                 (set-box! config:scripts (make-hash-table 'equal))
-                (kill-all-sessions! instance-queue)
+                (kill-all-instances!)
                 (report-error conn method ((responders-servlets-refreshed (host-responders host-info))))]
                [(string=? "/conf/refresh-passwords" path)
                 ; more here - send a nice error page
@@ -176,7 +174,6 @@
                [else (report-error conn method (responders-file-not-found uri))])]
             
             [else
-             (myprint "   else..~n")
              (report-error conn method (responders-file-not-found uri))])))
 
       ;; conf-prefix?: string -> (union (listof string) #f)
@@ -260,7 +257,6 @@
       ;;;;;; (two versions, 'v1 and I don't know what 'typed-model-split-store0 is)
       ;;;; A response
       (define (load-servlet/path a-path)
-        (myprint "load-servlet/path a-path = ~s~n" a-path)
         (and (file-exists? a-path)
              (let ([s (load/use-compiled a-path)])
                (cond
@@ -328,7 +324,8 @@
       ; to start a new servlet program that will handle this request
       (define (start-servlet a-resource top-custodian response method uri headers bindings host-info host-ip client-ip)
 	(let* ([invoke-id (string->symbol (symbol->string (gensym 'id)))]
-               [respond (lambda (page) (async-channel-put response page))])
+               [respond (lambda (page) (async-channel-put response page))]
+               [time-out-seconds (timeouts-default-servlet (host-timeouts host-info))])
 	  (let* ([servlet-custodian (make-custodian top-custodian)]
                  [shutdown (lambda (x)
                              (purge-table method uri config:instances invoke-id
@@ -337,17 +334,17 @@
 	    (parameterize ([current-custodian servlet-custodian]
 			   [read-case-sensitive #t]
 			   [exit-handler shutdown])
-              (let ([ses (create-session instance-queue
-                                         (timeouts-default-servlet (host-timeouts host-info))
-                                         (make-servlet-instance 0 (make-async-channel) (make-hash-table))
-                                         (lambda () (shutdown #f)))])
+              (let ([ses (create-instance-session
+                          (timeouts-default-servlet (host-timeouts host-info))
+                          (make-servlet-instance 0 (make-async-channel) (make-hash-table))
+                          (lambda () (shutdown #f)))])
                 (when ses
                   (let* ([adjust-timeout!
                           (lambda (n)
-                            (renew-session! ses instance-queue n))]
+                            (renew-session! ses n))]
                          [resume-next-request
                           (gen-resume-next-request (lambda ()
-                                                     (renew-session! ses instance-queue))
+                                                     (renew-session! ses time-out-seconds))
                                                    (lambda (new-response-channel)
                                                      (set! response new-response-channel)))])
                     (parameterize ([current-servlet-stuff (make-servlet-stuff uri invoke-id config:instances respond resume-next-request method)])
@@ -362,7 +359,7 @@
                             (let ([servlet-program
                                    (cached-load (url-path->path (resource-base a-resource) (resource-path a-resource)))]
                                   [initial-request (make-request method uri headers bindings host-ip client-ip)])
-                              (add-new-instance (session-payload ses) invoke-id config:instances)
+                              (add-new-instance (session->resource ses) invoke-id config:instances)
                               (with-handlers ([void (lambda (exn)
                                                       (decapitate method ((responders-servlet (host-responders host-info)) uri exn)))])
                                 (invoke-unit/sig servlet-program servlet^)))))))))))))))
@@ -382,25 +379,19 @@
       ; serve-file : resource Method url session host -> void
       ; to find the file, including searching for implicit index files, and serve it otu
       (define (serve-file a-resource method uri ses host-info)
-        (myprint "serve-file~n")
-        (let ([conn (session-payload ses)]
+        (let ([conn (session->resource ses)]
               [path (url-path->path (resource-base a-resource) (resource-path a-resource))])
           (cond
             [(file-exists? path)
-             (myprint "   file-exists?~n")
              (output-file method path ses host-info)]
             [(directory-exists? path)
-             (myprint "   directory-exists?~n")
              (let loop ([dir-defaults (host-indices host-info)])
-               (myprint "   top of loop~n")
                (cond
                  [(pair? dir-defaults)
-                  (myprint "      pair?~n")
                   (let ([full-name (build-path path (car dir-defaults))])
                     (if (file-exists? full-name)
                         (cond
                           [(looks-like-directory? (url-path uri))
-                           (myprint "         looks-like-directory?~n")
                            (output-file method full-name ses host-info)]
                           [else
                            ; more here - look into serving the file _and_ providing a Location header or
@@ -419,11 +410,10 @@
       ; output-file : Method str session host -> void
       ; to serve out the file
       (define (output-file method path ses host-info)
-        (myprint "output-file~n")
-	(let ([conn (session-payload ses)])
+	(let ([conn (session->resource ses)])
           (let ([size (file-size path)]
                 [timeouts (host-timeouts host-info)])
-            (renew-session! ses connection-queue (+ (timeouts-file-base timeouts) (* size (timeouts-file-per-byte timeouts))))
+            (renew-session! ses (+ (timeouts-file-base timeouts) (* size (timeouts-file-per-byte timeouts))))
             (output-headers conn 200 "Okay"
                             `(("Content-length: " ,size))
                             (file-or-directory-modify-seconds path)
@@ -441,7 +431,6 @@
       ; access-denied? : Method URL x-table host Access-table -> (+ false str)
       ; the return string is the prompt for authentication
       (define (access-denied? method uri headers host-info access-table)
-        (myprint "access-denied?~n")
         ;; denied?: str sym str -> (U str #f)
         ;; a function to authenticate the user
         (let ([denied?
@@ -456,7 +445,6 @@
                     (hash-table-put! access-table host-info f)
                     f)))])
           (let ([user-pass (extract-user-pass headers)])
-            (myprint "   extract-user-pass returned: user-pass = ~s~n" user-pass)
             (if user-pass
                 (denied? (url-path uri) (lowercase-symbol! (car user-pass)) (cdr user-pass))
                 (denied? (url-path uri) fake-user "")))))
@@ -469,7 +457,6 @@
       ; If the password file does not exist, all accesses are allowed.  If the file is malformed, an
       ; exn:password-file is raised.
       (define (read-passwords host-info)
-        (myprint "read-passwords~n")
         (let ([password-path (host-passwords host-info)])
           (with-handlers ([void (lambda (exn)
                                   (raise (make-exn:password-file (format "could not load password file ~a" password-path)
@@ -484,7 +471,6 @@
                   
                   ;; string symbol bytes -> (union #f string)
                   (lambda (request-path user-name password)
-                    (myprint "   &*&*&*&*request-path = ~s   password = ~s~n" request-path password)
                     (ormap (lambda (x)
                              (and (regexp-match (pass-entry-pattern x) request-path)
                                   (let ([name-pass (assq user-name (pass-entry-users x))])
@@ -519,7 +505,6 @@
       ;; GregP: at first look, it seems that this gets called when the user
       ;; has supplied bad authentication credentials.
       (define (request-authentication conn method uri host-info realm)
-        (myprint "request-authentication~n")
         (report-error conn method
                       ((responders-authentication (host-responders host-info))
                        uri `(WWW-Authenticate . ,(string-append " Basic realm=\"" realm "\"")))))
