@@ -570,6 +570,10 @@
     ; This is easier than removing the slash that may or may not
     ; be there and is not platform specific.
     (string->symbol (build-path path "a")))
+
+  ; exn:i/o:filesystem:servlet-not-found = 
+  ; (make-exn:i/o:filesystem:servlet-not-found str continuation-marks str sym)
+  (define-struct (exn:i/o:filesystem:servlet-not-found exn:i/o:filesystem) ())
   
   ; reload-servlet-script : Script-table str (listof str) -> script
   (define (reload-servlet-script scripts original-name paths)
@@ -583,9 +587,10 @@
                                    s)
                             (raise (format "looking up a script didn't yield a unit/sig: ~e" s))))))
                paths)
-        (raise (make-exn:i/o:filesystem (format "Couldn't find ~a" original-name)
-                                        (current-continuation-marks)
-                                        original-name 'ill-formed-path))))
+        (raise (make-exn:i/o:filesystem:servlet-not-found
+		    (format "Couldn't find ~a" original-name)
+		    (current-continuation-marks)
+		    original-name 'ill-formed-path))))
   
   (define URL-PARAMS:REGEXP (regexp "([^\\*]*)\\*(.*)"))
   
@@ -640,7 +645,7 @@
                                       (set! response new-response)))])
             (thread
              (lambda ()
-               (respond (with-handlers ([exn:i/o:filesystem?
+               (respond (with-handlers ([exn:i/o:filesystem:servlet-not-found?
                                          (lambda (exn)
                                            (decapitate method ((responders-file-not-found (host-responders host-info)) uri)))]
                                         [void (lambda (exn)
