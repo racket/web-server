@@ -96,7 +96,7 @@
   ; JBC : added error-handler hack; the right answer is only to transfer the 'mred'
   ; module binding when asked to, e.g. by a field in the configuration file.
   ; GregP: put this back in if Sam's code breaks
-  ;  (for-each (lambda (x) (with-handlers ([not-break-exn? (lambda (exn) 'dont-care)])
+  ;  (for-each (lambda (x) (with-handlers ([exn:fail? (lambda (exn) 'dont-care)])
   ;                          ; dynamic-require will fail when running web-server-text.
   ;                          ; maybe a warning message in the exception-handler?
   ;                          (dynamic-require x #f)))
