@@ -35,7 +35,7 @@
             [max-waiting (configuration-max-waiting configuration)]
             [custodian (make-custodian)])
         (parameterize ([current-custodian custodian])
-          (let ([listener (tcp-listen port max-waiting)])
+          (let ([listener (tcp-listen port max-waiting #t)])
             ; If tcp-listen fails, the exception will be raised in the caller's thread.
             (thread
              (lambda ()
