@@ -13,7 +13,9 @@
 ;;
 
 ;; Configuration
-(define *data-file* "./english-measure-questions.ss")
+(define *data-file*
+  (build-path (collection-path "web-server")
+              "default-web-root" "servlets" "examples" "english-measure-questions.ss"))
 (define *questions-per-quiz* 5)
 
 
@@ -202,4 +204,5 @@
  (run-quiz)
 
  )
+
 
