@@ -566,7 +566,7 @@
     (or (ormap (lambda (name)
                  (and (file-exists? name)
                       ; MF: I'd also like to test that s has the correct import signature.
-                      (let ([s (load name)])
+                      (let ([s (load/use-compiled name)])
                         (if (unit/sig? s)
                             (begin (hash-table-put! scripts (hash-path original-name) s)
                                    (hash-table-put! scripts (hash-path name) s)
