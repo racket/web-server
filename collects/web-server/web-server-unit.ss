@@ -6,7 +6,6 @@
 	   (lib "string.ss")
 	   (lib "list.ss")
 	   (lib "etc.ss")
-	   (lib "base64.ss" "net")
 	   (lib "tcp-sig.ss" "net")
 	   "channel.ss"
 	   "util.ss"
@@ -28,29 +27,22 @@
       ; -------------------------------------------------------------------------------
       ; The Server
 
-      ; serve : [Nat] [str | #f] -> -> Void
-      ; to start the server on the given port and return an un-server to shut it down
-      ; the optional port argument overrides the configuration's port
-      ; the optional host argument only accepts connections from that host ip address
-      ; (a host of #f places no restrictions on the connecting host)
+      ; serve : -> -> Void
+      ; to start the server and return a thunk to shut it down
       ; If tcp-listen fails, the exception will be raised in the caller's thread.
-      (define serve
-	(opt-lambda ([port config:port]
-		     [listen-ip config:listen-ip])
-	  (let ([server-custodian (make-custodian)])
-	    (parameterize ([current-custodian server-custodian])
-	      (let ([get-ports
-		     (let ([listener (tcp-listen port config:max-waiting #t listen-ip)])
-		       (lambda () (tcp-accept listener)))])
-		(thread
-		 (lambda ()
-		   (server-loop server-custodian get-ports
-				(make-config config:virtual-hosts (make-hash-table)
-					     (make-hash-table) (make-hash-table))
-				config:initial-connection-timeout
-				; more here - log the connection close? optionally?
-				void)))))
-	    (lambda () (custodian-shutdown-all server-custodian)))))
+      (define (serve)
+	(let ([server-custodian (make-custodian)])
+	  (parameterize ([current-custodian server-custodian])
+	    (let ([get-ports
+		   (let ([listener (tcp-listen config:port config:max-waiting #t config:listen-ip)])
+		     (lambda () (tcp-accept listener)))])
+	      (thread
+	       (lambda ()
+		 (server-loop server-custodian get-ports
+			      
+			      ; more here - log the dropped connection?
+			      void)))))
+	  (lambda () (custodian-shutdown-all server-custodian))))
 
       ; -------------------------------------------------------------------------------
       ; The Server Loop
@@ -62,9 +54,9 @@
 	(regexp-match METHOD:REGEXP x))
       ;:(define match-method (type: (str -> (union false (list str str str str str)))))
 
-      ; server-loop : custodian (-> iport oport) num (-> void) -> void
+      ; server-loop : custodian (-> iport oport) (-> void) -> void
       ; note - connection-lost is used by the development environment
-      (define (server-loop top-custodian listener init-timeout connection-lost)
+      (define (server-loop top-custodian listener connection-lost)
 	(let bigger-loop ()
 	  (with-handlers ([exn:i/o:tcp? (lambda (exn) (bigger-loop))]
 			  [void (lambda (exn)
@@ -85,15 +77,14 @@
 						 (shutdown))]
 					      [void (lambda (exn) (shutdown))])
 				(serve-connection top-custodian ip op
-						  (start-timer init-timeout shutdown)
-						  init-timeout)
+						  (start-timer config:initial-connection-timeout shutdown))
 				(shutdown)))))))
 	      (loop)))))
 
-      ; serve-connection : custodian iport oport timer num -> Void
+      ; serve-connection : custodian iport oport timer -> Void
       ; to respond to all the requests on an http connection
       ; (Currently only the first request is answered.)
-      (define (serve-connection top-custodian ip op timer init-timeout)
+      (define (serve-connection top-custodian ip op timer)
 	(let connection-loop ()
 	  (let-values ([(method uri-string major-version minor-version) (read-request ip op)])
 	    (let* ([headers (read-headers ip)]
@@ -108,7 +99,7 @@
 						(string->number minor-version)
 						client-ip host-ip)])
 		  (dispatch top-custodian method host-conf uri headers ip op timer close)
-		  (reset-timer timer init-timeout)
+		  (reset-timer timer config:initial-connection-timeout)
 		  (unless close (connection-loop))))))))
 
       ; close-connection? : table nat nat str str -> bool
@@ -310,10 +301,6 @@
       ; pass-entry = (make-pass-entry str regexp (list sym str))
       (define-struct pass-entry (domain pattern users))
 
-      (define AUTHENTICATION-REGEXP (regexp "([^:]*):(.*)"))
-      (define (match-authentication x) (regexp-match AUTHENTICATION-REGEXP x))
-      ;:(define match-authentication (type: (str -> (union false (list str str str)))))
-
       ; access-denied? : Method URL x-table host Access-table -> (+ false str)
       ; the return string is the prompt for authentication
       (define (access-denied? method uri headers host-info access-table)
@@ -359,18 +346,6 @@
 					(pass-entry-domain x)))))
 			   passwords)))
 		(lambda (req user pass) #f)))))
-
-      ; extract-user-pass : (listof (cons sym str)) -> (U #f (cons str str))
-      (define (extract-user-pass headers)
-	(let ([pass-pair (assq 'authorization headers)])
-	  (and pass-pair
-	       (let ([basic-credentials (cdr pass-pair)])
-		 (cond
-		   [(and (basic? basic-credentials)
-			 (match-authentication (base64-decode (substring basic-credentials 6 (string-length basic-credentials)))))
-		    => (lambda (user-pass)
-			 (cons (cadr user-pass) (caddr user-pass)))]
-		   [else #f])))))
 
       (define fake-user (gensym))
 
@@ -888,10 +863,8 @@
       ))
   ;: #|
   (define servlet-bin? (prefix? "/servlets/"))
-  (define basic? (prefix? "Basic "))
   (define conf-prefix? (prefix? "/conf/"))
   ;: |#
   ;:(define (servlet-bin? x) ((prefix? "/servlets/") x))
-  ;:(define (basic? x) ((prefix? "Basic ") x))
   ;:(define (conf-prefix? x) ((prefix? "/conf/") x))
   )

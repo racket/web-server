@@ -37,6 +37,7 @@
   ; : str configuration-table -> configuration
   (define (complete-configuration base table)
     (build-configuration
+     table
      (let ([default-host
 	     (apply-default-functions-to-host-table
 	      base (configuration-table-default-host table) gen-log-message)]
@@ -50,6 +51,7 @@
   ; : str configuration-table -> configuration
   (define (complete-developer-configuration base table)
     (build-configuration
+     table
      (gen-virtual-hosts null (apply-default-functions-to-host-table
 			      base
                               (configuration-table-default-host table) ignore-log))))

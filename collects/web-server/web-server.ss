@@ -1,9 +1,10 @@
 (module web-server mzscheme
   (require (lib "tcp-sig.ss" "net")
            (lib "unitsig.ss")
-           "servlet-sig.ss"
-           "web-server-unit.ss")
+           "sig.ss"
+           "web-server-unit.ss"
+	   "configuration.ss")
   
-  (provide-signature-elements web-server^)
+  '(provide-signature-elements web-server^)
   
-  (define-values/invoke-unit/sig web-server^ web-server@ #f net:tcp^))
+  '(define-values/invoke-unit/sig web-server^ web-server@ #f net:tcp^))

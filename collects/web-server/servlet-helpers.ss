@@ -1,9 +1,10 @@
 (module servlet-helpers mzscheme
   (require (lib "list.ss")
            (lib "etc.ss")
-           "web-server.ss"
+	   "util.ss"
            (lib "servlet-sig.ss" "web-server")
-           (lib "xml.ss" "xml"))
+           (lib "xml.ss" "xml")
+	   (lib "base64.ss" "net"))
   
   (provide extract-binding/single
            extract-bindings
@@ -132,4 +133,24 @@
                            [(anchor-pattern anchor-patterns ...)
                             body bodies ...]
                            ...
-                           [else (error 'src-anchor-case "unmatched response ~s" link)]))))))]))))
+                           [else (error 'src-anchor-case "unmatched response ~s" link)]))))))])))
+
+  ; Authentication
+
+  (define AUTHENTICATION-REGEXP (regexp "([^:]*):(.*)"))
+  (define (match-authentication x) (regexp-match AUTHENTICATION-REGEXP x))
+  ;:(define match-authentication (type: (str -> (union false (list str str str)))))
+
+  ; extract-user-pass : (listof (cons sym str)) -> (U #f (cons str str))
+  (define (extract-user-pass headers)
+    (let ([pass-pair (assq 'authorization headers)])
+      (and pass-pair
+	   (let ([basic-credentials (cdr pass-pair)])
+	     (cond
+	      [(and (basic? basic-credentials)
+		    (match-authentication (base64-decode (substring basic-credentials 6 (string-length basic-credentials)))))
+	       => (lambda (user-pass)
+		    (cons (cadr user-pass) (caddr user-pass)))]
+	      [else #f])))))
+
+  (define basic? (prefix? "Basic ")))
