@@ -129,7 +129,7 @@
     (opt-lambda (uri [perm/temp permanently])
       (make-response/full (redirection-status-code perm/temp)
                           (redirection-status-message perm/temp)
-                          (current-seconds) "text/html"
+                          (current-seconds) #"text/html"
                           `((location . ,uri)) (list (redirect-page uri)))))
 
   ; : str -> str
