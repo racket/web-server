@@ -27,7 +27,7 @@
         [(null? lst)
          (error 'extract-bindings/single "~a not found in ~a" name bindings)]
         [(null? (cdr lst)) (car lst)]
-        [else (error 'extract-bindings/single "~a occurs multiple times in ~a" name bindings)])))
+        [else (error 'extract-binding/single "~a occurs multiple times in ~a" name bindings)])))
   
   ; extract-bindings : sym (listof (cons sym str)) -> (listof str)
   (define (extract-bindings name bindings)
