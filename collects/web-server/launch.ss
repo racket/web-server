@@ -58,6 +58,4 @@
      (export (open s)))
     #f net:tcp^)
 
-  (serve)
-
-  (semaphore-wait (make-semaphore)))
+  (provide serve))
