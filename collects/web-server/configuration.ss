@@ -90,7 +90,7 @@
       ;; GregP: putting mred.ss here is a bad idea because it will cause
       ;; web-server-text to have a dependency on mred
       ;(lib "mred.ss" "mred")
-      (lib "min-servlet.ss" "web-server")
+      (lib "servlet.ss" "web-server")
       ; internal structs needed for parameter
       (lib "internal-structs.ss" "web-server")))
 
