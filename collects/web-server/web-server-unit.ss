@@ -153,9 +153,15 @@
       ; get-host : Url (listof (cons Symbol String)) -> String
       ; host names are case insesitive---Internet RFC 1034
       (define (get-host uri headers)
-	(let ([s (or (url-host uri) (cdr (or (assq 'host headers) (cons 'dummy DEFAULT-HOST-NAME))))])
-	  (string-lowercase! s)
-	  s))
+	(let ([lower!
+	       (lambda (s)
+		 (string-lowercase! s)
+		 s)])
+	  (cond
+	   [(url-host uri) => lower!]
+	   [(assq 'host headers) =>
+	    (lambda (h) (lower! (cdr h)))]
+	   [else DEFAULT-HOST-NAME])))
 
       (define COLON:REGEXP (regexp (format "^([^:]*):[ ~a]*(.*)" #\tab)))
 
@@ -763,9 +769,6 @@
 	  ; this could fail for dotted lists - rewrite andmap
 	  (and (pair? page) (pair? (cdr page)) (andmap string? page))
 	  (xexpr? page)))
-
-      ; : TST -> bool
-      (define (xexpr? page) #t)
 
       ; output-page/port : response oport bool -> void
       (define (output-page/port page out close)
