@@ -689,24 +689,33 @@
                      [send/forward ; : (str[Url] -> Response) -> Request
                       (lambda (page-maker) (purge-table) (send/suspend page-maker))]
                      [send/back ; : (Response -> doesn't)
-                      (lambda (page) (respond page) (resume-next-request (hash-table-get instances invoke-id)))])
+                      (lambda (page)
+			(respond page)
+			(if (hash-table-empty?
+			     (servlet-instance-cont-table
+			      (hash-table-get instances invoke-id)))
+			    (exit)
+			    (resume-next-request
+			     (hash-table-get instances invoke-id))))]
+		     [send/finish ; : (Response -> doesn't)
+		      (lambda (page) (respond page) (exit))])
                 (thread
                  (lambda ()
-                   (respond (with-handlers ([exn:i/o:filesystem:servlet-not-found?
-                                             (lambda (exn)
-                                               (decapitate method ((responders-file-not-found (host-responders host-info)) uri)))]
-                                            [void (lambda (exn)
-                                                    (decapitate method ((responders-servlet-loading (host-responders host-info)) uri exn)))])
-                              (let ([servlet-program
-                                     (cached-load scripts
-                                                  (url-path->path (paths-servlet (host-paths host-info))
-                                                                  (url-path uri)))]
-                                    [initial-request (make-request method uri headers bindings host-ip client-ip)])
-                                (add-new-instance invoke-id instances)
-                                (with-handlers ([void (lambda (exn)
-                                                        (decapitate method ((responders-servlet (host-responders host-info)) uri exn)))])
-                                  (let/ec send/finish (invoke-unit/sig servlet-program servlet^))))))
-                   (exit))))))))
+		   (send/back 
+		    (with-handlers ([exn:i/o:filesystem:servlet-not-found?
+				     (lambda (exn)
+				       (decapitate method ((responders-file-not-found (host-responders host-info)) uri)))]
+				   [void (lambda (exn)
+					   (decapitate method ((responders-servlet-loading (host-responders host-info)) uri exn)))])
+				  (let ([servlet-program
+					 (cached-load scripts
+						      (url-path->path (paths-servlet (host-paths host-info))
+								      (url-path uri)))]
+					[initial-request (make-request method uri headers bindings host-ip client-ip)])
+				    (add-new-instance invoke-id instances)
+				    (with-handlers ([void (lambda (exn)
+							    (decapitate method ((responders-servlet (host-responders host-info)) uri exn)))])
+						   (let/ec send/finish (invoke-unit/sig servlet-program servlet^)))))))))))))
       
       ; response = (cons str (listof str)), where the first str is a mime-type
       ;          | x-expression

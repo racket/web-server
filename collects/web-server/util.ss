@@ -1,5 +1,5 @@
 (module util mzscheme
-  (provide url-path->path prefix? provide-define-struct extract-flag path->list directory-part)
+  (provide url-path->path prefix? provide-define-struct extract-flag path->list directory-part hash-table-empty?)
   (require (lib "list.ss"))
   
   ; : str -> str
@@ -88,4 +88,10 @@
     (let ([x (assq name flags)])
       (if x
           (cdr x)
-          default))))
+          default)))
+
+  ; hash-table-empty? : hash-table -> bool
+  (define (hash-table-empty? table)
+    (let/ec out
+      (hash-table-for-each table (lambda (k v) (out #f)))
+      #t)))

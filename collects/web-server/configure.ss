@@ -91,12 +91,6 @@
                ;[width "123"] [height "115"]
                [width "61"] [height "57"])))
       
-      ; send/back : response -> doesn't
-      ; more here - consider providing an optimized version from the server
-      (define (send/back page)
-        (send/suspend (lambda (unused-k-url) page))
-        (error 'send/back "Alert! send/back returned: someone is guessing URLs."))
-      
       ; interact : (str -> response) -> bindings
       (define (interact page)
         (request-bindings (check-ip-address (send/suspend page))))
