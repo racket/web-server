@@ -102,11 +102,11 @@
             (unless (close-connection? headers
                                        (string->number major-version)
                                        (string->number minor-version)
-                                       client-ip)
+                                       client-ip host-ip)
               (connection-loop)))))))
   
-  ; close-connection? : table nat nat str -> bool
-  (define (close-connection? headers major minor client-ip)
+  ; close-connection? : table nat nat str str -> bool
+  (define (close-connection? headers major minor client-ip host-ip)
     (or (< major 1)
         (and (= major 1) (= minor 0))
         (cond
@@ -115,11 +115,11 @@
           [else #f])
         (msie-6.0-from-local-machine? headers client-ip)))
   
-  ; : table str -> bool
+  ; : table str str -> bool
   ; to work around a bug in MSIE 6.0 for documents < 265 bytes when connecting from the local
   ; machine.  The server could pad the response as MSIIS does, but closing the connection works, too.
-  (define (msie-6.0-from-local-machine? headers client-ip)
-    (and (string=? "127.0.0.1" client-ip)
+  (define (msie-6.0-from-local-machine? headers client-ip host-ip)
+    (and (string=? host-ip client-ip)
          (cond
            [(assq 'HTTP_USER_AGENT headers)
             => (lambda (client) (regexp-match MSIE-6-regexp (cdr client)))]
