@@ -11,7 +11,21 @@
            (rename (lib "configuration.ss" "web-server")
                    build-path-maybe build-path-maybe)
            (lib "configuration-table-structures.ss" "web-server")
-           (lib "parse-table.ss" "web-server"))
+           (lib "parse-table.ss" "web-server")
+           (lib "util.ss" "web-server"))
+  
+  ; FIX
+  ; - replace (collection-path "web-server") with the path of the directory containing the configuration file
+  ; - fuss with changing absolute paths into relative ones internally
+  ; - move old config files instead of copying default ones
+  ;   - ask: - move exisiting (don't move defaults)
+  ;          - copy defaults to new location
+  ;          - use files existing in the new location (ask only when they exist)
+  ;   - do this when either
+  ;     - changing the root dir (and at least one other file depends on it?)
+  ;     - editing an individual path
+  ; - change all configuration paths (in the configure servlet and in the server) to
+  ;   use a platform independent representation (i.e. a listof strings)
   
   ; servlet-maker : str -> (unit/sig servlet^ -> ())
   (define (servlet-maker default-configuration-path)
@@ -31,6 +45,8 @@
       (define-struct user-pass (user pass))
       
       (define doc-dir "Defaults/documentation")
+      
+      (define edit-host-button-name "Edit Boring Details")
       
       ; build-footer : str -> html
       (define (build-footer base)
@@ -133,7 +149,8 @@
       
       ; configure-top-level : str -> doesn't
       (define (configure-top-level configuration-path)
-        (with-handlers ([void (lambda (exn) (send/back (exception-error-page exn)))])
+        (with-handlers (;[void (lambda (exn) (send/back (exception-error-page exn)))]
+                        )
           (let loop ([configuration (read-configuration configuration-path)])
             (let* ([update-bindings (interact (request-new-configuration-table configuration))]
                    [form-configuration
@@ -148,7 +165,7 @@
                     (cond
                       [(assq 'add-host update-bindings)
                        (add-virtual-host form-configuration (extract-bindings 'host-prefixes update-bindings))]
-                      [(reverse-assoc "Edit" update-bindings)
+                      [(reverse-assoc edit-host-button-name update-bindings)
                        =>
                        (lambda (edit)
                          ; write the configuration twice when editing a host: once before and once after.
@@ -236,15 +253,18 @@
         (let* ([bindings (interact (request-new-host-table old))]
                [new (update-host-table old bindings)])
           (when (assq 'edit-passwords bindings)
-            (let ([paths (host-table-paths new)])
-              (configure-passwords (build-path-maybe (build-path-maybe (collection-path "web-server")
-                                                                       (paths-host-base paths))
-                                                     (paths-passwords paths)))))
+            (let* ([paths (host-table-paths new)]
+                   [password-path
+                    (build-path-maybe (build-path-maybe (collection-path "web-server")
+                                                        (paths-host-base paths))
+                                      (paths-passwords paths))])
+              (unless (file-exists? password-path)
+                (write-to-file password-path ''()))
+              (configure-passwords password-path)))
           new))
       
       (define restart-message
-        `((h3 (font ([color "red"]) "Restart the Web server to use the new settings."))
-          "You may need to choose a different port or wait a while before restarting."))
+        `((h3 (font ([color "red"]) "Restart the Web server to use the new settings."))))
       
       ; request-new-configuration-table : configuration-table -> str -> html
       (define (request-new-configuration-table old)
@@ -255,16 +275,16 @@
            "copyright 2001 by Paul Graunke and PLT"
            (hr)
            (table ([width "90%"])
-                  (tr (td ,@restart-message)
-                      (td ([align "right"]) (input ([type "submit"] [name "configure"] [value "Update Configuration"])))))    
+                  (tr (td ,@restart-message))
+                  (tr (td (input ([type "submit"] [name "configure"] [value "Update Configuration"])))))    
            (hr)
            (h2 "Basic Configuration")
            (table
-            ,(make-table-row "Port" 'port (configuration-table-port old))
-            ,(make-table-row "Maximum Waiting Connections"
-                             'waiting (configuration-table-max-waiting old))
-            ,(make-table-row "Initial Connection Timeout (seconds)" 'time-initial
-                             (configuration-table-initial-connection-timeout old)))
+            ,(make-tr-num "Port" 'port (configuration-table-port old))
+            ,(make-tr-num "Maximum Waiting Connections"
+                               'waiting (configuration-table-max-waiting old))
+            ,(make-tr-num "Initial Connection Timeout (seconds)" 'time-initial
+                               (configuration-table-initial-connection-timeout old)))
            (hr)
            (h2 "Host Name Configuration")
            (p "The Web server accepts requests on behalf of multiple " (em "hosts")
@@ -272,16 +292,19 @@
               " The table below maps domain names to host specific configurations.")
            (table ([width "50%"])
                   (tr (th ([align "left"]) "Name") ;(th "Host configuration path")
+                      (th "Host Directory")
                       (th nbsp)
                       (th nbsp))
                   (tr (td ,"Default Host")
+                      (td ,(make-field "text" 'default-host-root (paths-host-base (host-table-paths (configuration-table-default-host old)))))
                       (td ([align "center"])
-                          (input ([type "submit"] [name "default"] [value "Edit"])))
+                          (input ([type "submit"] [name "default"] [value ,edit-host-button-name])))
                       (td nbsp))
                   ,@(map (lambda (host n)
                            `(tr (td ,(make-field "text" 'host-regexps (car host)))
+                                (td ,(make-field "text" 'host-roots (paths-host-base (host-table-paths (cdr host)))))
                                 (td ([align "center"])
-                                    (input ([type "submit"] [name ,n] [value "Edit"])))
+                                    (input ([type "submit"] [name ,n] [value ,edit-host-button-name])))
                                 (td ([align "center"])
                                     (input ([type "submit"] [name ,n] [value "Delete"])))))
                          (configuration-table-virtual-hosts old)
@@ -293,15 +316,25 @@
            (hr)
            ,footer)))
       
-      ; make-table-row : xexpr sym str [xexpr ...] -> xexpr
-      (define (make-table-row label tag default-text . extra-tds)
-        `(tr (td (a ([href ,(format "/~a/terms/~a.html" doc-dir tag)]) ,label))
-             (td ,(make-field "text" tag (format "~a" default-text)))
-             . ,extra-tds))
+      ; gen-make-tr : nat -> xexpr sym str [xexpr ...] -> xexpr
+      (define (gen-make-tr size-n)
+        (let ([size-str (number->string size-n)])
+          (lambda (label tag default-text . extra-tds)
+            `(tr (td (a ([href ,(format "/~a/terms/~a.html" doc-dir tag)]) ,label))
+                 (td ,(make-field-size "text" tag (format "~a" default-text) size-str))
+                 . ,extra-tds))))
+      
+      (define make-tr-num (gen-make-tr 20))
+      
+      (define make-tr-str (gen-make-tr 70))
       
       ; make-field : str sym str -> xexpr
       (define (make-field type label value)
-        `(input ([type ,type] [name ,(symbol->string label)] [value ,value] [size "30"])))
+        (make-field-size type label value "30"))
+      
+      ; make-field-size : str sym str str -> xexpr
+      (define (make-field-size type label value size)
+        `(input ([type ,type] [name ,(symbol->string label)] [value ,value] [size ,size])))
       
       ; update-configuration : configuration-table bindings -> configuration-table
       (define (update-configuration old bindings)
@@ -309,17 +342,41 @@
          (string->nat (extract-binding/single 'port bindings))
          (string->nat (extract-binding/single 'waiting bindings))
          (string->num (extract-binding/single 'time-initial bindings))
-         (configuration-table-default-host old)
-         (map (lambda (h pattern)
-                (cons pattern (cdr h)))
+         (update-host-root (configuration-table-default-host old)
+                           (extract-binding/single 'default-host-root bindings))
+         (map (lambda (h root pattern)
+                (cons pattern (update-host-root (cdr h) root)))
               (configuration-table-virtual-hosts old)
+              (extract-bindings 'host-roots bindings)
               (extract-bindings 'host-regexps bindings))))
+      
+      ; update-host-root : host-table str -> host-table
+      (define (update-host-root host new-root)
+        (host-table<-paths host (paths<-host-base (host-table-paths host) new-root)))
+      
+      ; host-table<-paths : host-table paths -> host-table
+      ; more here - create these silly functions automatically from def-struct macro
+      (define (host-table<-paths host paths)
+        (make-host-table
+         (host-table-indices host)
+         (host-table-log-format host)
+         (host-table-messages host)
+         (host-table-timeouts host)
+         paths))
+      
+      ; paths<-host-base : paths str -> paths
+      ; more here - create these silly functions automatically from def-struct macro
+      (define (paths<-host-base paths host-base)
+        (make-paths (paths-conf paths)
+                    host-base
+                    (paths-log paths)
+                    (paths-htdocs paths)
+                    (paths-servlet paths)
+                    (paths-passwords paths)))
       
       ; string->num : str -> nat
       (define (string->num str)
-        (let ([n (string->number str)])
-          (or n
-              (error 'string->nat "~s is not a number" str))))
+        (or (string->number str) (error 'string->nat "~s is not a number" str)))
       
       ; string->nat : str -> nat
       (define (string->nat str)
@@ -330,77 +387,95 @@
       
       ; request-new-host-table : host-table -> str -> response
       (define (request-new-host-table old)
-        (let ([timeouts (host-table-timeouts old)]
-              [paths (host-table-paths old)]
-              [m (host-table-messages old)])
+        (let* ([timeouts (host-table-timeouts old)]
+               [paths (host-table-paths old)]
+               [m (host-table-messages old)]
+               [host-root (build-path-maybe (collection-path "web-server") (paths-host-base paths))]
+               [conf (build-path-maybe host-root (paths-conf paths))])
           (build-suspender
            '("Configure Host")
            `((h1 "PLT Web Server Host configuration")
              (input ([type "submit"] [value "Save Configuration"]))
              (hr)
              (table 
-              (tr (th ([colspan "2"]) "Paths") (th ([width "50%"]) nbsp))
-              ; more here - add links to descriptions, esp. what's relative to what
-              ,(make-dir-row "Host root" (collection-path "web-server")
-                             'path-host-root (paths-host-base paths))
-              ,(make-dir-row "Log file" (find-system-path 'home-dir)
-                             'path-log (paths-log paths))
-              ,(make-dir-row "Web document root" "Host root"
-                             'path-htdocs (paths-htdocs paths))
-              ,(make-dir-row "Servlet root" "Host root"
-                             'path-servlet (paths-servlet paths))
-              ,(make-dir-row "Password File" "Host root"
-                             'path-password (paths-passwords paths))
+              (tr (th ([colspan "2"]) "Paths"))
+              ,(make-tr-str "Log file" 
+                             'path-log (build-path-maybe (find-system-path 'home-dir) (paths-log paths)))
+              ,(make-tr-str "Web document root" 
+                             'path-htdocs (build-path-maybe host-root (paths-htdocs paths)))
+              ,(make-tr-str "Servlet root" 
+                             'path-servlet (build-path-maybe host-root (paths-servlet paths)))
+              ,(make-tr-str "Password File"
+                             'path-password (build-path-maybe host-root (paths-passwords paths)))
               (tr (td ([colspan "2"])
                       ,(make-field "submit" 'edit-passwords "Edit Passwords")))
-              (tr (td ([colspan "3"]) (hr)))
-              (tr (th ([colspan "2"]) "Message Paths") (th ([width "50%"]) nbsp))
-              ,(make-dir-row "Message root" "Host root"
-                             'path-message-root (paths-conf paths))
-              ,(make-dir-row "Servlet error" "Message root"
-                             'path-servlet-message (messages-servlet m))
-              ,(make-dir-row "Access Denied" "Message root" 'path-access-message (messages-authentication m))
-              ,(make-dir-row "Servlet cache refreshed" "Message root"
-                             'path-servlet-refresh-message (messages-servlets-refreshed m))
-              ,(make-dir-row "Password cache refreshed" "Message root"
-                             'path-password-refresh-message
-                             (messages-passwords-refreshed m))
-              ,(make-dir-row "File not found" "Message root"
-                             'path-not-found-message (messages-file-not-found m))
-              ,(make-dir-row "Protocol error" "Message root"
-                             'path-protocol-message (messages-protocol m))
-              (tr (th ([colspan "2"]) "Timeout Seconds") (th nbsp))
-              ,(make-3columns "Default Servlet" 'time-default-servlet (timeouts-default-servlet timeouts))
-              ,(make-3columns "Password" 'time-password (timeouts-password timeouts))
-              ,(make-3columns "Servlet Connection" 'time-servlet-connection (timeouts-servlet-connection timeouts))
-              ,(make-3columns "per Byte When Transfering Files" 'time-file-per-byte (timeouts-file-per-byte timeouts))
-              ,(make-3columns "Base When Transfering Files" 'time-file-base (timeouts-file-base timeouts))
-              (tr (td ([colspan "3"]) (hr))))
+              (tr (td ([colspan "2"]) (hr)))
+              (tr (th ([colspan "2"]) "Message Paths"))
+              ,(make-tr-str "Servlet error" 'path-servlet-message
+                             (build-path-maybe conf (messages-servlet m)))
+              ,(make-tr-str "Access Denied" 'path-access-message
+                             (build-path-maybe conf (messages-authentication m)))
+              ,(make-tr-str "Servlet cache refreshed" 'path-servlet-refresh-message
+                             (build-path-maybe conf (messages-servlets-refreshed m)))
+              ,(make-tr-str "Password cache refreshed" 'path-password-refresh-message
+                             (build-path-maybe conf (messages-passwords-refreshed m)))
+              ,(make-tr-str "File not found" 'path-not-found-message
+                             (build-path-maybe conf (messages-file-not-found m)))
+              ,(make-tr-str "Protocol error" 'path-protocol-message
+                             (build-path-maybe conf (messages-protocol m)))
+              (tr (td ([colspan "2"]) (hr)))
+              (tr (th ([colspan "2"]) "Timeout Seconds"))
+              ,(make-tr-num "Default Servlet" 'time-default-servlet (timeouts-default-servlet timeouts))
+              ,(make-tr-num "Password" 'time-password (timeouts-password timeouts))
+              ,(make-tr-num "Servlet Connection" 'time-servlet-connection (timeouts-servlet-connection timeouts))
+              ,(make-tr-num "per Byte When Transfering Files" 'time-file-per-byte (timeouts-file-per-byte timeouts))
+              ,(make-tr-num "Base When Transfering Files" 'time-file-base (timeouts-file-base timeouts)))
              (hr)
              (input ([type "submit"] [value "Save Configuration"]))
              ,footer))))
       
-      ; make-dir-row : str str sym tst -> xexpr
-      (define (make-dir-row dir parent tag default-text)
-        (make-3columns `(p ,dir (br) "(relative to " ,parent ")") tag default-text))
-      
-      ; make-3columns : str sym tst -> xexpr
-      (define (make-3columns label tag default-text)
-        (make-table-row label tag default-text '(td nbsp)))
-      
       ; update-host-table : host-table (listof (cons sym str)) -> host-table
       (define (update-host-table old bindings)
-        (let ([eb (lambda (tag) (extract-binding/single tag bindings))])
+        (let* ([eb (lambda (tag) (extract-binding/single tag bindings))]
+               [paths (host-table-paths old)]
+               [host-root (paths-host-base paths)]
+               [conf (build-path-maybe host-root (paths-conf paths))]
+               [ubp (un-build-path host-root)]
+               [eb-host-root (lambda (tag) (ubp (eb tag)))]
+               [ubp-conf (un-build-path conf)]
+               [eb-conf (lambda (tag) (ubp-conf (eb tag)))])
           (make-host-table
            (host-table-indices old)
            (host-table-log-format old)
            (apply make-messages
-                  (map eb '(path-servlet-message path-access-message path-servlet-refresh-message path-password-refresh-message path-not-found-message path-protocol-message)))
+                  (map eb-conf '(path-servlet-message path-access-message path-servlet-refresh-message path-password-refresh-message path-not-found-message path-protocol-message)))
            (apply make-timeouts
                   (map (lambda (tag) (string->number (extract-binding/single tag bindings)))
                        '(time-default-servlet time-password time-servlet-connection time-file-per-byte time-file-base)))
-           (apply make-paths
-                  (map eb '(path-message-root path-host-root path-log path-htdocs path-servlet path-password))))))
+           (let ([old-paths (host-table-paths old)])
+             (apply make-paths
+                    (paths-conf old-paths)
+                    (paths-host-base old-paths)
+                    (map eb-host-root '(path-log path-htdocs path-servlet path-password)))))))
+      
+      ; un-build-path : str -> str -> str
+      (define (un-build-path possible-base)
+        (let ([base-list (path->list possible-base)])
+          (lambda (path)
+            (let ([path-list (path->list path)])
+              (cond
+                [(list-extends base-list path-list)
+                 => (lambda (x) (apply build-path x))]
+                [else path])))))
+      
+      ; list-extends : (listof a) (listof a) -> (U #f (listof a))
+      (define (list-extends a b)
+        (cond
+          [(null? a) b]
+          [else (cond
+                  [(null? b) #f]
+                  [else (and (equal? (car a) (car b))
+                             (list-extends (cdr a) (cdr b)))])]))
       
       ; Password Configuration
       
@@ -482,8 +557,8 @@
          `("Update Authentication Realm " ,(realm-name realm))
          `((h1 "Update Authentication Realm")
            (table
-            ,(make-table-row "Realm Name" 'realm-name (realm-name realm))
-            ,(make-table-row "Protected URL Path Pattern" 'realm-pattern (realm-pattern realm)))
+            ,(make-tr-str "Realm Name" 'realm-name (realm-name realm))
+            ,(make-tr-str "Protected URL Path Pattern" 'realm-pattern (realm-pattern realm)))
            (hr)
            (table 
             (tr (th "User Name") (th "Password") (th "Delete"))
@@ -622,8 +697,7 @@
                   (lambda (from to)
                     (let ([to-path (build-path-maybe conf to)])
                       ; more here - check existance of from path?
-                      (unless (file-exists? to-path)
-                        (copy-file (build-path from-conf from) to-path))))])
+                      (copy-file* (build-path from-conf from) to-path)))])
             (copy-conf "passwords-refresh.html" (messages-passwords-refreshed messages))
             (copy-conf "servlet-refresh.html" (messages-servlets-refreshed messages))
             (copy-conf "forbidden.html" (messages-authentication messages))
@@ -640,6 +714,13 @@
           (let ([to-path (build-path to name)])
             (unless (file-exists? to-path)
               (copy-file (build-path from name) to-path)))))
+      
+      ; copy-file* : str str -> void
+      (define (copy-file* from-path to-path)
+        (unless (file-exists? to-path)
+          (let-values ([(to-path-base to-path-name must-be-dir?) (split-path to-path)])
+            (ensure-directory-shallow to-path-base))
+          (copy-file from-path to-path)))
       
       ; ensure* : str str str -> void
       (define (ensure* from to name)

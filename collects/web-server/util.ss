@@ -1,5 +1,5 @@
 (module util mzscheme
-  (provide url-path->path prefix? provide-define-struct extract-flag)
+  (provide url-path->path prefix? provide-define-struct extract-flag path->list)
   (require (lib "list.ss"))
   
   ; url-path->path : (Union 'same 'up String) String -> String
@@ -15,6 +15,18 @@
                       [else (cons x acc)]))
                   null
                   (chop-string #\/ p))))
+    
+  ; path->list : str -> (cons (U str 'up 'same) (listof (U str 'up 'same)))
+  ; to convert a platform dependent path into a listof path parts such that
+  ; (forall x (equal? (path->list x) (path->list (apply build-path (path->list x)))))
+  (define (path->list p)
+    (let loop ([p p] [acc null])
+      (let-values ([(base name must-be-dir?) (split-path p)])
+        (let ([new-acc (cons name acc)])
+          (cond
+            [(string? base) (loop base new-acc)]
+            [else ; conflate 'relative and #f
+             new-acc])))))
   
   ; don't use this as it is wrong for the Macintosh
   '(define (url-path->path base p)

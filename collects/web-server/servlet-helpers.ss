@@ -28,7 +28,11 @@
   (define build-suspender
     (opt-lambda (title content [body-attributes '([bgcolor "white"])] [head-attributes null])
       (lambda (k-url)
-        `(html (head ,head-attributes (title . ,title))
+        `(html (head ,head-attributes
+                     (meta ([http-equiv "Pragma"] [content "no-cache"])) ; don't cache in netscape
+                     (meta ([http-equiv "expires"] [content "-1"])) ; don't cache in IE
+                     ; one site said to use -1, another said to use 0.
+                     (title . ,title))
                (body ,body-attributes
                      (form ([action ,k-url] [method "post"])
                            . ,content)))))))
