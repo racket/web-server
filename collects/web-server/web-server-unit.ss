@@ -562,13 +562,13 @@
                                                 (cons s (read-to-eof))))))))]))]
                      [else (raise "not implemented yet")])])
               ; more here - keep one channel per connection instead of creating new ones
-              (let ([response (create-channel)])
+              (let ([response (make-async-channel)])
                 (let-values ([(host-ip client-ip) (tcp-addresses out)])
                   ((if (url-params uri) resume-servlet start-servlet)
                    custodian
                    response
                    meth uri headers binds host-info scripts instances host-ip client-ip))
-                (output-page/port (channel-get response) out close)))))
+                (output-page/port (async-channel-get response) out close)))))
       
       ; get-field-name : str -> sym
       (define (get-field-name rhs)
@@ -648,7 +648,7 @@
                   (let* ([invoke-id (string->symbol (cadr ids))]
                          [k-id (string->symbol (caddr ids))]
                          [inst (hash-table-get instances invoke-id)])
-                    (channel-put (servlet-instance-channel inst)
+                    (async-channel-put (servlet-instance-channel inst)
                                  (list response (hash-table-get (servlet-instance-cont-table inst) k-id)
                                        (make-request method uri headers bindings host-ip client-ip)))))]
             [else (raise "malformed url-params when resuming servlet program")])))
@@ -663,13 +663,13 @@
                     (when inst
                       (hash-table-remove! instances invoke-id)
                       (let loop ()
-                        (channel-get-available
+                        (async-channel-get-available
                          (servlet-instance-channel inst)
                          (lambda (x)
                            (timeout-error method uri (car x))
                            (loop)))))))]
                [time-out-seconds TIMEOUT-DEFAULT]
-               [respond (lambda (page) (channel-put response page))])
+               [respond (lambda (page) (async-channel-put response page))])
           (let ([servlet-custodian (make-custodian top-custodian)])
             (parameterize ([current-custodian servlet-custodian]
                            [read-case-sensitive #t]
@@ -782,7 +782,7 @@
       ; add-new-instance : sym instance-table -> void
       (define (add-new-instance invoke-id instances)
         (hash-table-put! instances invoke-id
-                         (make-servlet-instance 0 (create-channel) (make-hash-table))))
+                         (make-servlet-instance 0 (make-async-channel) (make-hash-table))))
       
       ; gen-send/suspend : url sym instance-table (response -> void) (instance -> doesn't) -> (str -> response) -> request
       (define (gen-send/suspend uri invoke-id instances output-page resume-next-request)
@@ -801,7 +801,7 @@
       ; :  (-> void) (channel -> void) -> instance -> doesn't
       (define (gen-resume-next-request update-time! update-channel!)
         (lambda (inst)
-          (let ([resume (channel-get (servlet-instance-channel inst))])
+          (let ([resume (async-channel-get (servlet-instance-channel inst))])
             ; set! - modeling things that change over time
             (update-time!)
             ; set! justified - communicating between threads
@@ -828,7 +828,7 @@
       ; "Internal Error, please see Microsoft's search engine" for 500 responses
       ; instead of displaying the server's error message.
       (define (timeout-error method uri channel)
-        (channel-put
+        (async-channel-put
          channel
          (make-response/full
           TIME-OUT-CODE "Timeout" (current-seconds) TEXT/HTML-MIME-TYPE TIME-OUT-HEADERS
