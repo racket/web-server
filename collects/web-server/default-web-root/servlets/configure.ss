@@ -33,8 +33,9 @@
       ; user-pass = (make-user-pass sym str)
       (define-struct user-pass (user pass))
       
-      ; configuration-path : str
-      (define configuration-path (build-path (collection-path "web-server") "configuration-table"))
+      ; default-configuration-path : str
+      (define default-configuration-path
+        (build-path (collection-path "web-server") "configuration-table"))
       
       (define doc-dir "Defaults/documentation")
       
@@ -55,7 +56,8 @@
                      (p "You must connect to the configuration tool from the machine the server runs on.")
                      ,footer)))
       
-      (define permission-error-page
+      ; permission-error-page : str -> html
+      (define (permission-error-page configuration-path)
         `(html (head (title "Web Server Configuration Permissions Error"))
                (body ([bgcolor "white"])
                      (p "You must have read and write access to "
@@ -69,12 +71,6 @@
         request)
       
       (check-ip-address initial-request)
-      
-      (let ([perms (file-or-directory-permissions configuration-path)])
-        (unless (and (memq 'write perms) (memq 'read perms))
-          ; race condition - changing the permissions after this check
-          ; will result in an exception later (which serves them right)
-          (send/finish permission-error-page)))
       
       ; more here - abstract with static pages?
       (define web-server-icon
@@ -92,8 +88,59 @@
       (define (interact page)
         (request-bindings (check-ip-address (send/suspend page))))
       
-      ; configure-top-level : -> responose
-      (define (configure-top-level)
+      ; choose-configuration-file : -> doesn't
+      (define (choose-configuration-file)
+        (let ([configuration-path (ask-for-configuration-path)])
+          (let loop ()
+            (if (file-exists? configuration-path)
+                (let ([perms (file-or-directory-permissions configuration-path)])
+                  ; race condition - changing the permissions after the check
+                  ; will result in an exception later (which serves them right)
+                  (if (and (memq 'write perms) (memq 'read perms))
+                      (configure-top-level configuration-path)
+                      (send/finish (permission-error-page configuration-path))))
+                (begin (send/suspend (copy-configuration-file configuration-path))
+                       (let-values ([(base name must-be-dir) (split-path configuration-path)])
+                         (unless (directory-exists? base)
+                           (make-directory* base)))
+                       (copy-file default-configuration-path configuration-path)
+                       (loop))))))
+      
+      ; copy-configuration-file : str -> html
+      (define (copy-configuration-file configuration-path)
+        (build-suspender
+         '("Copy Configuration File")
+         `((h1 "Copy Configuration File")
+           (p "The configuration file "
+              (blockquote (code ,configuration-path))
+              "does not exist.  Would you like to copy the default configuration to this "
+              "location?")
+           (center (input ([type "submit"] [name "ok"] [value "Copy"]))))))
+      
+      ; ask-for-configuration-path : -> str
+      (define (ask-for-configuration-path)
+        (extract-binding/single
+         'path
+         (request-bindings (send/suspend configuration-path-page))))
+      
+      ; configuration-path-page : str -> html
+      (define configuration-path-page
+        (build-suspender
+         '("Choose a Configuration File")
+         `((h1 "Choose a Web Server Configuration File")
+           ,web-server-icon
+           (p "Choose a Web server configuration file to edit. "
+              (br)
+              "By default the Web server uses the configuration in "
+              (blockquote (code ,default-configuration-path)))
+           (table (tr (th "Configuration path")
+                      (td (input ([type "text"] [name "path"] [size "80"]
+                                  [value ,default-configuration-path]))))
+                  (tr (td ([colspan "2"] [align "center"])
+                          (input ([type "submit"] [name "choose-path"] [value "Select"]))))))))
+      
+      ; configure-top-level : str -> doesn't
+      (define (configure-top-level configuration-path)
         (with-handlers ([void (lambda (exn) (send/back (exception-error-page exn)))])
           (let loop ([configuration (read-configuration configuration-path)])
             (let* ([update-bindings (interact (request-new-configuration-table configuration))]
@@ -107,13 +154,13 @@
                       [(assq 'edit-host-details update-bindings)
                        ; write the configuration twice when editing a host: once before and once after.
                        ; The after may never happen if the user doesn't continue
-                       (write-configuration form-configuration)
+                       (write-configuration form-configuration configuration-path)
                        (let ([x (assq 'edit-which-host update-bindings)])
                          (if x
                              (configure-hosts form-configuration (string->number (cdr x)))
                              (send/back must-select-host-page)))]
                       [else form-configuration])])
-              (write-configuration new-configuration)
+              (write-configuration new-configuration configuration-path)
               (loop new-configuration)))))
       
       ; add-virtual-host : configuration-table (listof str) -> configuration-table
@@ -513,10 +560,10 @@
       (define (read-configuration configuration-path)
         (parse-configuration-table (call-with-input-file configuration-path read)))
       
-      ; write-configuration : configuration-table -> void
+      ; write-configuration : configuration-table str -> void
       ; writes out the new configuration file and
       ; also copies the configure.ss servlet to the default-host's servlet directory
-      (define (write-configuration new)
+      (define (write-configuration new configuration-path)
         (ensure-configuration-servlet (configuration-table-default-host new))
         (let ([new-module
                `((port ,(configuration-table-port new))
@@ -621,7 +668,7 @@
       (define build-path-maybe-expression->file-name caddr)
       
       ; main
-      (configure-top-level))))
+      (choose-configuration-file))))
 
 ;; open it up
 (require configure)

@@ -1,7 +1,7 @@
 (module util mzscheme
-  (provide url-path->path prefix? provide-define-struct)
+  (provide url-path->path prefix? provide-define-struct extract-flag)
   (require (lib "list.ss"))
-    
+  
   ; url-path->path : (Union 'same 'up String) String -> String
   ; more here - ".." should probably raise an error instead of disappearing.
   (define (url-path->path base p)
@@ -60,4 +60,12 @@
                         (provide (struct struct-name (field ...)))))]
         [(_ struct-name (field ...))
          (syntax (begin (define-struct struct-name (field ...))
-                        (provide (struct struct-name (field ...)))))]))))
+                        (provide (struct struct-name (field ...)))))])))
+  
+  ; this is used by launchers
+  ; extract-flag : sym (listof (cons sym alpha)) alpha -> alpha
+  (define (extract-flag name flags default)
+    (let ([x (assq name flags)])
+      (if x
+          (cdr x)
+          default))))
