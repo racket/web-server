@@ -40,6 +40,12 @@
                      (form ([action ,k-url] [method "post"])
                            . ,content))))))
   
+  ; make-html-response/incremental : ((string -> void) -> void) -> response/incremental
+  (define (make-html-response/incremental chunk-maker)
+    (make-response/incremental
+     200 "Okay" (current-seconds) "text/html" '()
+     chunk-maker))
+  
   (define-syntax anchor-case
     (lambda (stx)
       (syntax-case stx ()

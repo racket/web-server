@@ -651,8 +651,10 @@
                (exit))))))))
   
   ; response = (cons str (listof str)), where the first str is a mime-type
-  ;          | (make-response/full nat str nat str (listof (cons sym str)) (listof str))
   ;          | x-expression
+  ;          | (make-response/full nat str nat str (listof (cons sym str)) (listof str))
+  ;          | (make-response/incremental nat str nat str (listof (cons sym str))
+  ;              ((str -> void) -> void))
   
   ; output-page/port : response oport -> void
   (define (output-page/port page out)
@@ -660,13 +662,27 @@
     ; it should output an error for this response
     (cond
       [(response/full? page)
-       (output-headers out (response/full-code page) (response/full-message page)
-                       (response/full-seconds page) (response/full-mime page)
-                       `(("Content-length: " ,(apply + (map string-length (response/full-body page))))
-                         . ,(map (lambda (x) (list (symbol->string (car x)) ": " (cdr x)))
-                                 (response/full-extras page))))
-       (for-each (lambda (str) (display str out))
-                 (response/full-body page))]
+       (cond
+         ; more here - the incremental should be disallowed for 1.0 clients that don't support chunked
+         [(response/incremental? page)
+          (output-headers out (response/full-code page) (response/full-message page)
+                          (response/full-seconds page) (response/full-mime page)
+                          `(("Transfer-Encoding: chunked")
+                            . ,(map (lambda (x) (list (symbol->string (car x)) ": " (cdr x)))
+                                    (response/full-extras page))))
+          ((response/full-body page)
+           (lambda (chunk)
+             (fprintf out "~x\r\n~a\r\n" (string-length chunk) chunk)))
+          ; one \r\n ends the last (empty) chunk and the second \r\n ends the (non-existant) trailers
+          (fprintf out "0\r\n\r\n")]
+         [else 
+          (output-headers out (response/full-code page) (response/full-message page)
+                          (response/full-seconds page) (response/full-mime page)
+                          `(("Content-length: " ,(apply + (map string-length (response/full-body page))))
+                            . ,(map (lambda (x) (list (symbol->string (car x)) ": " (cdr x)))
+                                    (response/full-extras page))))
+          (for-each (lambda (str) (display str out))
+                    (response/full-body page))])]
       [(string? (car page))
        (output-headers out 200 "Okay" (current-seconds) (car page)
                        `(("Content-length: " ,(apply + (map string-length (cdr page))))))
