@@ -444,9 +444,9 @@
                             (build-path-maybe conf (messages-servlet m)))
               ,(make-tr-str "Access Denied" 'path-access-message
                             (build-path-maybe conf (messages-authentication m)))
-              ,(make-tr-str "Servlet cache refreshed" 'path-servlet-refresh-message
+              ,(make-tr-str "Servlet cache refreshed" 'servlet-refresh-message
                             (build-path-maybe conf (messages-servlets-refreshed m)))
-              ,(make-tr-str "Password cache refreshed" 'path-password-refresh-message
+              ,(make-tr-str "Password cache refreshed" 'password-refresh-message
                             (build-path-maybe conf (messages-passwords-refreshed m)))
               ,(make-tr-str "File not found" 'path-not-found-message
                             (build-path-maybe conf (messages-file-not-found m)))
@@ -478,7 +478,7 @@
            (host-table-indices old)
            (host-table-log-format old)
            (apply make-messages
-                  (map eb-conf '(path-servlet-message path-access-message path-servlet-refresh-message path-password-refresh-message path-not-found-message path-protocol-message)))
+                  (map eb-conf '(path-servlet-message path-access-message servlet-refresh-message password-refresh-message path-not-found-message path-protocol-message)))
            (apply make-timeouts
                   (map (lambda (tag) (string->number (extract-binding/single tag bindings)))
                        '(time-default-servlet time-password time-servlet-connection time-file-per-byte time-file-base)))
