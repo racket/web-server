@@ -1,7 +1,7 @@
 ; configuration language example
 (module configuration mzscheme
   (provide complete-configuration build-path-maybe
-           complete-developer-configuration
+           build-developer-configuration
            default-configuration-table-path
            load-configuration
            load-developer-configuration)
@@ -27,6 +27,10 @@
   ; load-developer-configuration : str -> configuration
   (define (load-developer-configuration table-file-name)
     (complete-developer-configuration (get-configuration table-file-name)))
+
+  ; build-developer-configuration : tst -> configuration-table
+  (define (build-developer-configuration s-expr)
+    (complete-developer-configuration (parse-configuration-table s-expr)))
   
   ; complete-configuration : configuration-table -> configuration
   (define (complete-configuration table)

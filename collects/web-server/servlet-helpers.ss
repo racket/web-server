@@ -9,7 +9,7 @@
 	   exists-binding?
 	   extract-user-pass
 	   build-suspender
-	   ;make-html-response/incremental
+	   make-html-response/incremental
            ;anchor-case
 	   )
   
@@ -47,10 +47,10 @@
                            . ,content))))))
   
   ; make-html-response/incremental : ((string -> void) -> void) -> response/incremental
-  ;(define (make-html-response/incremental chunk-maker)
-  ;  (make-response/incremental
-  ;   200 "Okay" (current-seconds) "text/html" '()
-  ;   chunk-maker))
+  (define (make-html-response/incremental chunk-maker)
+    (make-response/incremental
+     200 "Okay" (current-seconds) "text/html" '()
+     chunk-maker))
   
   (define-syntax anchor-case
     (lambda (stx)
