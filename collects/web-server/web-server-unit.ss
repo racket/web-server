@@ -698,137 +698,152 @@
                                             [servlet-program (cached-load real-servlet-path)]
                                             [initial-request (make-request method uri headers bindings host-ip client-ip)])
 				       (add-new-instance invoke-id config:instances)
-                                       (let-values ([(base name must-be-dir?) (split-path real-servlet-path)])
-                                         (parameterize ([current-directory
-                                                         (if must-be-dir? real-servlet-path base)])
-                                           (with-handlers ([void (lambda (exn)
-                                                                   (decapitate method ((responders-servlet (host-responders host-info)) uri exn)))])
-                                             (invoke-unit/sig servlet-program servlet^)))))))))))))))
+               (parameterize ([current-directory
+                                (get-servlet-base-dir real-servlet-path)])
+                 (with-handlers
+                   ([void (lambda (exn)
+                            (decapitate method
+                                        ((responders-servlet
+                                           (host-responders host-info))
+                                         uri exn)))])
+                   (invoke-unit/sig servlet-program servlet^))))))))))))))
 
-      ; output-page/port : response oport bool -> void
-      (define (output-page/port page out close)
-	; double check what happens on erronious servlet output
-	; it should output an error for this response
-	(cond
-	  [(response/full? page)
-	   (cond
-	     [(response/incremental? page)
-	      (output-headers out (response/full-code page) (response/full-message page)
-			      (response/full-seconds page) (response/full-mime page)
-			      (if close
-				  null
-				  `(("Transfer-Encoding: chunked")
-				    . ,(map (lambda (x) (list (symbol->string (car x)) ": " (cdr x)))
-					    (response/full-extras page))))
-			      close)
-	      (if close
-		  ; WARNING: This is unreliable because the client can not distinguish between
-		  ; a dropped connection and the end of the file.  This is an inherit limitation
-		  ; of HTTP/1.0.  Other cases where we close the connection correspond to work arounds
-		  ; for buggy IE versions, at least some of which don't support chunked either.
-		  ((response/full-body page)
-		   (lambda chunks
-		     (for-each (lambda (chunk) (display chunk out)) chunks)))
-		  (begin
-		    ((response/full-body page)
-		     (lambda chunks
-		       (fprintf out "~x\r\n" (foldl (lambda (c acc) (+ (string-length c) acc)) 0 chunks))
-		       (for-each (lambda (chunk) (display chunk out)) chunks)
-		       (fprintf out "\r\n")))
-		    ; one \r\n ends the last (empty) chunk and the second \r\n ends the (non-existant) trailers
-		    (fprintf out "0\r\n\r\n")))]
-	     [else
-	      (output-headers out (response/full-code page) (response/full-message page)
-			      (response/full-seconds page) (response/full-mime page)
-			      `(("Content-length: " ,(apply + (map string-length (response/full-body page))))
-				. ,(map (lambda (x) (list (symbol->string (car x)) ": " (cdr x)))
-					(response/full-extras page)))
-			      close)
-	      (for-each (lambda (str) (display str out))
-			(response/full-body page))])]
-	  [(and (pair? page) (string? (car page)))
-	   (output-headers out 200 "Okay" (current-seconds) (car page)
-			   `(("Content-length: " ,(apply + (map string-length (cdr page)))))
-			   close)
-	   (for-each (lambda (str) (display str out))
-		     (cdr page))]
-	  [else
-	   (let ([str (with-handlers ([void (lambda (exn)
-					      (if (exn? exn)
-						  (exn-message exn)
-						  (format "~s" exn)))])
-			(xexpr->string page))])
-	     (output-headers out 200 "Okay" (current-seconds) TEXT/HTML-MIME-TYPE
-			     `(("Content-length: " ,(add1 (string-length str))))
-			     close)
-	     (display str out) ; the newline is for an IE 5.5 bug workaround
-	     (newline out))]))
 
-      ; --------------------------------------------------------------------------
-      ; COMMON LIBRARY FUNCTIONS:
+      ;; path -> path
+      ;; The actual servlet's parent directory.
+      (define (get-servlet-base-dir servlet-path)
+        (let loop ((path servlet-path))
+          (let-values ([(base name must-be-dir?) (split-path path)])
+            (if must-be-dir?
+              (or (and (directory-exists? path) path)
+                  (loop base))
+              (or (and (directory-exists? base) base)
+                  (loop base))))))
 
-      ; output-headers : oport Nat String Nat String (listof (listof String)) bool -> Void
-      (define (output-headers out code message seconds mime extras close)
-	(for-each (lambda (line)
-		    (for-each (lambda (word) (display word out)) line)
-		    (display #\return out)
-		    (newline out))
-		  (list* `("HTTP/1.1 " ,code " " ,message)
-                         `("Date: " ,(seconds->gmt-string (current-seconds)))
-			 `("Last-Modified: " ,(seconds->gmt-string seconds))
-			 `("Server: PLT Scheme")
-			 `("Content-type: " ,mime)
-			 ; more here - consider removing Connection fields from extras or raising an error
-			 (if close
-			     (cons `("Connection: close") extras)
-			     extras)))
-	(display #\return out)
-	(newline out))
+        ; output-page/port : response oport bool -> void
+        (define (output-page/port page out close)
+          ; double check what happens on erronious servlet output
+          ; it should output an error for this response
+          (cond
+            [(response/full? page)
+            (cond
+              [(response/incremental? page)
+              (output-headers out (response/full-code page) (response/full-message page)
+                              (response/full-seconds page) (response/full-mime page)
+                              (if close
+                                null
+                                `(("Transfer-Encoding: chunked")
+                                  . ,(map (lambda (x) (list (symbol->string (car x)) ": " (cdr x)))
+                                          (response/full-extras page))))
+                              close)
+              (if close
+                ; WARNING: This is unreliable because the client can not distinguish between
+                ; a dropped connection and the end of the file.  This is an inherit limitation
+                ; of HTTP/1.0.  Other cases where we close the connection correspond to work arounds
+                ; for buggy IE versions, at least some of which don't support chunked either.
+                ((response/full-body page)
+                 (lambda chunks
+                   (for-each (lambda (chunk) (display chunk out)) chunks)))
+                (begin
+                  ((response/full-body page)
+                   (lambda chunks
+                     (fprintf out "~x\r\n" (foldl (lambda (c acc) (+ (string-length c) acc)) 0 chunks))
+                     (for-each (lambda (chunk) (display chunk out)) chunks)
+                     (fprintf out "\r\n")))
+                  ; one \r\n ends the last (empty) chunk and the second \r\n ends the (non-existant) trailers
+                  (fprintf out "0\r\n\r\n")))]
+              [else
+              (output-headers out (response/full-code page) (response/full-message page)
+                              (response/full-seconds page) (response/full-mime page)
+                              `(("Content-length: " ,(apply + (map string-length (response/full-body page))))
+                                . ,(map (lambda (x) (list (symbol->string (car x)) ": " (cdr x)))
+                                        (response/full-extras page)))
+                              close)
+              (for-each (lambda (str) (display str out))
+                        (response/full-body page))])]
+            [(and (pair? page) (string? (car page)))
+            (output-headers out 200 "Okay" (current-seconds) (car page)
+                            `(("Content-length: " ,(apply + (map string-length (cdr page)))))
+                            close)
+            (for-each (lambda (str) (display str out))
+                      (cdr page))]
+            [else
+            (let ([str (with-handlers ([void (lambda (exn)
+                                               (if (exn? exn)
+                                                 (exn-message exn)
+                                                 (format "~s" exn)))])
+                         (xexpr->string page))])
+              (output-headers out 200 "Okay" (current-seconds) TEXT/HTML-MIME-TYPE
+                              `(("Content-length: " ,(add1 (string-length str))))
+                              close)
+              (display str out) ; the newline is for an IE 5.5 bug workaround
+              (newline out))]))
 
-      ; two-digits : num -> str
-      (define (two-digits n)
-	(let ([str (number->string n)])
-	  (if (< n 10) (string-append "0" str) str)))
+        ; --------------------------------------------------------------------------
+        ; COMMON LIBRARY FUNCTIONS:
 
-      ; seconds->gmt-string : Nat -> String
-      ; format is rfc1123 compliant according to rfc2068 (http/1.1)
-      (define (seconds->gmt-string s)
-	(let* ([local-date (seconds->date s)]
-	       [date (seconds->date (- s
-				       (date-time-zone-offset local-date)
-				       (if (date-dst? local-date) 3600 0)))])
-	  (format "~a, ~a ~a ~a ~a:~a:~a GMT"
-		  (vector-ref DAYS (date-week-day date))
-		  (two-digits (date-day date))
-		  (vector-ref MONTHS (sub1 (date-month date)))
-		  (date-year date)
-		  (two-digits (date-hour date))
-		  (two-digits (date-minute date))
-		  (two-digits (date-second date)))))
+        ; output-headers : oport Nat String Nat String (listof (listof String)) bool -> Void
+        (define (output-headers out code message seconds mime extras close)
+          (for-each (lambda (line)
+                      (for-each (lambda (word) (display word out)) line)
+                      (display #\return out)
+                      (newline out))
+                    (list* `("HTTP/1.1 " ,code " " ,message)
+                           `("Date: " ,(seconds->gmt-string (current-seconds)))
+                           `("Last-Modified: " ,(seconds->gmt-string seconds))
+                           `("Server: PLT Scheme")
+                           `("Content-type: " ,mime)
+                           ; more here - consider removing Connection fields from extras or raising an error
+                           (if close
+                             (cons `("Connection: close") extras)
+                             extras)))
+          (display #\return out)
+          (newline out))
 
-      ; more here - include doc.txt
-      (define DEFAULT-ERROR "An error message configuration file is missing.")
+        ; two-digits : num -> str
+        (define (two-digits n)
+          (let ([str (number->string n)])
+            (if (< n 10) (string-append "0" str) str)))
 
-      ; report-error : oport method response bool -> void
-      (define (report-error out method response close)
-	(output-page/port (decapitate method response) out close))
+        ; seconds->gmt-string : Nat -> String
+        ; format is rfc1123 compliant according to rfc2068 (http/1.1)
+        (define (seconds->gmt-string s)
+          (let* ([local-date (seconds->date s)]
+                             [date (seconds->date (- s
+                                                     (date-time-zone-offset local-date)
+                                                     (if (date-dst? local-date) 3600 0)))])
+            (format "~a, ~a ~a ~a ~a:~a:~a GMT"
+                    (vector-ref DAYS (date-week-day date))
+                    (two-digits (date-day date))
+                    (vector-ref MONTHS (sub1 (date-month date)))
+                    (date-year date)
+                    (two-digits (date-hour date))
+                    (two-digits (date-minute date))
+                    (two-digits (date-second date)))))
 
-      ; decapitate : method response -> response
-      ; to remove the body if the method is 'head
-      (define (decapitate method response)
-	(if (eq? method 'head)
-	    (cond
-	      [(response/full? response)
-	       (make-response/full (response/full-code response)
-				   (response/full-message response)
-				   (response/full-seconds response)
-				   (response/full-mime response)
-				   (response/full-extras response)
-				   (response/full-body response))]
-	      [else (make-response/full 200 "Okay" (current-seconds) TEXT/HTML-MIME-TYPE null null)])
-	    response))
+        ; more here - include doc.txt
+        (define DEFAULT-ERROR "An error message configuration file is missing.")
 
-      ))
+        ; report-error : oport method response bool -> void
+        (define (report-error out method response close)
+          (output-page/port (decapitate method response) out close))
+
+        ; decapitate : method response -> response
+        ; to remove the body if the method is 'head
+        (define (decapitate method response)
+          (if (eq? method 'head)
+            (cond
+              [(response/full? response)
+              (make-response/full (response/full-code response)
+                                  (response/full-message response)
+                                  (response/full-seconds response)
+                                  (response/full-mime response)
+                                  (response/full-extras response)
+                                  (response/full-body response))]
+              [else (make-response/full 200 "Okay" (current-seconds) TEXT/HTML-MIME-TYPE null null)])
+            response))
+
+        ))
   ;: #|
   (define servlet-bin? (prefix? "/servlets/"))
   (define conf-prefix? (prefix? "/conf/"))
