@@ -27,7 +27,7 @@
     (unit/sig web-server^
       (import net:tcp^ (config : web-config^))
       
-      (define the-memory-threshold 200000000)
+      (define the-memory-threshold 45000000)
       (define instance-queue (new-session-queue the-memory-threshold))
       (define connection-queue (new-session-queue the-memory-threshold))
       
