@@ -1,6 +1,7 @@
 ; configuration language example
 (module configuration mzscheme
   (provide complete-configuration build-path-maybe
+           complete-developer-configuration
            default-configuration-table-path
            load-configuration
            load-developer-configuration)
