@@ -434,12 +434,7 @@
                      [real-servlet-path (url-path->path
                                          (paths-servlet (host-paths host-info))
                                          (url-path->string (url-path uri)))]
-                     ;; Resources created when the servlet is loaded are
-                     ;; created within the dynamic extent of the
-                     ;; servlet-program-custodian and will be shutdown only
-                     ;; when the scripts are refreshed. See cached-load for
-                     ;; details.
-                     [servlet-program (cached-load real-servlet-path)]
+
                      [servlet-exit-handler (make-servlet-exit-handler inst)]
                      )
 
@@ -455,6 +450,13 @@
                                                  (host-timeouts host-info))
                                                 (lambda ()
                                                   (servlet-exit-handler #f)))]
+
+                        ;; Notes:
+                        ;; 1. Servlet is not loaded within the extent of
+                        ;;    servlet-custodian. (See reload-servlet-script)
+                        ;; 2. call to cached-load must be within extent of
+                        ;;    real-servlet-path for paths to work right.
+                        [servlet-program (cached-load real-servlet-path)]
                         )
 
                     (with-handlers ([(lambda (x) #t)
@@ -489,7 +491,7 @@
           (kill-connection!
            (execution-context-connection
             (servlet-instance-context inst)))
-          ;(custodian-shutdown-all (servlet-instance-custodian inst))
+          (custodian-shutdown-all (servlet-instance-custodian inst))
           ))
 
       ;; make-servlet-exception-handler: host -> exn -> void
@@ -593,6 +595,11 @@
       ;; reload-servlet-script : str -> script
       ;; The servlet is not cached in the servlet-table, so reload it from the filesystem.
       (define (reload-servlet-script servlet-filename)
+
+        ;; Resources created when the servlet is loaded are
+        ;; created within the dynamic extent of the
+        ;; servlet-program-custodian and will be shutdown only
+        ;; when the scripts are refreshed.
         (parameterize ((current-custodian (make-servlet-custodian)))
           (cond
             [(load-servlet/path servlet-filename)
