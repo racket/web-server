@@ -16,30 +16,37 @@
            )
   (provide web-server@)
 
-
   (define web-server@
     (unit/sig web-server^
       (import net:tcp^ (config : web-config^))
 
+      (define current-server-custodian (make-parameter #f))
+
+      ;; make-servlet-custodian: -> custodian
+      ;; create a custodian for the dynamic extent of a servlet continuation
+      (define (make-servlet-custodian)
+        (make-custodian (current-server-custodian)))
+
       ;; serve: -> -> void
       ;; start the server and return a thunk to shut it down
       (define (serve)
-        (let* ([server-custodian (make-custodian)])
-          (start-connection-manager server-custodian)
-          (parameterize ([current-custodian server-custodian])
+        (let ([the-server-custodian (make-custodian)])
+          (start-connection-manager the-server-custodian)
+          (parameterize ([current-custodian the-server-custodian]
+                         [current-server-custodian the-server-custodian])
             (let ([get-ports
                    (let ([listener (tcp-listen config:port config:max-waiting
                                                #t config:listen-ip)])
                      (lambda () (tcp-accept listener)))])
               (thread
                (lambda ()
-                 (server-loop server-custodian get-ports)))))
+                 (server-loop get-ports)))))
           (lambda ()
-            (custodian-shutdown-all server-custodian))))
+            (custodian-shutdown-all the-server-custodian))))
 
-        ;; server-loop: custodian (-> i-port o-port) -> void
+      ;; server-loop: (-> i-port o-port) -> void
       ;; start a thread to handle each incoming connection
-      (define (server-loop server-custodian get-ports)
+      (define (server-loop get-ports)
         (let loop ()
           (let ([connection-cust (make-custodian)])
             (parameterize ([current-custodian connection-cust])
@@ -391,56 +398,92 @@
                             (request-method req)))]
                         ;; servlet is broken
                         [(lambda (x) #t)
-                        (lambda (the-exn)
-                          (output-response/method
+                         (lambda (the-exn)
+                           (output-response/method
                             conn
                             ((responders-servlet-loading (host-responders
-                                                           host-info)) uri
-                             the-exn)
+                                                          host-info)) uri
+                                                          the-exn)
                             (request-method req)))])
-          (let* ([invoke-id (string->symbol (symbol->string (gensym 'id)))]
-                            [time-bomb (start-timer (timeouts-default-servlet
-                                                      (host-timeouts host-info))
-                                                    (lambda ()
-                                                      (hash-table-remove! config:instances invoke-id)
-                                                      (kill-connection! conn)))]
-                            [adjust-timeout!
-                            (lambda (secs)
-                              (reset-timer time-bomb secs))]
-                            [real-servlet-path (url-path->path
-                                                 (paths-servlet (host-paths host-info))
-                                                 (url-path->string (url-path uri)))]
-                            [servlet-program (cached-load real-servlet-path)]
-                            [initial-request req])
-            (let/cc suspend
-              (parameterize ([current-directory (get-servlet-base-dir real-servlet-path)])
-                (thread-cell-set!
-                  current-servlet-context
-                  (let ([inst (create-new-instance! config:instances invoke-id)])
-                    (make-servlet-context inst conn req
-                                          (lambda ()
-                                            (semaphore-post (servlet-instance-mutex
+          (let* ([servlet-custodian (make-servlet-custodian)]
+                 [invoke-id (string->symbol (symbol->string (gensym 'id)))]
+                 [time-bomb (start-timer (timeouts-default-servlet
+                                          (host-timeouts host-info))
+                                         (lambda ()
+                                           (hash-table-remove! config:instances
+                                                               invoke-id)
+                                           (custodian-shutdown-all servlet-custodian)
+                                           (kill-connection!
+                                            (servlet-context-connection
+                                             (thread-cell-ref current-servlet-context)))))]
+
+                 [real-servlet-path (url-path->path
+                                     (paths-servlet (host-paths host-info))
+                                     (url-path->string (url-path uri)))]
+                 [servlet-program (cached-load real-servlet-path)])
+              (let/cc suspend
+                (parameterize ([current-directory (get-servlet-base-dir real-servlet-path)]
+                               [current-custodian servlet-custodian])
+                  (thread-cell-set!
+                   current-servlet-context
+                   (let ([inst (create-new-instance! config:instances invoke-id)])
+                     (make-servlet-context inst conn req
+                                           (lambda ()
+                                             (semaphore-post (servlet-instance-mutex
                                                               inst))
-                                            (suspend #t)))))
-                (with-handlers ([;; servlet is broken
-                                    (lambda (x) #t)
-                                    (lambda (the-exn)
-                                      (output-response/method
-                                        conn
-                                        ((responders-servlet (host-responders
-                                                               host-info)) uri the-exn)
-                                        (request-method req)))])
-                  ;; Two possibilities:
-                  ;; - module servlet. start : Request -> Void handles
-                  ;;   output-response via send/finish, etc.
-                  ;; - unit/sig or simple xexpr servlet. These must produce a
-                  ;;   response, which is then output by the server.
-                  ;; Here, we do not know if the servlet was a module,
-                  ;; unit/sig, or Xexpr; we do know whether it produces a
-                  ;; response.
-                  (let ((r (invoke-unit/sig servlet-program servlet^)))
-                    (when (response? r)
-                      (send/back r)))))))))
+                                             (suspend #t)))))
+                  ;; servlet is broken
+                  (with-handlers ([(lambda (x) #t)
+                                   (make-servlet-exception-handler host-info)])
+                    (invoke-servlet-unit
+                     servlet-program
+                     (lambda (secs)
+                       (reset-timer time-bomb secs))
+                     req)))))))
+
+      ;; invoke-servlet-unit: unit/sig number -> void request -> void
+      ;; Two possibilities:
+      ;; - module servlet. start : Request -> Void handles
+      ;;   output-response via send/finish, etc.
+      ;; - unit/sig or simple xexpr servlet. These must produce a
+      ;;   response, which is then output by the server.
+      ;; Here, we do not know if the servlet was a module,
+      ;; unit/sig, or Xexpr; we do know whether it produces a
+      ;; response.
+      ;;
+      ;; Bindings for adjust-timeout! and initial request must be in scope for
+      ;; invoke-unit/sig to succeed
+      (define (invoke-servlet-unit servlet-program adjust-timeout! initial-request)
+        (let ((r (invoke-unit/sig servlet-program servlet^)))
+          (when (response? r)
+            (send/back r))))
+
+      ;; make-servlet-exception-handler: host -> exn -> void
+      ;; This exception handler traps all unhandled servlet exceptions
+      ;; * Must occur within the dynamic extent of the servlet
+      ;;   custodian since several connection custodians will typically
+      ;;   be shutdown during the dynamic extent of a continuation
+      ;; * Use the connection from the current-servlet-context in case
+      ;;   the exception is raised while invoking a continuation.
+      ;; * Use the suspend from the current-servlet-context which is
+      ;;   closed over the current tcp ports which may need to be
+      ;;   closed for an http 1.0 request
+      ;; * This fixes PR# 7066
+      (define (make-servlet-exception-handler host-info)
+        (lambda (the-exn)
+          (let* ([svt-ctxt (thread-cell-ref
+                            current-servlet-context)]
+                 [req (servlet-context-request
+                       svt-ctxt)]
+                 [resp ((responders-servlet (host-responders
+                                             host-info))
+                        (request-uri req)
+                        the-exn)])
+            (output-response/method
+             (servlet-context-connection svt-ctxt)
+             resp (request-method req))
+            ((servlet-context-suspend svt-ctxt))
+            )))
 
       ;; path -> path
       ;; The actual servlet's parent directory.
