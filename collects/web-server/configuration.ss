@@ -194,7 +194,9 @@
   (define (gen-servlet-responder servlet-error-file)
     (lambda (url exn)
       ; more here - use separate log file
-      (printf "Servlet exception:\n~s\n" (exn->string exn))
+      ((error-display-handler)
+       (format "Servlet exception:\n~a\n" (exn-message exn))
+       exn)
       (error-response 500 "Servlet error" servlet-error-file)))
 
   ; gen-servlets-refreshed : str -> -> response

@@ -64,12 +64,12 @@
                      (p "You must connect to the configuration tool from the machine the server runs on using 127.0.0.1 for the host part of the URL.")
                      ,footer)))
 
-      ; permission-error-page : str -> html
+      ; permission-error-page : path -> html
       (define (permission-error-page configuration-path)
         `(html (head (title "Web Server Configuration Permissions Error"))
                (body ([bgcolor "white"])
                      (p "You must have read and write access to "
-                        (code ,configuration-path)
+                        (code ,(path->string configuration-path))
                         " in order to configure the server."))))
 
       ; check-ip-address : request -> request
@@ -110,22 +110,23 @@
                          (copy-file default-configuration-path configuration-path))
                        (loop))))))
 
-      ; copy-configuration-file : str -> html
+      ; copy-configuration-file : path -> html
       (define (copy-configuration-file configuration-path)
         (build-suspender
          '("Copy Configuration File")
          `((h1 "Copy Configuration File")
            (p "The configuration file "
-              (blockquote (code ,configuration-path))
+              (blockquote (code ,(path->string configuration-path)))
               "does not exist.  Would you like to copy the default configuration to this "
               "location?")
            (center (input ([type "submit"] [name "ok"] [value "Copy"]))))))
 
-      ; ask-for-configuration-path : -> str
+      ; ask-for-configuration-path : -> path
       (define (ask-for-configuration-path)
-        (extract-binding/single
-         'path
-         (request-bindings (send/suspend configuration-path-page))))
+        (build-path
+         (extract-binding/single
+          'path
+          (request-bindings (send/suspend configuration-path-page)))))
 
       ; configuration-path-page : str -> html
       (define configuration-path-page
@@ -136,14 +137,14 @@
            (p "Choose a Web server configuration file to edit. "
               (br)
               "This Web server uses the configuration in "
-              (blockquote (code ,default-configuration-path)))
+              (blockquote (code ,(path->string default-configuration-path))))
            (table (tr (th "Configuration path")
                       (td (input ([type "text"] [name "path"] [size ,WIDE]
-                                  [value ,default-configuration-path]))))
+                                  [value ,(path->string default-configuration-path)]))))
                   (tr (td ([colspan "2"] [align "center"])
                           (input ([type "submit"] [name "choose-path"] [value "Select"]))))))))
 
-      ; configure-top-level : str -> doesn't
+      ; configure-top-level : path -> doesn't
       (define (configure-top-level configuration-path)
         (with-handlers ([exn:fail:filesystem:exists? send-exn])
           (let ([original-configuration (read-configuration configuration-path)])
@@ -336,7 +337,7 @@
 
       ; table->host-root : host-table -> str
       (define (table->host-root t)
-        (build-path-unless-absolute web-base (paths-host-base (host-table-paths t))))
+        (path->string (build-path-unless-absolute web-base (paths-host-base (host-table-paths t)))))
 
       ; gen-make-tr : nat -> xexpr sym str [xexpr ...] -> xexpr
       (define (gen-make-tr size-n)
@@ -360,15 +361,15 @@
 
       ; update-configuration : configuration-table bindings -> configuration-table
       (define (update-configuration old bindings)
-        (let ([ubp (un-build-path web-base)])
+        (let ([ubp (un-build-path web-base)]) ;; web-base returned by directory-part is a path
         (make-configuration-table
          (string->nat (extract-binding/single 'port bindings))
          (string->nat (extract-binding/single 'waiting bindings))
          (string->num (extract-binding/single 'time-initial bindings))
          (update-host-root (configuration-table-default-host old)
-                           (ubp (extract-binding/single 'default-host-root bindings)))
+                           (ubp (build-path (extract-binding/single 'default-host-root bindings))))
          (map (lambda (h root pattern)
-                (cons pattern (update-host-root (cdr h) (ubp root))))
+                (cons pattern (update-host-root (cdr h) (ubp (build-path root)))))
               (configuration-table-virtual-hosts old)
               (extract-bindings 'host-roots bindings)
               (extract-bindings 'host-regexps bindings)))))
@@ -459,7 +460,7 @@
 
       ; update-host-table : host-table (listof (cons sym str)) -> host-table
       (define (update-host-table old bindings)
-        (let* ([eb (lambda (tag) (extract-binding/single tag bindings))]
+        (let* ([eb (lambda (tag) (build-path (extract-binding/single tag bindings)))]
                [paths (host-table-paths old)]
                [host-root (paths-host-base paths)]
                [expanded-host-root (build-path-unless-absolute web-base host-root)]
@@ -479,32 +480,35 @@
            (let ([old-paths (host-table-paths old)])
              (apply make-paths
                     (paths-conf old-paths)
-                    ((un-build-path web-base) (paths-host-base old-paths))
+                    ((un-build-path web-base) (build-path (paths-host-base old-paths)))
                     (map eb-host-root '(path-log path-htdocs path-servlet path-password)))))))
 
-      ; un-build-path : str -> str -> str
+      ; un-build-path : path -> path -> string
+      ; (GregP) Theory: this should return a string not a path so that the result can be
+      ;                 written to the configuration file.
       (define (un-build-path possible-base)
         (let ([base-list (path->list possible-base)])
           (lambda (path)
             (let ([path-list (path->list path)])
               (cond
-                [(list-extends base-list path-list)
-                 => (lambda (x) (apply build-path x))]
-                [else path])))))
+                [(suffix base-list path-list)
+                 => (lambda (x) (path->string (apply build-path x)))]
+                [else
+                 (path->string path)])))))
 
-      ; list-extends : (listof a) (listof a) -> (U #f (listof a))
+      ; suffix : (listof a) (listof a) -> (U #f (listof a))
       ; to return the extra elements in b after removing all elements from a in order
-      (define (list-extends a b)
+      (define (suffix a b)
         (cond
           [(null? a) (if (null? b) #f b)]
           [else (cond
                   [(null? b) #f]
                   [else (and (equal? (car a) (car b))
-                             (list-extends (cdr a) (cdr b)))])]))
+                             (suffix (cdr a) (cdr b)))])]))
 
       ; Password Configuration
 
-      ; configure-passwords : str -> void
+      ; configure-passwords : path -> void
       (define (configure-passwords password-path)
         (edit-passwords
          password-path
@@ -512,7 +516,7 @@
              (call-with-input-file password-path read-passwords)
              null)))
 
-      ; edit-passwords : str passwords -> passwords
+      ; edit-passwords : path passwords -> passwords
       (define (edit-passwords which-one passwords)
         (let* ([bindings (interact (password-updates which-one passwords))]
                [to-deactivate (extract-bindings 'deactivate bindings)]
@@ -536,26 +540,27 @@
                           (drop passwords to-deactivate)))]
             [else (drop passwords to-deactivate)])))
 
-      ; password-updates : str passwords -> request
+      ; password-updates : path passwords -> request
       (define (password-updates which-one passwords)
-        (build-suspender
-         `("Updating Passwords for " ,which-one)
-         `((h1 "Updating Passwords for ")
-           (h3 ,which-one)
-           (h2 "You may wish to " (font ([color "red"]) "backup") " this password file.")
-           (p "Each authentication " (em "realm") " password protects URLs that match a pattern. "
-              "Choose a realm to edit below:")
-           (table
-            (tr (th "Realm Name") (th "Delete") (th "Edit"))
-            . ,(map (lambda (realm n)
-                      `(tr (td ,(realm-name realm))
-                           (td ,(make-field "checkbox" 'deactivate n))
-                           (td ,(make-field "radio" 'edit n))))
-                    passwords
-                    (build-list (length passwords) number->string)))
-           ,(make-field "submit" 'add "Add Realm")
-           ,(make-field "submit" 'edit-button "Edit")
-           ,footer)))
+        (let ([which-one (path->string which-one)])
+          (build-suspender
+           `("Updating Passwords for " ,which-one)
+           `((h1 "Updating Passwords for ")
+             (h3 ,which-one)
+             (h2 "You may wish to " (font ([color "red"]) "backup") " this password file.")
+             (p "Each authentication " (em "realm") " password protects URLs that match a pattern. "
+                "Choose a realm to edit below:")
+             (table
+              (tr (th "Realm Name") (th "Delete") (th "Edit"))
+              . ,(map (lambda (realm n)
+                        `(tr (td ,(realm-name realm))
+                             (td ,(make-field "checkbox" 'deactivate n))
+                             (td ,(make-field "radio" 'edit n))))
+                      passwords
+                      (build-list (length passwords) number->string)))
+             ,(make-field "submit" 'add "Add Realm")
+             ,(make-field "submit" 'edit-button "Edit")
+             ,footer))))
 
       ; edit-realm : realm -> realm
       (define (edit-realm realm)
@@ -659,11 +664,11 @@
 
       ; io
 
-      ; read-configuration : str -> configuration-table
+      ; read-configuration : path -> configuration-table
       (define (read-configuration configuration-path)
         (parse-configuration-table (call-with-input-file configuration-path read)))
 
-      ; write-configuration : configuration-table str -> void
+      ; write-configuration : configuration-table path -> void
       ; writes out the new configuration file and
       ; also copies the configure.ss servlet to the default-host's servlet directory
       (define (write-configuration new configuration-path)
@@ -680,7 +685,7 @@
             . ,(map (lambda (h) (list (car h) (format-host (cdr h))))
                     (configuration-table-virtual-hosts new))))))
 
-      ; ensure-configuration-servlet : str host-table -> void
+      ; ensure-configuration-servlet : path host-table -> void
       (define (ensure-configuration-servlet configuration-path host)
         (let* ([paths (host-table-paths host)]
                [root (build-path-unless-absolute web-base
@@ -688,7 +693,7 @@
                [servlets-path
                 (build-path (build-path-unless-absolute root (paths-servlet paths)) "servlets")])
           (ensure-config-servlet configuration-path servlets-path)
-          (let ([defaults "Defaults"])
+          (let ([defaults (build-path "Defaults")])
             (ensure* (collection-path "web-server" "default-web-root" "htdocs")
                      (build-path-unless-absolute root (paths-htdocs paths))
                      defaults))))
@@ -728,7 +733,7 @@
             (copy-conf "not-found.html" (messages-file-not-found messages))
             (copy-conf "servlet-error.html" (messages-servlet messages)))))
 
-      ; ensure-file : str str str -> void
+      ; ensure-file : path path path -> void
       ; to copy (build-path from name) to (build-path to name), creating directories as
       ; needed if the latter does not already exist.
       (define (ensure-file from to name)
@@ -745,13 +750,15 @@
             (ensure-directory-shallow to-path-base))
           (copy-file from-path to-path)))
 
-      ; ensure* : str str str -> void
+      ; ensure* : path path path -> void
+      ;; GregP: Don't know what the heck this does (thanks Paul)
+      ;;        but the first two arguments are now paths.
       (define (ensure* from to name)
         (ensure-directory-shallow to)
         (let ([p (build-path from name)])
           (cond
             [(directory-exists? p)
-             (unless (string=? "CVS" name) ; yuck
+             (unless (string=? "CVS" (path->string name)) ; yuck
                (let ([dest (build-path to name)])
                  (ensure-directory-shallow dest)
                  (for-each (lambda (x) (ensure* p dest x))
@@ -759,13 +766,13 @@
             [(file-exists? p)
              (ensure-file from to name)])))
 
-      ; ensure-directory-shallow : str -> void
+      ; ensure-directory-shallow : path -> void
       (define (ensure-directory-shallow to)
         (unless (directory-exists? to)
           ; race condition - someone else could make the directory
           (make-directory* to)))
 
-      ; ensure-config-servlet : str str -> void
+      ; ensure-config-servlet : str path -> void
       ; to create, if necessary, a stub configuration servlet that includes the main configuration servlet
       ; at the desired location in a new web tree
       (define (ensure-config-servlet configuration-path servlets-path)
@@ -780,7 +787,7 @@
                  out)
                 (newline out)
                 (pretty-print
-                 `(servlet-maker ,configuration-path)
+                 `(servlet-maker ,(path->string configuration-path))
                  out))))))
 
       ; format-host : host-table
