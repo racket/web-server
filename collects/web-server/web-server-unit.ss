@@ -72,7 +72,9 @@
               (set-connection-close?! conn close?)
               (dispatch conn req host-conf)
               (adjust-connection-timeout! conn config:initial-connection-timeout)
-              (unless close? (connection-loop))))))
+              (cond
+                [close? (kill-connection! conn)]
+                [else (connection-loop)])))))
 
       (define DEFAULT-HOST-NAME "<none>")
 
@@ -401,10 +403,8 @@
                  [time-bomb (start-timer (timeouts-default-servlet
                                           (host-timeouts host-info))
                                          (lambda ()
-                                           (hash-table-remove! config:instances
-                                                               invoke-id)
-                                           (custodian-shutdown-all
-                                            (connection-custodian conn))))]
+                                           (hash-table-remove! config:instances invoke-id)
+                                           (kill-connection! conn)))]
                  [adjust-timeout!
                   (lambda (secs)
                     (reset-timer time-bomb secs))]

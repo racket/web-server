@@ -28,12 +28,17 @@
   (define (new-connection time-to-live i-port o-port cust close?)
     (make-connection
      (start-timer time-to-live
-                  (lambda () (custodian-shutdown-all cust)))
+                  (lambda () 
+                    (close-output-port o-port)
+                    (close-input-port i-port)
+                    (custodian-shutdown-all cust)))
      i-port o-port cust close?))
 
   ;; kill-connection!: connection -> void
   ;; kill this connection
   (define (kill-connection! conn-demned)
+    (close-output-port (connection-o-port conn-demned))
+    (close-input-port (connection-i-port conn-demned))
     (custodian-shutdown-all (connection-custodian conn-demned)))
 
   ;; adjust-connection-timeout!: connection number -> void
