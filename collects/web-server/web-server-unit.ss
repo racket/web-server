@@ -431,8 +431,9 @@
                                     ((responders-servlet (host-responders
                                                           host-info)) uri the-exn)
                                     (request-method req)))])
-                  (invoke-unit/sig servlet-program servlet^))
-                  )))))
+                  (output-response
+                   conn
+                   (invoke-unit/sig servlet-program servlet^))))))))
 
       ;; path -> path
       ;; The actual servlet's parent directory.
