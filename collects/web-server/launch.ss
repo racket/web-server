@@ -43,22 +43,10 @@
 		  (error 'web-server "ip-address expects a numeric ip-address (i.e. 127.0.0.1); given ~s" ip-address))))
 	 ("Restrict access to come from ip-address" "ip-address")]))
      (lambda (flags)
-       (let ([configuration
-	      (load-configuration
-	       (extract-flag 'config flags default-configuration-table-path))])
-
-	 (compound-unit/sig
-	  (import)
-	  (link
-	   [config : web-config^ (configuration)]
-	   [new-config : web-config/local^
-		       ((unit/sig web-config/local^
-			  (import (raw : web-config/local^))
-			  (define port (extract-flag 'port flags raw:port))
-			  (define listen-ip (extract-flag 'ip-address flags raw:listen-ip)))
-			(config : web-config/local^))])
-	  (export (open (config : web-config/pervasive^))
-		  (open (new-config : web-config/local^))))))
+       (update-configuration
+	(load-configuration
+	 (extract-flag 'config flags default-configuration-table-path))
+	flags))
      '()))
 
   (define-values/invoke-unit/sig web-server^

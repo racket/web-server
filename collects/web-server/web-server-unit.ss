@@ -12,6 +12,7 @@
 	   "servlet-sig.ss"
 	   "servlet.ss"
 	   "servlet-tables.ss"
+	   "servlet-helpers.ss"
 	   "timer.ss"
 	   "internal-structs.ss"
 	   "configuration-structures.ss")
@@ -625,7 +626,6 @@
 		(lambda (name)
 		  (and (file-exists? name)
 ; MF: I'd also like to test that s has the correct import signature.
-; FIX - consider eliminating units entirely---ptg
 		       (let ([s (load/use-compiled name)])
 			 (install-servlet
 			  name
@@ -723,20 +723,6 @@
 				       (with-handlers ([void (lambda (exn)
 							       (decapitate method ((responders-servlet (host-responders host-info)) uri exn)))])
 						      (invoke-unit/sig servlet-program servlet^)))))))))))))
-
-      ; response = (cons str (listof str)), where the first str is a mime-type
-      ;          | x-expression
-      ;          | (make-response/full nat str nat str (listof (cons sym str)) (listof str))
-      ;          | (make-response/incremental nat str nat str (listof (cons sym str))
-      ;              ((str -> void) -> void))
-
-      ; : TST -> bool
-      (define (response? page)
-	(or (response/full? page)
-	  ; this could fail for dotted lists - rewrite andmap
-	  (and (pair? page) (pair? (cdr page)) (andmap string? page))
-	  ; insist the xexpr has a root element
-	  (and (pair? page) (xexpr? page))))
 
       ; output-page/port : response oport bool -> void
       (define (output-page/port page out close)

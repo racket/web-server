@@ -4,7 +4,8 @@
            build-developer-configuration
            default-configuration-table-path
            load-configuration
-           load-developer-configuration)
+           load-developer-configuration
+	   update-configuration)
   (require "configuration-structures.ss"
            "configuration-table-structs.ss"
            "servlet-sig.ss"
@@ -67,7 +68,24 @@
       (define virtual-hosts the-virtual-hosts)
       (define access (make-hash-table))
       (define instances (make-hash-table))
-      (define scripts (box (make-hash-table))))) 
+      (define scripts (box (make-hash-table)))))
+
+  ; : (listof (cons sym TST)) -> configuration
+  ; more here - this is ugly
+  (define (update-configuration configuration flags)
+    (compound-unit/sig
+     (import)
+     (link
+      [config : web-config^ (configuration)]
+      [new-config : web-config/local^
+		  ((unit/sig web-config/local^
+		     (import (raw : web-config/local^))
+		     (define port (extract-flag 'port flags raw:port))
+		     (define listen-ip (extract-flag 'ip-address flags raw:listen-ip))
+		     (define instances (extract-flag 'instances flags raw:instances)))
+		   (config : web-config/local^))])
+     (export (open (config : web-config/pervasive^))
+	     (open (new-config : web-config/local^)))))
   
   (define TEXT/HTML-MIME-TYPE "text/html")
   
