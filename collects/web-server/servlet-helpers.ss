@@ -4,7 +4,7 @@
            "web-server.ss"
            (lib "servlet-sig.ss" "web-server"))
   
-  (provide extract-binding/single extract-bindings exists-binding? extract-user-pass build-suspender
+  (provide extract-binding/single extract-bindings exists-binding? extract-user-pass build-suspender make-html-response/incremental
            anchor-case)
   
   ; extract-binding/single : sym (listof (cons sym str)) -> str
