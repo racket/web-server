@@ -10,7 +10,8 @@
            "servlet-sig.ss"
            "util.ss"
            "parse-table.ss"
-           (lib "url.ss" "net")
+           (lib "unitsig.ss")
+	   (lib "url.ss" "net")
 	   (lib "date.ss"))
   
   (define default-configuration-table-path
@@ -33,31 +34,38 @@
     (complete-developer-configuration (directory-part default-configuration-table-path)
                                       (parse-configuration-table s-expr)))
   
-  ; complete-configuration : str configuration-table -> configuration
+  ; : str configuration-table -> configuration
   (define (complete-configuration base table)
-    (make-configuration
-     (configuration-table-port table)
-     (configuration-table-max-waiting table)
-     (configuration-table-initial-connection-timeout table)
+    (build-configuration
      (let ([default-host
-            (apply-default-functions-to-host-table
-             base (configuration-table-default-host table) gen-log-message)]
-           [expanded-virtual-host-table
-            (map (lambda (x)
-                   (list (regexp (string-append (car x) "(:[0-9]*)?"))
-                         (apply-default-functions-to-host-table base (cdr x) gen-log-message)))
-                 (configuration-table-virtual-hosts table))])
+	     (apply-default-functions-to-host-table
+	      base (configuration-table-default-host table) gen-log-message)]
+	   [expanded-virtual-host-table
+	    (map (lambda (x)
+		   (list (regexp (string-append (car x) "(:[0-9]*)?"))
+			 (apply-default-functions-to-host-table base (cdr x) gen-log-message)))
+		 (configuration-table-virtual-hosts table))])
        (gen-virtual-hosts expanded-virtual-host-table default-host))))
   
-  ; complete-developer-configuration : str configuration-table -> configuration
+  ; : str configuration-table -> configuration
   (define (complete-developer-configuration base table)
-    (make-configuration
-     (configuration-table-port table)
-     (configuration-table-max-waiting table)
-     (configuration-table-initial-connection-timeout table)
+    (build-configuration
      (gen-virtual-hosts null (apply-default-functions-to-host-table
-                              base
+			      base
                               (configuration-table-default-host table) ignore-log))))
+
+  ; : configuration-table host-table -> configuration
+  (define (build-configuration table the-virtual-hosts)
+    (unit/sig web-config^
+      (import)
+      (define port (configuration-table-port table))
+      (define max-waiting (configuration-table-max-waiting table))
+      (define listen-ip #f) ; more here - add to configuration table
+      (define initial-connection-timeout (configuration-table-initial-connection-timeout table))
+      (define virtual-hosts the-virtual-hosts)
+      (define access (make-hash-table))
+      (define instances (make-hash-table))
+      (define scripts (box (make-hash-table))))) 
   
   (define TEXT/HTML-MIME-TYPE "text/html")
   

@@ -23,38 +23,34 @@
 
   (define web-server@
     (unit/sig web-server^
-      (import net:tcp^)
+      (import net:tcp^ (config : web-config^))
 
       ; -------------------------------------------------------------------------------
       ; The Server
 
-      ; serve : configuration Nat [str | #f] -> -> Void
+      ; serve : [Nat] [str | #f] -> -> Void
       ; to start the server on the given port and return an un-server to shut it down
       ; the optional port argument overrides the configuration's port
       ; the optional host argument only accepts connections from that host ip address
       ; (a host of #f places no restrictions on the connecting host)
+      ; If tcp-listen fails, the exception will be raised in the caller's thread.
       (define serve
-	; use default values from configuration.ss by default
-	(opt-lambda (configuration
-		     [port (configuration-port configuration)]
-		     [only-from-host #f])
-	  (let ([virtual-hosts (configuration-virtual-hosts configuration)]
-		[max-waiting (configuration-max-waiting configuration)]
-		[custodian (make-custodian)])
-	    (parameterize ([current-custodian custodian])
+	(opt-lambda ([port config:port]
+		     [listen-ip config:listen-ip])
+	  (let ([server-custodian (make-custodian)])
+	    (parameterize ([current-custodian server-custodian])
 	      (let ([get-ports
-		     ; If tcp-listen fails, the exception will be raised in the caller's thread.
-		     (let ([listener (tcp-listen port max-waiting #t only-from-host)])
+		     (let ([listener (tcp-listen port config:max-waiting #t listen-ip)])
 		       (lambda () (tcp-accept listener)))])
 		(thread
 		 (lambda ()
-		   (server-loop custodian get-ports
-				(make-config virtual-hosts (make-hash-table)
+		   (server-loop server-custodian get-ports
+				(make-config config:virtual-hosts (make-hash-table)
 					     (make-hash-table) (make-hash-table))
-				(configuration-initial-connection-timeout configuration)
+				config:initial-connection-timeout
 				; more here - log the connection close? optionally?
 				void)))))
-	    (lambda () (custodian-shutdown-all custodian)))))
+	    (lambda () (custodian-shutdown-all server-custodian)))))
 
       ; -------------------------------------------------------------------------------
       ; The Server Loop
@@ -66,9 +62,9 @@
 	(regexp-match METHOD:REGEXP x))
       ;:(define match-method (type: (str -> (union false (list str str str str str)))))
 
-      ; server-loop : custodian (-> iport oport) config num (-> void) -> void
+      ; server-loop : custodian (-> iport oport) num (-> void) -> void
       ; note - connection-lost is used by the development environment
-      (define (server-loop top-custodian listener tables init-timeout connection-lost)
+      (define (server-loop top-custodian listener init-timeout connection-lost)
 	(let bigger-loop ()
 	  (with-handlers ([exn:i/o:tcp? (lambda (exn) (bigger-loop))]
 			  [void (lambda (exn)
@@ -88,22 +84,22 @@
 						 (connection-lost)
 						 (shutdown))]
 					      [void (lambda (exn) (shutdown))])
-				(serve-connection top-custodian ip op tables
+				(serve-connection top-custodian ip op
 						  (start-timer init-timeout shutdown)
 						  init-timeout)
 				(shutdown)))))))
 	      (loop)))))
 
-      ; serve-connection : custodian iport oport Tables timer num -> Void
+      ; serve-connection : custodian iport oport timer num -> Void
       ; to respond to all the requests on an http connection
       ; (Currently only the first request is answered.)
-      (define (serve-connection top-custodian ip op tables timer init-timeout)
+      (define (serve-connection top-custodian ip op timer init-timeout)
 	(let connection-loop ()
 	  (let-values ([(method uri-string major-version minor-version) (read-request ip op)])
 	    (let* ([headers (read-headers ip)]
 		   [uri     (string->url uri-string)]
 		   [host    (get-host uri headers)]
-		   [host-conf ((config-hosts tables) host)])
+		   [host-conf (config:virtual-hosts host)])
 	      ; more here - don't extract host-ip and client-ip twice (leakage)
 	      (let-values ([(host-ip client-ip) (tcp-addresses ip)])
 		((host-log-message host-conf) host-ip client-ip method uri host)
@@ -111,7 +107,7 @@
 						(string->number major-version)
 						(string->number minor-version)
 						client-ip host-ip)])
-		  (dispatch top-custodian method host-conf uri headers ip op tables timer close)
+		  (dispatch top-custodian method host-conf uri headers ip op timer close)
 		  (reset-timer timer init-timeout)
 		  (unless close (connection-loop))))))))
 
@@ -249,8 +245,6 @@
       ; --------------------------------------------------------------------------
       ; CONSTANTS AND COMPUTED CONSTANTS
 
-      (define TIMEOUT-DEFAULT (* 2 60)) ; in seconds
-
       (define INPUT-BUFFER-SIZE 4096)
 
       ; copy-port : iport oport -> Void
@@ -283,12 +277,12 @@
       ; script-table : (hashtable-of sym script)
       ; script = (unit servlet^ -> response)
 
-      ; dispatch : custodian Method Host URL x-table iport oport Configuration timer bool -> Void
+      ; dispatch : custodian Method Host URL x-table iport oport timer bool -> Void
       ; to respond to an HTTP request
-      (define (dispatch top-custodian method host-info uri headers in out config timer close)
+      (define (dispatch top-custodian method host-info uri headers in out timer close)
 	(let ([path (url-path uri)])
 	  (cond
-	    [(access-denied? method uri headers host-info (config-access config)) =>
+	    [(access-denied? method uri headers host-info config:access) =>
 	     (lambda (realm)
 	       (reset-timer timer (timeouts-password (host-timeouts host-info)))
 	       (request-authentication method uri in out host-info realm close))]
@@ -297,18 +291,17 @@
 	       [(string=? "/conf/refresh-servlets" path)
 		; more here - this is broken - only out of date or specifically mentioned
 		; scripts should be flushed.  This destroys persistent state!
-		(set-config-scripts! config (make-hash-table))
+		(set-box! config:scripts (make-hash-table))
 		(report-error out method ((responders-servlets-refreshed (host-responders host-info))) close)]
 	       [(string=? "/conf/refresh-passwords" path)
-		;(set-config-access! config (make-hash-table))
 		; more here - send a nice error page
-		(hash-table-put! (config-access config) host-info (read-passwords host-info))
+		(hash-table-put! config:access host-info (read-passwords host-info))
 		(report-error out method ((responders-passwords-refreshed (host-responders host-info))) close)]
 	       [else (report-error out method (responders-file-not-found uri) close)])]
 	    [(servlet-bin? path)
 	     (reset-timer timer (timeouts-servlet-connection (host-timeouts host-info)))
 	     ; more here - make timeout proportional to size of bindings
-	     (servlet-content-producer top-custodian method uri headers in out host-info (config-scripts config) (config-instances config) close)]
+	     (servlet-content-producer top-custodian method uri headers in out host-info close)]
 	    [else (file-content-producer method uri headers in out host-info timer close)])))
 
       ; --------------------------------------------------------------------------
@@ -531,9 +524,9 @@
 
       (define FILE-FORM-REGEXP (regexp "multipart/form-data; *boundary=(.*)"))
 
-      ; servlet-content-producer : custodian Method URL Bindings iport oport host Script-table Instance-table bool -> Void
+      ; servlet-content-producer : custodian Method URL Bindings iport oport host bool -> Void
       ; to find and run a servlet program, wait for the result, and output the page
-      (define (servlet-content-producer custodian meth uri headers in out host-info scripts instances close)
+      (define (servlet-content-producer custodian meth uri headers in out host-info close)
 	(if (eq? meth 'head)
 	    (output-headers out 200 "Okay" (current-seconds) TEXT/HTML-MIME-TYPE null close)
 	    (let ([binds
@@ -569,7 +562,7 @@
 		  ((if (url-params uri) resume-servlet start-servlet)
 		   custodian
 		   response
-		   meth uri headers binds host-info scripts instances host-ip client-ip))
+		   meth uri headers binds host-info host-ip client-ip))
 		(output-page/port (async-channel-get response) out close)))))
 
       ; get-field-name : str -> sym
@@ -579,13 +572,12 @@
 	    (error 'get-field-name "Couldn't extract form field name for file upload from ~a" x))
 	  (string->symbol (or (caddr x) (cadddr x)))))
 
-      ; cached-load : Script-table str -> script
+      ; cached-load : str -> script
       ; timestamps are no longer checked for performance.  The cache must be explicitly
       ; refreshed (see dispatch).
-      (define (cached-load scripts name)
+      (define (cached-load name)
 	(let ([paths (build-path-list name)])
-	  (lookup-path scripts paths
-		       (lambda () (reload-servlet-script scripts name paths)))))
+	  (lookup-path paths (lambda () (reload-servlet-script name paths)))))
 
       ; build-path-list : str -> (listof str)
       ; to build a list of paths from most specific to least specific containing
@@ -596,12 +588,13 @@
 	      (cons path (build-path-list base))
 	      (list path))))
 
-      ; lookup-path : Script-table (listof str) (-> script) -> script
-      (define (lookup-path scripts path-lst fail)
+      ; lookup-path : (listof str) (-> script) -> script
+      (define (lookup-path path-lst fail)
 	(cond
 	  [(null? path-lst) (fail)]
-	  [else (hash-table-get scripts (hash-path (car path-lst))
-				(lambda () (lookup-path scripts (cdr path-lst) fail)))]))
+	  [else (hash-table-get (unbox config:scripts)
+				(hash-path (car path-lst))
+				(lambda () (lookup-path (cdr path-lst) fail)))]))
 
       ; hash-path : str -> sym
       ; path must not be the empty string
@@ -645,12 +638,12 @@
 		      to-be-copied-module-names)
 	    new-namespace)))
 
-      ; reload-servlet-script : Script-table str (listof str) -> script
-      (define (reload-servlet-script scripts original-name paths)
+      ; reload-servlet-script : str (listof str) -> script
+      (define (reload-servlet-script original-name paths)
 	(let* ([install-servlet
 		(lambda (name s)
-		  (hash-table-put! scripts (hash-path original-name) s)
-		  (hash-table-put! scripts (hash-path name) s)
+		  (hash-table-put! (unbox config:scripts) (hash-path original-name) s)
+		  (hash-table-put! (unbox config:scripts) (hash-path name) s)
 		  s)]
 	       [load-servlet-path
 ; : str -> (U script #f)
@@ -701,10 +694,10 @@
       (define (match-url-params x) (regexp-match URL-PARAMS:REGEXP x))
       ;:(define match-url-params (type: (str -> (union false (list str str str)))))
 
-      ; resume-servlet : custodian channel method Url bindings bindings host scripts-table instance-table str str -> void
+      ; resume-servlet : custodian channel method Url bindings bindings host str str -> void
       ; to pass the request to the waiting thread that suspended the computation refered to by this url
       ; the url-params can't be #f
-      (define (resume-servlet top-custodian response method uri headers bindings host-info unused-scripts instances host-ip client-ip)
+      (define (resume-servlet top-custodian response method uri headers bindings host-info host-ip client-ip)
 	(with-handlers ([exn:application:mismatch?
 			 (lambda (exn) (timeout-error method uri response))])
 	  (cond
@@ -712,51 +705,49 @@
 	     => (lambda (ids)
 		  (let* ([invoke-id (string->symbol (cadr ids))]
 			 [k-id (string->symbol (caddr ids))]
-			 [inst (hash-table-get instances invoke-id)])
+			 [inst (hash-table-get config:instances invoke-id)])
 		    (async-channel-put (servlet-instance-channel inst)
 				 (list response (hash-table-get (servlet-instance-cont-table inst) k-id)
 				       (make-request method uri headers bindings host-ip client-ip)))))]
 	    [else (raise "malformed url-params when resuming servlet program")])))
 
-      ; start-servlet : custodian channel method Url bindings bindings host scripts-table instance-table str str -> void
+      ; start-servlet : custodian channel method Url bindings bindings host str str -> void
       ; to start a new servlet program that will handle this request
-      (define (start-servlet top-custodian response method uri headers bindings host-info scripts instances host-ip client-ip)
+      (define (start-servlet top-custodian response method uri headers bindings host-info host-ip client-ip)
 	(let* ([invoke-id (string->symbol (symbol->string (gensym 'id)))]
-	       ; FIX - this timeout looks wrong.  Why isn't it using the configuration (or is it)?
-	       [time-out-seconds TIMEOUT-DEFAULT]
+	       ; FIX - use a per servlet initial timeout
+	       [time-out-seconds (timeouts-default-servlet (host-timeouts host-info))]
 	       [respond (lambda (page) (async-channel-put response page))])
 	  (let ([servlet-custodian (make-custodian top-custodian)])
-	    (let* ([timer (start-timer time-out-seconds exit)]
-		   [adjust-timeout! (lambda (n) (set! time-out-seconds n) (reset-timer timer n))]
-		   [resume-next-request
-		    (gen-resume-next-request (lambda () (reset-timer timer time-out-seconds))
-					     ; channel -> void
-					     (lambda (new-response)
-					       (set! response new-response)))])
-	      (parameterize ([current-custodian servlet-custodian]
-			     [read-case-sensitive #t]
-			     [exit-handler (lambda (x)
-					     (purge-table method uri instances invoke-id
-							  (lambda (inst) (hash-table-remove! instances invoke-id)))
-					     (custodian-shutdown-all servlet-custodian))]
-			     [current-servlet-stuff (make-servlet-stuff uri invoke-id instances respond resume-next-request method)])
-		(thread
-		 (lambda ()
-		   (send/back
-		    (with-handlers ([exn:i/o:filesystem:servlet-not-found?
-				     (lambda (exn)
-				       (decapitate method ((responders-file-not-found (host-responders host-info)) uri)))]
-				    [void (lambda (exn)
-					    (decapitate method ((responders-servlet-loading (host-responders host-info)) uri exn)))])
-		      (let ([servlet-program
-			     (cached-load scripts
-					  (url-path->path (paths-servlet (host-paths host-info))
-							  (url-path uri)))]
-			    [initial-request (make-request method uri headers bindings host-ip client-ip)])
-			(add-new-instance invoke-id instances)
-			(with-handlers ([void (lambda (exn)
-						(decapitate method ((responders-servlet (host-responders host-info)) uri exn)))])
-                          (invoke-unit/sig servlet-program servlet^))))))))))))
+	    (parameterize ([current-custodian servlet-custodian]
+			   [read-case-sensitive #t]
+			   [exit-handler (lambda (x)
+					   (purge-table method uri config:instances invoke-id
+							(lambda (inst) (hash-table-remove! config:instances invoke-id)))
+					   (custodian-shutdown-all servlet-custodian))])
+	      (let* ([timer (start-timer time-out-seconds exit)]
+		     [adjust-timeout! (lambda (n) (set! time-out-seconds n) (reset-timer timer n))]
+		     [resume-next-request
+		      (gen-resume-next-request (lambda () (reset-timer timer time-out-seconds))
+					       (lambda (new-response-channel)
+						 (set! response new-response-channel)))])
+		(parameterize ([current-servlet-stuff (make-servlet-stuff uri invoke-id config:instances respond resume-next-request method)])
+		  (thread
+		   (lambda ()
+		     (send/back
+		      (with-handlers ([exn:i/o:filesystem:servlet-not-found?
+				       (lambda (exn)
+					 (decapitate method ((responders-file-not-found (host-responders host-info)) uri)))]
+				      [void (lambda (exn)
+					      (decapitate method ((responders-servlet-loading (host-responders host-info)) uri exn)))])
+				     (let ([servlet-program
+					    (cached-load (url-path->path (paths-servlet (host-paths host-info))
+									 (url-path uri)))]
+					   [initial-request (make-request method uri headers bindings host-ip client-ip)])
+				       (add-new-instance invoke-id config:instances)
+				       (with-handlers ([void (lambda (exn)
+							       (decapitate method ((responders-servlet (host-responders host-info)) uri exn)))])
+						      (invoke-unit/sig servlet-program servlet^)))))))))))))
 
       ; response = (cons str (listof str)), where the first str is a mime-type
       ;          | x-expression
