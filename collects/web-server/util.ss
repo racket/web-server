@@ -1,6 +1,7 @@
 (module util mzscheme
-  (provide url-path->path prefix? provide-define-struct extract-flag path->list directory-part hash-table-empty?)
-  (require (lib "list.ss"))
+  (provide update-params url-path->path prefix? provide-define-struct extract-flag path->list directory-part hash-table-empty?)
+  (require (lib "list.ss")
+           (lib "url.ss" "net"))
   
   ; : str -> str
   (define (directory-part path)
@@ -23,6 +24,14 @@
                       [else (cons x acc)]))
                   null
                   (chop-string #\/ p))))
+  
+  ; update-params : Url (U #f String) -> String
+  ; to create a new url just like the old one, but with a different parameter part
+  (define (update-params uri params)
+    (url->string
+     (make-url (url-scheme uri) (url-host uri) (url-port uri) 
+               (url-path uri) params (url-query uri) 
+               (url-fragment uri))))
     
   ; path->list : str -> (cons (U str 'up 'same) (listof (U str 'up 'same)))
   ; to convert a platform dependent path into a listof path parts such that
