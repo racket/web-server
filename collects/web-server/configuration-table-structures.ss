@@ -1,12 +1,12 @@
 (module configuration-table-structures mzscheme
   (require "util.ss")
   
-  ; configuration-table = (make-configuration-table nat nat num host-table (listof host-table))
+  ; configuration-table = (make-configuration-table nat nat num host-table (listof (cons str host-table)))
   (provide-define-struct
    configuration-table
    (port max-waiting initial-connection-timeout default-host virtual-hosts))
   
-  ; host-table = (make-host-table (listof str) sym passwords messages timeouts paths)
+  ; host-table = (make-host-table (listof str) sym messages timeouts paths)
   (provide-define-struct host-table (indices log-format messages timeouts paths))
   
   ; passwords = (listof (list* relm:str protected-dir-regexp:str (listof (list user:sym password:str))))
