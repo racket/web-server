@@ -20,8 +20,8 @@
        (file-base-connection-timeout 30))
      (paths
       (configuration-root "conf")
-      (host-root "/tmp/ptg-web-root")
-      (log-file-path ".web-log")
+      (host-root "/home/ptg/plt/collects/web-server/default-web-root")
+      (log-file-path "log")
       (file-root "htdocs")
       (servlet-root ".")
       (password-authentication "passwords"))))

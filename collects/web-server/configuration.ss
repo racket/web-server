@@ -2,7 +2,8 @@
 (module configuration mzscheme
   (provide complete-configuration build-path-maybe
            default-configuration-table-path
-           load-configuration)
+           load-configuration
+           load-developer-configuration)
   (require "configuration-structures.ss"
            "configuration-table-structures.ss"
            "servlet-sig.ss"
@@ -14,9 +15,17 @@
   (define default-configuration-table-path
     (build-path (collection-path "web-server") "configuration-table"))
   
+  ; get-configuration : str -> configuration-table
+  (define (get-configuration table-file-name)
+    (parse-configuration-table (call-with-input-file table-file-name read)))
+  
   ; load-configuration : str -> configuration
   (define (load-configuration table-file-name)
-    (complete-configuration (parse-configuration-table (call-with-input-file table-file-name read))))
+    (complete-configuration (get-configuration table-file-name)))
+  
+  ; load-developer-configuration : str -> configuration
+  (define (load-developer-configuration table-file-name)
+    (complete-developer-configuration (get-configuration table-file-name)))
   
   ; complete-configuration : configuration-table -> configuration
   (define (complete-configuration table)
@@ -26,13 +35,22 @@
      (configuration-table-initial-connection-timeout table)
      (let ([default-host
             (apply-default-functions-to-host-table
-             (configuration-table-default-host table))]
+             (configuration-table-default-host table) gen-log-message)]
            [expanded-virtual-host-table
             (map (lambda (x)
                    (list (regexp (string-append (car x) "(:[0-9]*)?"))
-                         (apply-default-functions-to-host-table (cdr x))))
+                         (apply-default-functions-to-host-table (cdr x) gen-log-message)))
                  (configuration-table-virtual-hosts table))])
        (gen-virtual-hosts expanded-virtual-host-table default-host))))
+  
+  ; complete-developer-configuration : configuration-table -> configuration
+  (define (complete-developer-configuration table)
+    (make-configuration
+     (configuration-table-port table)
+     (configuration-table-max-waiting table)
+     (configuration-table-initial-connection-timeout table)
+     (gen-virtual-hosts null (apply-default-functions-to-host-table
+                              (configuration-table-default-host table) ignore-log))))
   
   (define TEXT/HTML-MIME-TYPE "text/html")
   
@@ -78,7 +96,7 @@
               (if (exn? exn) (exn-message exn) exn))
       (error-response 500 "Servlet error" servlet-error-file)))
   
-  ; gen-servlets-refreshed : str -> -> responseapply-default-functions-to-host-table
+  ; gen-servlets-refreshed : str -> -> response
   (define (gen-servlets-refreshed servlet-refresh-file)
     (lambda ()
       (error-response 200 "Servlet cache refreshed" servlet-refresh-file)))
@@ -114,27 +132,33 @@
   ; I never used.
   ; ...
   
-  ; gen-format-log-message : sym -> str str sym url str -> str
+  ; gen-log-message : sym str -> str str sym url str -> str
   ; more here - check apache log configuration formats
   ; other server's include the original request line,
   ; including the major and minor HTTP version numbers
   ; to produce a string that is displayed into the log file
-  (define (gen-format-log-message log-format)
-    (lambda (host-ip client-ip method uri host)
-      (format "~s~n" (list 'from client-ip 'to host-ip 'for (url->string uri)))))
+  (define (gen-log-message log-format log-path)
+    (let ([out (open-output-file log-path 'append)])
+      (lambda (host-ip client-ip method uri host)
+        ; do the display all at once by formating first
+	(display (format "~s~n" (list 'from client-ip 'to host-ip 'for (url->string uri)))
+		 out))))
+  
+  ; ignore-log : sym str -> str str sym url str -> str
+  (define (ignore-log log-format log-path) void)
   
   ; read-file : str -> str
   (define (read-file path)
     (call-with-input-file path
       (lambda (in) (read-string (file-size path) in))))
   
-  ; apply-default-functions-to-host-table : host-table -> host
-  (define (apply-default-functions-to-host-table host-table)
+  ; apply-default-functions-to-host-table : host-table (sym str -> str str sym url str -> str) -> host
+  (define (apply-default-functions-to-host-table host-table gen-log-message-maybe)
     (let ([paths (expand-paths (host-table-paths host-table))])
       (make-host
        (host-table-indices host-table)
        (gen-servlet-path (paths-servlet paths))
-       (gen-format-log-message (host-table-log-format host-table))
+       (gen-log-message-maybe (host-table-log-format host-table) (paths-log paths))
        (paths-passwords paths)
        (let ([m (host-table-messages host-table)]
              [conf (paths-conf paths)])
@@ -147,15 +171,14 @@
           (gen-file-not-found-responder (build-path-maybe conf (messages-file-not-found m)))
           (gen-protocol-responder (build-path-maybe conf (messages-protocol m)))))
        (host-table-timeouts host-table)
-       paths
-       (open-output-file (paths-log paths) 'append))))
+       paths)))
   
   ; expand-paths : paths -> paths
   (define (expand-paths paths)
     (let ([host-base (build-path-maybe web-server-root (paths-host-base paths))])
       (make-paths (build-path-maybe host-base (paths-conf paths))
                   host-base
-                  (build-path-maybe (find-system-path 'home-dir) (paths-log paths))
+                  (build-path-maybe host-base (paths-log paths))
                   (build-path-maybe host-base (paths-htdocs paths))
                   (build-path-maybe host-base (paths-servlet paths))
                   (build-path-maybe host-base (paths-passwords paths)))))

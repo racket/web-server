@@ -11,7 +11,6 @@
            (lib "list.ss")
            (lib "etc.ss")
            (lib "base64.ss" "net")
-           (lib "file.ss")
            "channel.ss"
            "util.ss"
            "servlet-sig.ss"
@@ -93,8 +92,7 @@
                [host-conf ((config-hosts tables) host)])
           ; more here - don't extract host-ip and client-ip twice (leakage)
           (let-values ([(host-ip client-ip) (tcp-addresses ip)])
-            (display ((host-format-log-message host-conf) host-ip client-ip method uri host)
-                     (host-log host-conf)))
+            ((host-log-message host-conf) host-ip client-ip method uri host))
           (dispatch top-custodian method host-conf uri headers ip op tables timer)
           (reset-timer timer init-timeout)
           (unless (close-connection? headers (string->number major-version) (string->number minor-version))

@@ -400,7 +400,7 @@
              (table 
               (tr (th ([colspan "2"]) "Paths"))
               ,(make-tr-str "Log file" 
-                             'path-log (build-path-maybe (find-system-path 'home-dir) (paths-log paths)))
+                             'path-log (build-path-maybe host-root (paths-log paths)))
               ,(make-tr-str "Web document root" 
                              'path-htdocs (build-path-maybe host-root (paths-htdocs paths)))
               ,(make-tr-str "Servlet root" 
@@ -683,7 +683,7 @@
         (let* ([paths (host-table-paths host)]
                [host-base (build-path-maybe (collection-path "web-server") (paths-host-base paths))]
                [conf (build-path-maybe host-base (paths-conf paths))]
-               [log (build-path-maybe (find-system-path 'home-dir) (paths-log paths))])
+               [log (build-path-maybe host-base (paths-log paths))])
           ; skip passwords since a missing file is an okay default
           (ensure-directory-shallow conf)
           (ensure-directory-shallow host-base)
