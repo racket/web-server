@@ -1,5 +1,6 @@
 (module util mzscheme
   (require (lib "contract.ss")
+           (lib "string.ss")
            (lib "list.ss")
            (lib "url.ss" "net"))
   
@@ -7,7 +8,8 @@
            update-params 
            provide-define-struct
            extract-flag
-           hash-table-empty?)
+           hash-table-empty?
+           lowercase-symbol!)
   
   (provide/contract 
    [path->list  (path? . -> . (cons/p (union path? (symbols 'up 'same))
@@ -16,6 +18,14 @@
    [directory-part (path? . -> . path?)])
 
 
+    ; lowercase-symbol! : (union string bytes) -> symbol
+  (define (lowercase-symbol! s)
+    (let ([s (if (bytes? s)
+                 (bytes->string/utf-8 s)
+                 s)])
+      (string-lowercase! s)
+      (string->symbol s)))
+  
   ; prefix? : str -> str -> bool
   ; more here - consider moving this to mzlib's string.ss
   ;; Notes: (GregP)
@@ -50,7 +60,8 @@
       (lambda (path)
         (let ([sffx (cadr (regexp-match file-suffix-regexp (path->bytes path)))])
           (hash-table-get MIME-TYPE-TABLE
-                          (string->symbol (bytes->string/utf-8 sffx))
+                          (lowercase-symbol! sffx)
+                          ;(string->symbol (bytes->string/utf-8 sffx))
                           (lambda () DEFAULT-MIME-TYPE))))))
     
   
