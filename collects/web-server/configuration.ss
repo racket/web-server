@@ -68,7 +68,37 @@
       (define virtual-hosts the-virtual-hosts)
       (define access (make-hash-table))
       (define instances (make-hash-table))
-      (define scripts (box (make-hash-table)))))
+      (define scripts (box (make-hash-table)))
+      (define make-servlet-namespace the-make-servlet-namespace)))
+
+
+
+  ; begin stolen from commander.ss, which was stolen from private/drscheme/eval.ss
+  ; FIX - abstract this out to a namespace library somewhere (ask Robby and Matthew)
+  (define to-be-copied-module-specs
+    '(mzscheme
+      (lib "servlet-sig.ss" "web-server")
+      ; internal structs needed for parameter
+      (lib "internal-structs.ss" "web-server")))
+  (for-each (lambda (x) (dynamic-require x #f)) to-be-copied-module-specs)
+
+  ;; get the names of those modules.
+  (define to-be-copied-module-names
+    (let ([get-name
+	   (lambda (spec)
+	     (if (symbol? spec)
+		 spec
+		 ((current-module-name-resolver) spec #f #f)))])
+      (map get-name to-be-copied-module-specs)))
+  ; end stolen
+
+  (define (the-make-servlet-namespace)
+    (let ([server-namespace (current-namespace)]
+	  [new-namespace (make-namespace)])
+      (parameterize ([current-namespace new-namespace])
+	(for-each (lambda (name) (namespace-attach-module server-namespace name))
+		  to-be-copied-module-names)
+	new-namespace)))
 
   ; : (listof (cons sym TST)) -> configuration
   ; more here - this is ugly
@@ -82,7 +112,8 @@
 		     (import (raw : web-config/local^))
 		     (define port (extract-flag 'port flags raw:port))
 		     (define listen-ip (extract-flag 'ip-address flags raw:listen-ip))
-		     (define instances (extract-flag 'instances flags raw:instances)))
+		     (define instances (extract-flag 'instances flags raw:instances))
+		     (define make-servlet-namespace (extract-flag 'namespace flags raw:make-servlet-namespace)))
 		   (config : web-config/local^))])
      (export (open (config : web-config/pervasive^))
 	     (open (new-config : web-config/local^)))))

@@ -585,35 +585,6 @@
       ; (make-exn:i/o:filesystem:servlet-not-found str continuation-marks str sym)
       (define-struct (exn:i/o:filesystem:servlet-not-found exn:i/o:filesystem) ())
 
-      ; more here - rename servlet-sig.ss or move the structure defs out of it.
-      ; begin stolen from commander.ss, which was stolen from private/drscheme/eval.ss
-      ; FIX - abstract this out to a namespace library somewhere (ask Robby and Matthew)
-      (define to-be-copied-module-specs
-	'(mzscheme
-	  (lib "servlet-sig.ss" "web-server")
-	  ; internal structs needed for parameter
-	  (lib "internal-structs.ss" "web-server")))
-      (for-each (lambda (x) (dynamic-require x #f)) to-be-copied-module-specs)
-
-      ;; get the names of those modules.
-      (define to-be-copied-module-names
-	(let ([get-name
-	       (lambda (spec)
-		 (if (symbol? spec)
-		     spec
-		     ((current-module-name-resolver) spec #f #f)))])
-	  (map get-name to-be-copied-module-specs)))
-      ; end stolen
-
-      ; more here - allow the caller of the serve function to pass in make-servlet-namespace
-      (define (make-servlet-namespace)
-	(let ([server-namespace (current-namespace)]
-	      [new-namespace (make-namespace)])
-	  (parameterize ([current-namespace new-namespace])
-	    (for-each (lambda (name) (namespace-attach-module server-namespace name))
-		      to-be-copied-module-names)
-	    new-namespace)))
-
       ; reload-servlet-script : str (listof str) -> script
       (define (reload-servlet-script original-name paths)
 	(let* ([install-servlet
@@ -633,7 +604,7 @@
 			   [(unit/sig? s) s]
 ; FIX - reason about exceptions from dynamic require (catch and report if not already)
 			   [(void? s)
-			    (parameterize ([current-namespace (make-servlet-namespace)])
+			    (parameterize ([current-namespace (config:make-servlet-namespace)])
 			      (let* ([module-name `(file ,name)]
 				     [version (dynamic-require module-name 'interface-version)])
 				(case version
