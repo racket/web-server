@@ -8,8 +8,7 @@
            (lib "list.ss")
            (lib "pretty.ss")
            (lib "file.ss")
-           (rename (lib "configuration.ss" "web-server")
-                   build-path-maybe build-path-maybe)
+           (lib "dispatcher.ss" "web-server")
            (rename (lib "configuration.ss" "web-server")
                    default-configuration-table-path default-configuration-table-path)
            (lib "configuration-table-structs.ss" "web-server")
@@ -271,7 +270,7 @@
           (when (assq 'edit-passwords bindings)
             (let* ([paths (host-table-paths new)]
                    [password-path
-                    (build-path-maybe (build-path-maybe web-base (paths-host-base paths))
+                    (build-path-unless-absolute (build-path-unless-absolute web-base (paths-host-base paths))
                                       (paths-passwords paths))])
               (unless (file-exists? password-path)
                 (write-to-file password-path ''()))
@@ -337,7 +336,7 @@
       
       ; table->host-root : host-table -> str
       (define (table->host-root t)
-        (build-path-maybe web-base (paths-host-base (host-table-paths t))))
+        (build-path-unless-absolute web-base (paths-host-base (host-table-paths t))))
       
       ; gen-make-tr : nat -> xexpr sym str [xexpr ...] -> xexpr
       (define (gen-make-tr size-n)
@@ -414,8 +413,8 @@
         (let* ([timeouts (host-table-timeouts old)]
                [paths (host-table-paths old)]
                [m (host-table-messages old)]
-               [host-root (build-path-maybe web-base (paths-host-base paths))]
-               [conf (build-path-maybe host-root (paths-conf paths))])
+               [host-root (build-path-unless-absolute web-base (paths-host-base paths))]
+               [conf (build-path-unless-absolute host-root (paths-conf paths))])
           (build-suspender
            '("Configure Host")
            `((h1 "PLT Web Server Host configuration")
@@ -424,29 +423,29 @@
              (table 
               (tr (th ([colspan "2"]) "Paths"))
               ,(make-tr-str "Log file" 
-                            'path-log (build-path-maybe host-root (paths-log paths)))
+                            'path-log (build-path-unless-absolute host-root (paths-log paths)))
               ,(make-tr-str "Web document root" 
-                            'path-htdocs (build-path-maybe host-root (paths-htdocs paths)))
+                            'path-htdocs (build-path-unless-absolute host-root (paths-htdocs paths)))
               ,(make-tr-str "Servlet root" 
-                            'path-servlet (build-path-maybe host-root (paths-servlet paths)))
+                            'path-servlet (build-path-unless-absolute host-root (paths-servlet paths)))
               ,(make-tr-str "Password File"
-                            'path-password (build-path-maybe host-root (paths-passwords paths)))
+                            'path-password (build-path-unless-absolute host-root (paths-passwords paths)))
               (tr (td ([colspan "2"])
                       ,(make-field "submit" 'edit-passwords "Edit Passwords")))
               (tr (td ([colspan "2"]) (hr)))
               (tr (th ([colspan "2"]) "Message Paths"))
               ,(make-tr-str "Servlet error" 'path-servlet-message
-                            (build-path-maybe conf (messages-servlet m)))
+                            (build-path-unless-absolute conf (messages-servlet m)))
               ,(make-tr-str "Access Denied" 'path-access-message
-                            (build-path-maybe conf (messages-authentication m)))
+                            (build-path-unless-absolute conf (messages-authentication m)))
               ,(make-tr-str "Servlet cache refreshed" 'servlet-refresh-message
-                            (build-path-maybe conf (messages-servlets-refreshed m)))
+                            (build-path-unless-absolute conf (messages-servlets-refreshed m)))
               ,(make-tr-str "Password cache refreshed" 'password-refresh-message
-                            (build-path-maybe conf (messages-passwords-refreshed m)))
+                            (build-path-unless-absolute conf (messages-passwords-refreshed m)))
               ,(make-tr-str "File not found" 'path-not-found-message
-                            (build-path-maybe conf (messages-file-not-found m)))
+                            (build-path-unless-absolute conf (messages-file-not-found m)))
               ,(make-tr-str "Protocol error" 'path-protocol-message
-                            (build-path-maybe conf (messages-protocol m)))
+                            (build-path-unless-absolute conf (messages-protocol m)))
               (tr (td ([colspan "2"]) (hr)))
               (tr (th ([colspan "2"]) "Timeout Seconds"))
               ,(make-tr-num "Default Servlet" 'time-default-servlet (timeouts-default-servlet timeouts))
@@ -463,8 +462,8 @@
         (let* ([eb (lambda (tag) (extract-binding/single tag bindings))]
                [paths (host-table-paths old)]
                [host-root (paths-host-base paths)]
-               [expanded-host-root (build-path-maybe web-base host-root)]
-               [conf (build-path-maybe expanded-host-root (paths-conf paths))]
+               [expanded-host-root (build-path-unless-absolute web-base host-root)]
+               [conf (build-path-unless-absolute expanded-host-root (paths-conf paths))]
                [ubp (un-build-path expanded-host-root)]
                [eb-host-root (lambda (tag) (ubp (eb tag)))]
                [ubp-conf (un-build-path conf)]
@@ -686,14 +685,14 @@
       ; ensure-configuration-servlet : str host-table -> void
       (define (ensure-configuration-servlet configuration-path host)
         (let* ([paths (host-table-paths host)]
-               [root (build-path-maybe web-base
+               [root (build-path-unless-absolute web-base
                                        (paths-host-base paths))]
                [servlets-path
-                (build-path (build-path-maybe root (paths-servlet paths)) "servlets")])
+                (build-path (build-path-unless-absolute root (paths-servlet paths)) "servlets")])
           (ensure-config-servlet configuration-path servlets-path)
           (let ([defaults "Defaults"])
             (ensure* (collection-path "web-server" "default-web-root" "htdocs")
-                     (build-path-maybe root (paths-htdocs paths))
+                     (build-path-unless-absolute root (paths-htdocs paths))
                      defaults))))
       
       ; ensure-configuration-paths : configuration-table -> void
@@ -707,21 +706,21 @@
       ; to ensure that all the referenced config files exist for a virtual host
       (define (ensure-host-configuration host)
         (let* ([paths (host-table-paths host)]
-               [host-base (build-path-maybe web-base (paths-host-base paths))]
-               [conf (build-path-maybe host-base (paths-conf paths))]
-               [log (build-path-maybe host-base (paths-log paths))])
+               [host-base (build-path-unless-absolute web-base (paths-host-base paths))]
+               [conf (build-path-unless-absolute host-base (paths-conf paths))]
+               [log (build-path-unless-absolute host-base (paths-log paths))])
           ; skip passwords since a missing file is an okay default
           (ensure-directory-shallow conf)
           (ensure-directory-shallow host-base)
           ;(ensure-file log ...) ; empty log file is okay
-          (ensure-directory-shallow (build-path-maybe host-base (paths-htdocs paths)))
-          (ensure-directory-shallow (build-path-maybe host-base (paths-servlet paths)))
+          (ensure-directory-shallow (build-path-unless-absolute host-base (paths-htdocs paths)))
+          (ensure-directory-shallow (build-path-unless-absolute host-base (paths-servlet paths)))
           (let* ([messages (host-table-messages host)]
                  ; more here maybe - check default config file instead? maybe not
                  [from-conf (collection-path "web-server" "default-web-root" "conf")]
                  [copy-conf
                   (lambda (from to)
-                    (let ([to-path (build-path-maybe conf to)])
+                    (let ([to-path (build-path-unless-absolute conf to)])
                       ; more here - check existance of from path?
                       (copy-file* (build-path from-conf from) to-path)))])
             (copy-conf "passwords-refresh.html" (messages-passwords-refreshed messages))

@@ -1,16 +1,19 @@
 ; configuration language example
 (module configuration mzscheme
-  (provide complete-configuration build-path-maybe
+  (provide complete-configuration
+           ;build-path-unless-absolute
            build-developer-configuration
            default-configuration-table-path
            load-configuration
            load-developer-configuration
-	   update-configuration)
+	   update-configuration
+           )
   (require "configuration-structures.ss"
            "configuration-table-structs.ss"
            "servlet-sig.ss"
            "util.ss"
            "parse-table.ss"
+           "dispatcher.ss"
            (lib "unitsig.ss")
 	   (lib "url.ss" "net")
 	   (lib "date.ss"))
@@ -133,13 +136,6 @@
   
   (define TEXT/HTML-MIME-TYPE "text/html")
   
-  ; gen-servlet-path : str -> str str -> (U #f str)
-  ; to return the pathname of a servlet or #f
-  (define (gen-servlet-path servlet-root)
-    (lambda (host-name path-from-url)
-      (and (servlet? path-from-url)
-           (url-path->path servlet-root path-from-url))))
-  
   ; error-response : nat str str [(cons sym str) ...] -> response
   ; more here - cache files with a refresh option.
   ; The server should still start without the files there, so the
@@ -235,35 +231,39 @@
       (lambda (in) (read-string (file-size path) in))))
   
   ; apply-default-functions-to-host-table : str host-table (sym str -> str str sym url str -> str) -> host
+  ;; Greg P: web-server-root is the directory-part of the path to the configuration-table (I don't think I like this.)
   (define (apply-default-functions-to-host-table web-server-root host-table gen-log-message-maybe)
     (let ([paths (expand-paths web-server-root (host-table-paths host-table))])
       (make-host
        (host-table-indices host-table)
-       (gen-servlet-path (paths-servlet paths))
+       (make-dispatcher paths)
        (gen-log-message-maybe (host-table-log-format host-table) (paths-log paths))
        (paths-passwords paths)
        (let ([m (host-table-messages host-table)]
              [conf (paths-conf paths)])
          (make-responders
-          (gen-servlet-responder (build-path-maybe conf (messages-servlet m)))
+          (gen-servlet-responder (build-path-unless-absolute conf (messages-servlet m)))
           servlet-loading-responder
-          (gen-authentication-responder (build-path-maybe conf (messages-authentication m)))
-          (gen-servlets-refreshed (build-path-maybe conf (messages-servlets-refreshed m)))
-          (gen-passwords-refreshed (build-path-maybe conf (messages-passwords-refreshed m)))
-          (gen-file-not-found-responder (build-path-maybe conf (messages-file-not-found m)))
-          (gen-protocol-responder (build-path-maybe conf (messages-protocol m)))))
+          (gen-authentication-responder (build-path-unless-absolute conf (messages-authentication m)))
+          (gen-servlets-refreshed (build-path-unless-absolute conf (messages-servlets-refreshed m)))
+          (gen-passwords-refreshed (build-path-unless-absolute conf (messages-passwords-refreshed m)))
+          (gen-file-not-found-responder (build-path-unless-absolute conf (messages-file-not-found m)))
+          (gen-protocol-responder (build-path-unless-absolute conf (messages-protocol m)))))
        (host-table-timeouts host-table)
        paths)))
   
   ; expand-paths : str paths -> paths
   (define (expand-paths web-server-root paths)
-    (let ([host-base (build-path-maybe web-server-root (paths-host-base paths))])
-      (make-paths (build-path-maybe host-base (paths-conf paths))
+    (let ([host-base (build-path-unless-absolute web-server-root (paths-host-base paths))])
+      (make-paths (build-path-unless-absolute host-base (paths-conf paths))
                   host-base
-                  (build-path-maybe host-base (paths-log paths))
-                  (build-path-maybe host-base (paths-htdocs paths))
-                  (build-path-maybe host-base (paths-servlet paths))
-                  (build-path-maybe host-base (paths-passwords paths)))))
+                  (build-path-unless-absolute host-base (paths-log paths))
+                 
+                  ;; gregp no sense expanding these:
+                  (paths-htdocs paths)
+                  (paths-servlet paths)
+                 
+                  (build-path-unless-absolute host-base (paths-passwords paths)))))
   
   ; gen-virtual-hosts : (listof (list regexp host)) host ->
   ; str -> host-configuration
@@ -274,9 +274,4 @@
                         (cadr x)))
                  expanded-virtual-host-table)
           default-host)))
-  
-  ; build-path-maybe : str str -> str
-  (define (build-path-maybe base path)
-    (if (absolute-path? path)
-        path
-        (build-path base path))))
+  )

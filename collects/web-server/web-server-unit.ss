@@ -15,6 +15,7 @@
 	   "servlet-helpers.ss"
 	   "timer.ss"
 	   "internal-structs.ss"
+           "dispatcher.ss"
 	   "configuration-structures.ss")
 
   ; Method = (U 'get 'post 'head 'put 'delete 'trace)
@@ -278,6 +279,17 @@
 	     (lambda (realm)
 	       (reset-timer timer (timeouts-password (host-timeouts host-info)))
 	       (request-authentication method uri in out host-info realm close))]
+            
+            [((host-dispatcher host-info) path)
+             => (lambda (a-resource)
+                  (cond
+                    [(static-resource? a-resource)
+                     (file-content-producer a-resource method uri headers in out host-info timer close)]
+                    [(dynamic-resource? a-resource)
+                     (reset-timer timer (timeouts-servlet-connection (host-timeouts host-info)))
+                     ; more here - make timeout proportional to size of bindings
+                     (servlet-content-producer a-resource top-custodian method uri headers in out host-info close)]))]
+            
 	    [(conf-prefix? path)
 	     (cond
 	       [(string=? "/conf/refresh-servlets" path)
@@ -290,11 +302,8 @@
 		(hash-table-put! config:access host-info (read-passwords host-info))
 		(report-error out method ((responders-passwords-refreshed (host-responders host-info))) close)]
 	       [else (report-error out method (responders-file-not-found uri) close)])]
-	    [(servlet-bin? path)
-	     (reset-timer timer (timeouts-servlet-connection (host-timeouts host-info)))
-	     ; more here - make timeout proportional to size of bindings
-	     (servlet-content-producer top-custodian method uri headers in out host-info close)]
-	    [else (file-content-producer method uri headers in out host-info timer close)])))
+ 
+	    [else (report-error out method (responders-file-not-found uri) close)])))
 
       ; --------------------------------------------------------------------------
       ; ACCESS CONTROL
@@ -380,19 +389,19 @@
       ; --------------------------------------------------------------------------
       ; SERVING FILES
 
-      ; file-content-producer : Method URL x-table iport oport host timer bool -> Void
-      (define (file-content-producer method uri headers in out host-info timer close)
-	(serve-file method uri out host-info timer close))
+      ; file-content-producer : resource Method URL x-table iport oport host timer bool -> Void
+      (define (file-content-producer a-resource method uri headers in out host-info timer close)
+	(serve-file a-resource method uri out host-info timer close))
 
       ; looks-like-directory : str -> bool
       ; to determine if is url style path looks like it refers to a directory
       (define (looks-like-directory? path)
 	(eq? #\/ (string-ref path (sub1 (string-length path)))))
 
-      ; serve-file : Method url oport host timer bool -> void
+      ; serve-file : resource Method url oport host timer bool -> void
       ; to find the file, including searching for implicit index files, and serve it otu
-      (define (serve-file method uri out host-info timer close)
-	(let ([path (url-path->path (paths-htdocs (host-paths host-info)) (url-path uri))])
+      (define (serve-file a-resource method uri out host-info timer close)
+	(let ([path (url-path->path (resource-base a-resource) (resource-path a-resource))])
 	  (cond
 	    [(file-exists? path) (output-file method path out timer host-info close)]
 	    [(directory-exists? path)
@@ -500,46 +509,49 @@
 
       (define FILE-FORM-REGEXP (regexp "multipart/form-data; *boundary=(.*)"))
 
-      ; servlet-content-producer : custodian Method URL Bindings iport oport host bool -> Void
+      ; servlet-content-producer : resource custodian Method URL Bindings iport oport host bool -> Void
       ; to find and run a servlet program, wait for the result, and output the page
-      (define (servlet-content-producer custodian meth uri headers in out host-info close)
+      (define (servlet-content-producer a-resource custodian meth uri headers in out host-info close)
 	(if (eq? meth 'head)
 	    (output-headers out 200 "Okay" (current-seconds) TEXT/HTML-MIME-TYPE null close)
-	    (let ([binds
-		   (case meth
-		     [(get) (url-query uri)]
-		     [(post)
-		      (let ([content-type (assq 'content-type headers)])
-			(cond
-			  [(and content-type (regexp-match FILE-FORM-REGEXP (cdr content-type)))
-			   => (lambda (content-boundary)
-				(map (lambda (part)
-				       ; more here - better checks, avoid string-append
-				       (cons (get-field-name (cdr (assq 'content-disposition (car part))))
-					     (apply string-append (cdr part))))
-				     (read-mime-multipart (cadr content-boundary) in)))]
-			  [else
-			   (let ([len-str (assq 'content-length headers)])
-			     (if len-str
-				 (cond
-				   [(string->number (cdr len-str))
-				    => (lambda (len) (read-string len in))]
-				   [else (report-error out meth ((responders-protocol (host-responders host-info)) "Post request contained a non-numeric content-length") close)])
-				 (apply string-append
-					(let read-to-eof ()
-					  (let ([s (read-string INPUT-BUFFER-SIZE in)])
-					    (if (eof-object? s)
-						null
-						(cons s (read-to-eof))))))))]))]
-		     [else (raise "not implemented yet")])])
+	    (let ([binds (read-bindings meth uri headers in out host-info close)])
+		   
 	      ; more here - keep one channel per connection instead of creating new ones
 	      (let ([response (make-async-channel)])
 		(let-values ([(host-ip client-ip) (tcp-addresses out)])
-		  ((if (url-params uri) resume-servlet start-servlet)
-		   custodian
-		   response
-		   meth uri headers binds host-info host-ip client-ip))
+                  (if (url-params uri)
+                      (resume-servlet response meth uri headers binds host-ip client-ip)
+                      (start-servlet a-resource custodian response meth uri headers binds host-info host-ip client-ip)))                   
 		(output-page/port (async-channel-get response) out close)))))
+      
+      (define (read-bindings meth uri headers in out host-info close)
+        (case meth
+          [(get) (url-query uri)]
+          [(post)
+           (let ([content-type (assq 'content-type headers)])
+             (cond
+               [(and content-type (regexp-match FILE-FORM-REGEXP (cdr content-type)))
+                => (lambda (content-boundary)
+                     (map (lambda (part)
+                            ; more here - better checks, avoid string-append
+                            (cons (get-field-name (cdr (assq 'content-disposition (car part))))
+                                  (apply string-append (cdr part))))
+                          (read-mime-multipart (cadr content-boundary) in)))]
+               [else
+                (let ([len-str (assq 'content-length headers)])
+                  (if len-str
+                      (cond
+                        [(string->number (cdr len-str))
+                         => (lambda (len) (read-string len in))]
+                        [else (report-error out meth ((responders-protocol (host-responders host-info))
+                                                      "Post request contained a non-numeric content-length") close)])
+                      (apply string-append
+                             (let read-to-eof ()
+                               (let ([s (read-string INPUT-BUFFER-SIZE in)])
+                                 (if (eof-object? s)
+                                     null
+                                     (cons s (read-to-eof))))))))]))]
+          [else (raise "not implemented yet")]))
 
       ; get-field-name : str -> sym
       (define (get-field-name rhs)
@@ -640,10 +652,10 @@
       (define (match-url-params x) (regexp-match URL-PARAMS:REGEXP x))
       ;:(define match-url-params (type: (str -> (union false (list str str str)))))
 
-      ; resume-servlet : custodian channel method Url bindings bindings host str str -> void
+      ; resume-servlet : channel method Url bindings bindings str str -> void
       ; to pass the request to the waiting thread that suspended the computation refered to by this url
       ; the url-params can't be #f
-      (define (resume-servlet top-custodian response method uri headers bindings host-info host-ip client-ip)
+      (define (resume-servlet response method uri headers bindings host-ip client-ip)
 	(with-handlers ([exn:application:mismatch?
 			 (lambda (exn) (timeout-error method uri response))])
 	  (cond
@@ -657,9 +669,9 @@
 				       (make-request method uri headers bindings host-ip client-ip)))))]
 	    [else (raise "malformed url-params when resuming servlet program")])))
 
-      ; start-servlet : custodian channel method Url bindings bindings host str str -> void
+      ; start-servlet : resource custodian channel method Url bindings bindings host str str -> void
       ; to start a new servlet program that will handle this request
-      (define (start-servlet top-custodian response method uri headers bindings host-info host-ip client-ip)
+      (define (start-servlet a-resource top-custodian response method uri headers bindings host-info host-ip client-ip)
 	(let* ([invoke-id (string->symbol (symbol->string (gensym 'id)))]
 	       ; FIX - use a per servlet initial timeout
 	       [time-out-seconds (timeouts-default-servlet (host-timeouts host-info))]
@@ -687,8 +699,7 @@
 				      [void (lambda (exn)
 					      (decapitate method ((responders-servlet-loading (host-responders host-info)) uri exn)))])
 				     (let ([servlet-program
-					    (cached-load (url-path->path (paths-servlet (host-paths host-info))
-									 (url-path uri)))]
+					    (cached-load (url-path->path (resource-base a-resource) (resource-path a-resource)))]
 					   [initial-request (make-request method uri headers bindings host-ip client-ip)])
 				       (add-new-instance invoke-id config:instances)
 				       (with-handlers ([void (lambda (exn)
