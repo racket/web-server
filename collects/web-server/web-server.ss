@@ -65,7 +65,8 @@
                               (bigger-loop))])
         (let loop ()
           (let ([connection-cust (make-custodian)])
-            (parameterize ([current-custodian connection-cust])
+            (parameterize ([current-custodian connection-cust]
+                           [read-case-sensitive #t])
               (let-values ([(ip op) (tcp-accept listener)]
                            [(shutdown) (lambda () (custodian-shutdown-all connection-cust))])
                 (thread (lambda ()
