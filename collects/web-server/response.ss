@@ -23,7 +23,18 @@
   ;; response?: any -> boolean
   ;; Determine if an object is a response
   (define (response? x)
-    (or (response/basic? x)
+    (or (and (response/basic? x)
+             (number? (response/basic-code x))
+             (string? (response/basic-message x))
+             (number? (response/basic-seconds x))
+             (bytes? (response/basic-mime x))
+             (and (list? (response/basic-extras x))
+                  (andmap
+                    (lambda (p)
+                      (and (pair? p)
+                           (symbol? (car p))
+                           (string? (cdr p))))
+                    (response/basic-extras x))))
                                         ; this could fail for dotted lists - rewrite andmap
         (and (pair? x) (pair? (cdr x)) (andmap
                                         (lambda (x)
@@ -35,27 +46,21 @@
 
 
   (provide/contract
-   [struct (response/full response/basic) ([code number?]
-                                           [message string?]
-
-                                           [seconds number?]
-                                           [mime bytes?]
-                                           [extras (listof
-                                                    (lambda (p) (and (pair? p)
-                                                                     (symbol? (car p))
-                                                                     (string? (cdr p)))))]
-                                           [body (listof (union string?
-                                                                bytes?))])]
+   [struct (response/full response/basic)
+           ([code number?]
+                  [message string?]
+                  [seconds number?]
+                  [mime bytes?]
+                  [extras (listof (cons/p symbol? string?))]
+                  [body (listof (union string?
+                                       bytes?))])]
 
    [struct (response/incremental response/basic)
            ([code number?]
             [message string?]
             [seconds number?]
-            [mime string?]
-            [extras (listof
-                     (lambda (p) (and (pair? p)
-                                      (symbol? (car p))
-                                      (string? (cdr p)))))]
+            [mime bytes?]
+            [extras (listof (cons/p symbol? string?))]
             [generator ((() (listof (union bytes? string?)) . ->* . any) . ->
                         . any)]
             )]
@@ -178,7 +183,7 @@
      [(and (pair? resp) (string? (car resp)))
       (output-response/basic
        conn
-       (make-response/basic 200 "Okay" '() (current-seconds) (car resp))
+       (make-response/basic 200 "Okay" (current-seconds) (car resp) '())
        (apply + (map
                  (lambda (c)
                    (if (string? c)
@@ -197,7 +202,11 @@
         (let ([str (xexpr->string resp)])
           (output-response/basic
            conn
-           (make-response/basic 200 "Okay" '() (current-seconds) TEXT/HTML-MIME-TYPE)
+           (make-response/basic 200
+                                "Okay"
+                                (current-seconds)
+                                TEXT/HTML-MIME-TYPE
+                                '())
            (add1 (string-length str))
            (lambda (o-port)
              (display str o-port)
@@ -288,13 +297,7 @@
   ;; convert the response/basic-extras to the form used by output-headers
   (define (extras->strings r/bas)
     (map
-     (lambda (xtra)
-       (list (symbol->string (car xtra)) ": " (cdr xtra)))
-     (response/basic-extras r/bas)))
+      (lambda (xtra)
+        (list (symbol->string (car xtra)) ": " (cdr xtra)))
+      (response/basic-extras r/bas)))
   )
-
-
-
-
-
-
