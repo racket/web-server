@@ -1,41 +1,34 @@
 ; configuration language example
 (module configuration mzscheme
-  (require "configuration-structures.ss"
-           "configuration-table-structs.ss"
-           "sig.ss"
-           "util.ss"
-           "parse-table.ss"
-           "dispatcher.ss"
-           "servlet-helpers.ss"
-           (lib "unitsig.ss")
-           (lib "contract.ss")
-	   (lib "url.ss" "net")
-	   (lib "date.ss"))
-
-  (provide complete-configuration
-           ;build-path-unless-absolute
+  (provide complete-configuration build-path-maybe
            build-developer-configuration
            default-configuration-table-path
-	   update-configuration
-           )
-
-  (provide/contract
-   [load-configuration (path? . -> . unit/sig?)]
-   [load-developer-configuration (path? . -> . unit/sig?)])
+           load-configuration
+           load-developer-configuration
+	   update-configuration)
+  (require "configuration-structures.ss"
+           "configuration-table-structs.ss"
+           "servlet-sig.ss"
+           "util.ss"
+           "parse-table.ss"
+           (lib "unitsig.ss")
+	   (lib "url.ss" "net")
+	   (lib "date.ss"))
   
-
+  ;(define myprint printf)
+  
   (define default-configuration-table-path
     (build-path (collection-path "web-server") "configuration-table"))
   
-  ; get-configuration : path -> configuration-table
+  ; get-configuration : str -> configuration-table
   (define (get-configuration table-file-name)
     (parse-configuration-table (call-with-input-file table-file-name read)))
   
-  ; load-configuration : path -> configuration
+  ; load-configuration : str -> configuration
   (define (load-configuration table-file-name)
     (complete-configuration (directory-part table-file-name) (get-configuration table-file-name)))
   
-  ; load-developer-configuration : path -> configuration
+  ; load-developer-configuration : str -> configuration
   (define (load-developer-configuration table-file-name)
     (complete-developer-configuration (directory-part table-file-name) (get-configuration table-file-name)))
 
@@ -77,7 +70,7 @@
       (define virtual-hosts the-virtual-hosts)
       (define access (make-hash-table))
       (define instances (make-hash-table))
-      (define scripts (box (make-hash-table 'equal)))
+      (define scripts (box (make-hash-table)))
       (define make-servlet-namespace the-make-servlet-namespace)))
 
 
@@ -85,24 +78,25 @@
   ; begin stolen from commander.ss, which was stolen from private/drscheme/eval.ss
   ; FIX - abstract this out to a namespace library somewhere (ask Robby and Matthew)
   
-  
-  (define to-be-copied-module-specs
-    '(mzscheme
-      ;; allow people (SamTH) to use MrEd primitives from servlets.
-      ;; GregP: Put this back in if Sam's code is broken.
-      ;(lib "mred.ss" "mred")
-      (lib "min-servlet.ss" "web-server")
-      ; internal structs needed for parameter
-      (lib "internal-structs.ss" "web-server")))
-  
   ; JBC : added error-handler hack; the right answer is only to transfer the 'mred' 
   ; module binding when asked to, e.g. by a field in the configuration file.
-  ; GregP: put this back in if Sam's code breaks
-  ;  (for-each (lambda (x) (with-handlers ([not-break-exn? (lambda (exn) 'dont-care)]) 
-  ;                          ; dynamic-require will fail when running web-server-text.
-  ;                          ; maybe a warning message in the exception-handler?
-  ;                          (dynamic-require x #f))) 
-  ;            to-be-copied-module-specs)
+  (define to-be-copied-module-specs
+    '(mzscheme
+      
+      ;; allow people to use MrEd primitives from servlets.
+      ;;(lib "mred.ss" "mred")
+      ;; GregP This should not be allowed in this way, because
+      ;; then web-server-text has a dependency on mred that it shouldn't
+      ;; (see PR# 6620)
+      
+      (lib "servlet-sig.ss" "web-server")
+      ; internal structs needed for parameter
+      (lib "internal-structs.ss" "web-server")))
+  (for-each (lambda (x) (with-handlers ([not-break-exn? (lambda (exn) 'dont-care)]) 
+                          ; dynamic-require will fail when running web-server-text.
+                          ; maybe a warning message in the exception-handler?
+                          (dynamic-require x #f))) 
+            to-be-copied-module-specs)
 
   ;; get the names of those modules.
   (define to-be-copied-module-names
@@ -113,7 +107,7 @@
 		 ((current-module-name-resolver) spec #f #f)))])
       (map get-name to-be-copied-module-specs)))
   ; end stolen
-  
+
   (define (the-make-servlet-namespace)
     (let ([server-namespace (current-namespace)]
 	  [new-namespace (make-namespace)])
@@ -146,6 +140,13 @@
   
   (define TEXT/HTML-MIME-TYPE "text/html")
   
+  ; gen-servlet-path : str -> str str -> (U #f str)
+  ; to return the pathname of a servlet or #f
+  (define (gen-servlet-path servlet-root)
+    (lambda (host-name path-from-url)
+      (and (servlet? path-from-url)
+           (url-path->path servlet-root path-from-url))))
+  
   ; error-response : nat str str [(cons sym str) ...] -> response
   ; more here - cache files with a refresh option.
   ; The server should still start without the files there, so the
@@ -164,8 +165,10 @@
                         TEXT/HTML-MIME-TYPE
                         null ; check
                         (list "Servlet didn't load.\n"
-                              (exn->string exn))))
- 
+                              (if (exn? exn)
+                                  (exn-message exn)
+                                  (format "~s~n" exn)))))
+  
   ; gen-servlet-not-found : str -> url -> response
   (define (gen-servlet-not-found file-not-found-file)
     (lambda (url)
@@ -175,7 +178,8 @@
   (define (gen-servlet-responder servlet-error-file)
     (lambda (url exn)
       ; more here - use separate log file
-      (printf "Servlet exception:\n~s\n" (exn->string exn))
+      (printf "Servlet exception: ~s~n"
+              (if (exn? exn) (exn-message exn) exn))
       (error-response 500 "Servlet error" servlet-error-file)))
   
   ; gen-servlets-refreshed : str -> -> response
@@ -204,10 +208,7 @@
     (lambda (url)
       (error-response 404 "File not found" file-not-found-file)))
   
-  (define servlet?
-    (let ([servlets-regexp (regexp "^/servlets/.*")])
-      (lambda (str)
-        (regexp-match servlets-regexp str))))
+  (define servlet? (prefix? "/servlets/"))
   
   ; access-denied? : str sym str -> (U #f str)
   ; (define (access-denied? client-ip user-name password) ???)
@@ -241,39 +242,35 @@
       (lambda (in) (read-string (file-size path) in))))
   
   ; apply-default-functions-to-host-table : str host-table (sym str -> str str sym url str -> str) -> host
-  ;; Greg P: web-server-root is the directory-part of the path to the configuration-table (I don't think I like this.)
   (define (apply-default-functions-to-host-table web-server-root host-table gen-log-message-maybe)
     (let ([paths (expand-paths web-server-root (host-table-paths host-table))])
       (make-host
        (host-table-indices host-table)
-       (make-dispatcher paths)
+       (gen-servlet-path (paths-servlet paths))
        (gen-log-message-maybe (host-table-log-format host-table) (paths-log paths))
        (paths-passwords paths)
        (let ([m (host-table-messages host-table)]
              [conf (paths-conf paths)])
          (make-responders
-          (gen-servlet-responder (build-path-unless-absolute conf (messages-servlet m)))
+          (gen-servlet-responder (build-path-maybe conf (messages-servlet m)))
           servlet-loading-responder
-          (gen-authentication-responder (build-path-unless-absolute conf (messages-authentication m)))
-          (gen-servlets-refreshed (build-path-unless-absolute conf (messages-servlets-refreshed m)))
-          (gen-passwords-refreshed (build-path-unless-absolute conf (messages-passwords-refreshed m)))
-          (gen-file-not-found-responder (build-path-unless-absolute conf (messages-file-not-found m)))
-          (gen-protocol-responder (build-path-unless-absolute conf (messages-protocol m)))))
+          (gen-authentication-responder (build-path-maybe conf (messages-authentication m)))
+          (gen-servlets-refreshed (build-path-maybe conf (messages-servlets-refreshed m)))
+          (gen-passwords-refreshed (build-path-maybe conf (messages-passwords-refreshed m)))
+          (gen-file-not-found-responder (build-path-maybe conf (messages-file-not-found m)))
+          (gen-protocol-responder (build-path-maybe conf (messages-protocol m)))))
        (host-table-timeouts host-table)
        paths)))
   
   ; expand-paths : str paths -> paths
   (define (expand-paths web-server-root paths)
-    (let ([host-base (build-path-unless-absolute web-server-root (paths-host-base paths))])
-      (make-paths (build-path-unless-absolute host-base (paths-conf paths))
+    (let ([host-base (build-path-maybe web-server-root (paths-host-base paths))])
+      (make-paths (build-path-maybe host-base (paths-conf paths))
                   host-base
-                  (build-path-unless-absolute host-base (paths-log paths))
-                 
-                  ;; gregp no sense expanding these:
-                  (paths-htdocs paths)
-                  (paths-servlet paths)
-                 
-                  (build-path-unless-absolute host-base (paths-passwords paths)))))
+                  (build-path-maybe host-base (paths-log paths))
+                  (build-path-maybe host-base (paths-htdocs paths))
+                  (build-path-maybe host-base (paths-servlet paths))
+                  (build-path-maybe host-base (paths-passwords paths)))))
   
   ; gen-virtual-hosts : (listof (list regexp host)) host ->
   ; str -> host-configuration
@@ -284,4 +281,9 @@
                         (cadr x)))
                  expanded-virtual-host-table)
           default-host)))
-  )
+  
+  ; build-path-maybe : str str -> str
+  (define (build-path-maybe base path)
+    (if (absolute-path? path)
+        path
+        (build-path base path))))
