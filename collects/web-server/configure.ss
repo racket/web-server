@@ -33,6 +33,7 @@
       (import servlet^)
       
       (define CONFIGURE-SERVLET-NAME "configure.ss")
+      (define WIDE "70")
       
       (adjust-timeout! (* 12 60 60))
       (error-print-width 800) ; 10-ish lines
@@ -143,7 +144,7 @@
               "This Web server uses the configuration in "
               (blockquote (code ,default-configuration-path)))
            (table (tr (th "Configuration path")
-                      (td (input ([type "text"] [name "path"] [size "80"]
+                      (td (input ([type "text"] [name "path"] [size ,WIDE]
                                   [value ,default-configuration-path]))))
                   (tr (td ([colspan "2"] [align "center"])
                           (input ([type "submit"] [name "choose-path"] [value "Select"]))))))))
@@ -151,30 +152,44 @@
       ; configure-top-level : str -> doesn't
       (define (configure-top-level configuration-path)
         (with-handlers ([exn:i/o:filesystem? send-exn])
-          (let loop ([configuration (read-configuration configuration-path)])
-            (let* ([update-bindings (interact (request-new-configuration-table configuration))]
-                   [form-configuration
-                    (delete-hosts (update-configuration configuration update-bindings)
-                                  (foldr (lambda (b acc)
-                                           (if (string=? "Delete" (cdr b))
-                                               (cons (symbol->string (car b)) acc)
-                                               acc))
-                                         null
-                                         update-bindings))]
-                   [new-configuration
-                    (cond
-                      [(assq 'add-host update-bindings)
-                       (add-virtual-host form-configuration (extract-bindings 'host-prefixes update-bindings))]
-                      [(reverse-assoc edit-host-button-name update-bindings)
-                       =>
-                       (lambda (edit)
-                         ; write the configuration twice when editing a host: once before and once after.
-                         ; The after may never happen if the user doesn't continue
-                         (write-configuration form-configuration configuration-path)
-                         (configure-hosts form-configuration (string->number (symbol->string (car edit)))))]
-                      [else form-configuration])])
-              (write-configuration new-configuration configuration-path)
-              (loop new-configuration)))))
+          (let ([original-configuration (read-configuration configuration-path)])
+            (let loop ([configuration original-configuration])
+              (let* ([update-bindings (interact (request-new-configuration-table configuration original-configuration))]
+                     [form-configuration
+                      (delete-hosts (update-configuration configuration update-bindings)
+                                    (foldr (lambda (b acc)
+                                             (if (string=? "Delete" (cdr b))
+                                                 (cons (symbol->string (car b)) acc)
+                                                 acc))
+                                           null
+                                           update-bindings))]
+                     [new-configuration
+                      (cond
+                        [(assq 'add-host update-bindings)
+                         (add-virtual-host form-configuration (extract-bindings 'host-prefixes update-bindings))]
+                        [(reverse-assoc edit-host-button-name update-bindings)
+                         =>
+                         (lambda (edit)
+                           ; write the configuration twice when editing a host: once before and once after.
+                           ; The after may never happen if the user doesn't continue
+                           (write-configuration form-configuration configuration-path)
+                           (configure-hosts form-configuration (string->number (symbol->string (car edit)))))]
+                        [else form-configuration])])
+                (write-configuration new-configuration configuration-path)
+                (loop new-configuration))))))
+      
+      ; switch-to-current-port : configuration-table -> (U #f configuration-table)
+      ; doesn't work - the browser doesn't send the port and it wouldn't be reliable anyway
+      ; perhaps the server could include it?
+      '(define (switch-to-current-port old)
+         (let ([current-port (url-port (request-uri initial-request))])
+           (and (not (= current-port (configuration-table-port old)))
+                (make-configuration-table
+                 current-port
+                 (configuration-table-max-waiting old)
+                 (configuration-table-initial-connection-timeout old)
+                 (configuration-table-default-host old)
+                 (configuration-table-virtual-hosts old)))))
       
       ; send-exn : tst -> doesn't
       (define (send-exn exn)
@@ -270,17 +285,13 @@
       (define restart-message
         `((h3 (font ([color "red"]) "Restart the Web server to use the new settings."))))
       
-      ; request-new-configuration-table : configuration-table -> str -> html
-      (define (request-new-configuration-table old)
+      ; request-new-configuration-table : configuration-table configuration-table -> str -> html
+      (define (request-new-configuration-table old orig)
         (build-suspender
          '("PLT Web Server Configuration")
          `((h1 "PLT Web Server Configuration Management")
            ,web-server-icon
            "copyright 2001 by Paul Graunke and PLT"
-           (hr)
-           (table ([width "90%"])
-                  (tr (td ,@restart-message))
-                  (tr (td (input ([type "submit"] [name "configure"] [value "Update Configuration"])))))    
            (hr)
            (h2 "Basic Configuration")
            (table
@@ -300,13 +311,15 @@
                       (th nbsp)
                       (th nbsp))
                   (tr (td ,"Default Host")
-                      (td ,(make-field "text" 'default-host-root (paths-host-base (host-table-paths (configuration-table-default-host old)))))
+                      (td ,(make-field-size "text" 'default-host-root
+                                       (table->host-root (configuration-table-default-host old))
+                                       WIDE))
                       (td ([align "center"])
                           (input ([type "submit"] [name "default"] [value ,edit-host-button-name])))
                       (td nbsp))
                   ,@(map (lambda (host n)
                            `(tr (td ,(make-field "text" 'host-regexps (car host)))
-                                (td ,(make-field "text" 'host-roots (paths-host-base (host-table-paths (cdr host)))))
+                                (td ,(make-field-size "text" 'host-roots (table->host-root (cdr host)) WIDE))
                                 (td ([align "center"])
                                     (input ([type "submit"] [name ,n] [value ,edit-host-button-name])))
                                 (td ([align "center"])
@@ -318,7 +331,18 @@
                       ;(td (input ([type "submit"] [name "edit-host-details"] [value "Edit"])))
                       (td nbsp)))
            (hr)
+           (table ([width "90%"])
+                  ,@(if (equal? old orig) ; This only tests eq? because structures are more opaque now.
+                        null
+                        `((tr (td ,@restart-message))))
+                  (tr (td (input ([type "submit"] [name "configure"] [value "Update Configuration"])))))    
+           (hr)
            ,footer)))
+      
+      ; table->host-root : host-table -> str
+      (define (table->host-root t)
+        (build-path-maybe (collection-path "web-server")
+                          (paths-host-base (host-table-paths t))))
       
       ; gen-make-tr : nat -> xexpr sym str [xexpr ...] -> xexpr
       (define (gen-make-tr size-n)
@@ -342,17 +366,18 @@
       
       ; update-configuration : configuration-table bindings -> configuration-table
       (define (update-configuration old bindings)
+        (let ([ubp (un-build-path (collection-path "web-server"))])
         (make-configuration-table
          (string->nat (extract-binding/single 'port bindings))
          (string->nat (extract-binding/single 'waiting bindings))
          (string->num (extract-binding/single 'time-initial bindings))
          (update-host-root (configuration-table-default-host old)
-                           (extract-binding/single 'default-host-root bindings))
+                           (ubp (extract-binding/single 'default-host-root bindings)))
          (map (lambda (h root pattern)
-                (cons pattern (update-host-root (cdr h) root)))
+                (cons pattern (update-host-root (cdr h) (ubp root))))
               (configuration-table-virtual-hosts old)
               (extract-bindings 'host-roots bindings)
-              (extract-bindings 'host-regexps bindings))))
+              (extract-bindings 'host-regexps bindings)))))
       
       ; update-host-root : host-table str -> host-table
       (define (update-host-root host new-root)
