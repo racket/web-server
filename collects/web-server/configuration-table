@@ -21,7 +21,7 @@
      (paths
       (configuration-root "conf")
       (host-root "default-web-root")
-      (log-file-path "log")
+      (log-file-path ".web-log")
       (file-root "htdocs")
       (servlet-root ".")
       (password-authentication "passwords"))))

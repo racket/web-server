@@ -346,7 +346,8 @@
                     ; more here - add links to descriptions, esp. what's relative to what
                     ,(make-dir-row "Host root" (collection-path "web-server")
                                    'path-host-root (paths-host-base paths))
-                    ,(make-dir-row "Log file" "Host root" 'path-log (paths-log paths))
+                    ,(make-dir-row "Log file" (find-system-path 'home-dir)
+                                   'path-log (paths-log paths))
                     ,(make-dir-row "Web document root" "Host root"
                                    'path-htdocs (paths-htdocs paths))
                     ,(make-dir-row "Servlet root" "Host root"

@@ -155,7 +155,7 @@
     (let ([host-base (build-path-maybe web-server-root (paths-host-base paths))])
       (make-paths (build-path-maybe host-base (paths-conf paths))
                   host-base
-                  (build-path-maybe host-base (paths-log paths))
+                  (build-path-maybe (find-system-path 'home-dir) (paths-log paths))
                   (build-path-maybe host-base (paths-htdocs paths))
                   (build-path-maybe host-base (paths-servlet paths))
                   (build-path-maybe host-base (paths-passwords paths)))))
