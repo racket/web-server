@@ -67,7 +67,8 @@
   
   ; : str -> str
   (define (redirect-page url)
-    (xexpr->string `(html (head "Redirect to " ,url)
+    (xexpr->string `(html (head (meta ((http-equiv "refresh") (url ,url)))
+				"Redirect to " ,url)
                           (body (p "Redirecting to " (a ([href ,url]) ,url))))))
   
   ; make-html-response/incremental : ((string -> void) -> void) -> response/incremental
