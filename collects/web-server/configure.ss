@@ -455,7 +455,7 @@
            (let ([old-paths (host-table-paths old)])
              (apply make-paths
                     (paths-conf old-paths)
-                    (paths-host-base old-paths)
+                    ((un-build-path (collection-path "web-server")) (paths-host-base old-paths))
                     (map eb-host-root '(path-log path-htdocs path-servlet path-password)))))))
       
       ; un-build-path : str -> str -> str
