@@ -25,7 +25,7 @@
       ; -------------------------------------------------------------------------------
       ; The Server
       
-      ; serve : configuration [Nat | (-> iport oport)] [str | #f] -> -> Void
+      ; serve : configuration Nat [str | #f] -> -> Void
       ; to start the server on the given port and return an un-server to shut it down
       ; the optional port argument overrides the configuration's port
       ; the optional host argument only accepts connections from that host ip address
@@ -40,11 +40,9 @@
                 [custodian (make-custodian)])
             (parameterize ([current-custodian custodian])
               (let ([get-ports
-                     (if (number? port)
-                         (let ([listener (tcp-listen port max-waiting #t only-from-host)])
-                           (lambda () (tcp-accept listener)))
-                         port)])
-                ; If tcp-listen fails, the exception will be raised in the caller's thread.
+                     ; If tcp-listen fails, the exception will be raised in the caller's thread.
+                     (let ([listener (tcp-listen port max-waiting #t only-from-host)])
+                           (lambda () (tcp-accept listener)))])
                 (thread
                  (lambda ()
                    (server-loop custodian get-ports
@@ -66,6 +64,7 @@
       ;:(define match-method (type: (str -> (union false (list str str str str str)))))
       
       ; server-loop : custodian (-> iport oport) config num (-> void) -> void
+      ; note - connection-lost is used by the development environment
       (define (server-loop top-custodian listener tables init-timeout connection-lost)
         (let bigger-loop ()
           (with-handlers ([exn:i/o:tcp? (lambda (exn) (bigger-loop))]
@@ -233,12 +232,6 @@
       
       (define CR-NL (format "~a~a" #\return #\newline))
       
-      ; finally : (-> a) (-> b) -> a
-      (define (finally body catch)
-        (with-handlers ([void (lambda (exn)
-                                (catch)
-                                (raise exn))])
-          (begin0 (body) (catch))))
       
       ; ----------------------------------------------------------------------------
       
@@ -286,6 +279,7 @@
       ; script = (unit servlet^ -> response)
       
       ; dispatch : custodian Method Host URL x-table iport oport Configuration timer bool -> Void
+      ; to respond to an HTTP request
       (define (dispatch top-custodian method host-info uri headers in out config timer close)
         (let ([path (url-path uri)])
           (cond
@@ -297,7 +291,7 @@
              (cond
                [(string=? "/conf/refresh-servlets" path)
                 ; more here - this is broken - only out of date or specifically mentioned
-                ; scripts should be flushed.  This destroys persistant state!
+                ; scripts should be flushed.  This destroys persistent state!
                 (set-config-scripts! config (make-hash-table))
                 (report-error out method ((responders-servlets-refreshed (host-responders host-info))) close)]
                [(string=? "/conf/refresh-passwords" path)
@@ -715,7 +709,7 @@
 				    (add-new-instance invoke-id instances)
 				    (with-handlers ([void (lambda (exn)
 							    (decapitate method ((responders-servlet (host-responders host-info)) uri exn)))])
-						   (let/ec send/finish (invoke-unit/sig servlet-program servlet^)))))))))))))
+						   (invoke-unit/sig servlet-program servlet^))))))))))))
       
       ; response = (cons str (listof str)), where the first str is a mime-type
       ;          | x-expression
