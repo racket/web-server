@@ -60,11 +60,14 @@
       ;; NOTE: this doesn't use a connection manager since
       ;;       connection managers don't do anything anyways. -robby
       (define (serve-ports ip op)
-        (thread
-         (lambda ()
-           (serve-connection
-            (new-connection config:initial-connection-timeout
-                            ip op (current-custodian) #f)))))
+        (let ([the-server-custodian (make-custodian)])
+          (parameterize ([current-custodian the-server-custodian]
+                         [current-server-custodian the-server-custodian])
+            (thread
+             (lambda ()
+               (serve-connection
+                (new-connection config:initial-connection-timeout
+                                ip op (current-custodian) #f)))))))
 
       ;; serve-connection: connection -> void
       ;; respond to all requests on this connection
