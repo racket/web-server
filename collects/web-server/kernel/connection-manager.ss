@@ -2,13 +2,17 @@
   (require (lib "contract.ss")
            "server-resource-manager.ss")
 
-  (provide (struct connection (i-port o-port custodian)))
-  (define-struct (connection server-resource) (i-port o-port custodian)
+  ;(provide (struct connection (i-port o-port custodian close?)))
+  (define-struct (connection server-resource) (i-port o-port custodian close?)
     (make-inspector))
 
   (provide/contract
+   [struct (connection server-resource)
+           ([id number?] [expiration-time number?]
+            [i-port input-port?] [o-port output-port?] [custodian custodian?]
+            [close? boolean?])]
    [start-connection-manager (custodian? . -> . void)]
-   [new-connection (number? input-port? output-port? custodian? . -> . connection?)]
+   [new-connection (number? input-port? output-port? custodian? boolean? . -> . connection?)]
    [kill-connection! (connection? . -> . void)])
 
   (define the-connection-manager #f)
@@ -25,8 +29,9 @@
 
   ;; new-connection: number i-port o-port custodian -> connection
   ;; ask the connection manager for a new connection
-  (define (new-connection time-to-live i-port o-port cust)
-    (new-server-resource the-connection-manager time-to-live i-port o-port cust))
+  (define (new-connection time-to-live i-port o-port cust close?)
+    (new-server-resource the-connection-manager time-to-live i-port o-port cust
+                         close?))
 
   ;; kill-connection!: connection -> void
   ;; kill this connection
