@@ -112,9 +112,8 @@
             (let-values ([(method uri-string major-version minor-version)
                           (read-request-line ip)])
               (let* ([headers (read-headers ip)]
-                     [uri     (decode-some-url-parts
-                               (string->url
-                                (bytes->string/utf-8 uri-string)))]
+                     [uri     (string->url
+                               (bytes->string/utf-8 uri-string))]
                      [host    (get-host uri headers)]
                      [host-conf (config:virtual-hosts host)])
                 ; more here - don't extract host-ip and client-ip twice (leakage)

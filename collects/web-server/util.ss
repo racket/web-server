@@ -126,8 +126,13 @@
   ; to create a new url just like the old one, but with a different parameter part
   (define (update-params uri params)
     (url->string
-     (make-url (url-scheme uri) (url-host uri) (url-port uri) 
-               (url-path uri) params (url-query uri) 
+     (make-url (url-scheme uri)
+               (url-user uri)
+               (url-host uri)
+               (url-port uri)
+               (url-path uri)
+               params
+               (url-query uri) 
                (url-fragment uri))))
 
   ; to convert a platform dependent path into a listof path parts such that
