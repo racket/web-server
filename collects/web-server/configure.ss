@@ -63,7 +63,7 @@
       (define access-error-page
         `(html (head (title "Web Server Configuration Access Error"))
                (body ([bgcolor "white"])
-                     (p "You must connect to the configuration tool from the machine the server runs on.")
+                     (p "You must connect to the configuration tool from the machine the server runs on using 127.0.0.1 for the host part of the URL.")
                      ,footer)))
       
       ; permission-error-page : str -> html
