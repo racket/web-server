@@ -19,6 +19,8 @@
            (lib "tcp-sig.ss" "net")
            (lib "url.ss" "net")
            )
+
+  (define myprint printf)
   
   (define web-server@
     (unit/sig web-server^
@@ -70,10 +72,13 @@
       ; note - connection-lost is used by the development environment
       (define (server-loop top-custodian listener connection-lost)
         (let exception-loop ()
-          (with-handlers ([exn:i/o:tcp? (lambda (exn) (exception-loop))]
-                          [void (lambda (exn)
-                                  (fprintf (current-error-port) "server-loop exn: ~a" exn)
-                                  (exception-loop))])
+          (with-handlers ([exn:fail:network? (lambda (exn)
+                                               (raise exn)
+                                               (exception-loop))]
+;                          [void (lambda (exn)
+;                                  (fprintf (current-error-port) "server-loop exn: ~a" exn)
+;                                  (exception-loop))]
+                          )
             (let listener-loop ()
               (let ([connection-cust (make-custodian)])
                 (parameterize ([current-custodian connection-cust])
@@ -89,12 +94,14 @@
                            [kill-this-session (lambda () (kill-session! ses))])
                       (if ses
                           (thread (lambda ()
-                                    (with-handlers ([exn:i/o:port:closed?
-                                                     (lambda (exn)
-                                                       (connection-lost)
-                                                       (kill-this-session))]
+                                    (with-handlers (
+                                                    ;[exn:i/o:port:closed?
+;                                                     (lambda (exn)
+;                                                       (connection-lost)
+;                                                       (kill-this-session))]
                                                     [exn?
                                                      (lambda (exn)
+                                                       (raise exn)
                                                        (kill-this-session)
                                                        )])
                                       (serve-connection top-custodian ses)
@@ -106,11 +113,13 @@
       ; to respond to all the requests on an http connection
       ; (Currently only the first request is answered.)
       (define (serve-connection top-custodian ses)
+        (myprint "serve-connection~n")
         (let* ([conn (session->resource ses)]
                [ip (connection-i-port conn)])
           (let connection-loop ()
             (let-values ([(method uri-string major-version minor-version)
                           (read-request-line ip)])
+              (myprint "   uri-string = ~a" uri-string)
               (let* ([headers (read-headers ip)]
                      [uri     (string->url
                                (bytes->string/utf-8 uri-string))]
@@ -140,10 +149,10 @@
       ; dispatch : custodian Method Host URL x-table session -> Void
       ; to respond to an HTTP request
       (define (dispatch top-custodian method host-info uri headers ses)
-        (let ([path (url-path uri)]
+        (let ([path (url-path->string (url-path uri))]
               [conn (session->resource ses)])
           (cond
-            [(access-denied? method uri headers host-info config:access)
+            [(access-denied? method path headers host-info config:access)
              => (lambda (realm)
                   (renew-session! ses (timeouts-password (host-timeouts host-info)))
                   (request-authentication conn method uri host-info realm))]
@@ -196,7 +205,7 @@
               ; more here - keep one channel per connection instead of creating new ones
               (let ([response-channel (make-async-channel)])
                 (let-values ([(host-ip client-ip) (tcp-addresses (connection-o-port conn))])
-                  (if (url-params uri)
+                  (if (path/param? (url-path uri))
                       (resume-servlet response-channel meth uri headers binds host-ip client-ip)
                       (start-servlet a-resource custodian response-channel meth uri headers binds host-info host-ip client-ip)))
                 (output-page/port conn (async-channel-get response-channel))))))
@@ -218,9 +227,9 @@
                         (lambda () (reload-servlet-script name))))
       
       ; exn:i/o:filesystem:servlet-not-found =
-      ; (make-exn:i/o:filesystem:servlet-not-found str continuation-marks str sym)
-      (define-struct (exn:i/o:filesystem:servlet-not-found exn:i/o:filesystem) ())
-      
+      ; (make-exn:fail:filesystem:exists:servlet str continuation-marks str sym)
+      (define-struct (exn:fail:filesystem:exists:servlet exn:fail:filesystem:exists) ())
+            
       
       ;; reload-servlet-script : str -> script
       ;; The servlet is not cached in the servlet-table, so reload it from the filesystem.
@@ -231,10 +240,10 @@
                 (hash-table-put! (unbox config:scripts) servlet-filename svlt)
                 svlt)]
           [else
-           (raise (make-exn:i/o:filesystem:servlet-not-found
-                   (format "Couldn't find ~a" servlet-filename)
-                   (current-continuation-marks)
-                   servlet-filename 'ill-formed-path))]))
+           (raise (make-exn:fail:filesystem:exists:servlet
+                   (string->immutable-string (format "Couldn't find ~a" servlet-filename))
+                   (current-continuation-marks) ))]))
+;                   servlet-filename 'ill-formed-path))])) exception doesn't seem to want these arguments anymore.
       
       ;; servlet-resolver: x y z -> symbol
       ;; Search help-desk to get a contract for a current-module-name-resolver
@@ -304,11 +313,11 @@
       ; to pass the request to the waiting thread that suspended the computation refered to by this url
       ; the url-params can't be #f
       (define (resume-servlet response method uri headers bindings host-ip client-ip)
-	(with-handlers ([exn:application:mismatch?
+	(with-handlers ([exn:fail:contract:arity?
 			 (lambda (exn)
                            (timeout-error method uri response))])
 	  (cond
-	    [(match-url-params (url-params uri))
+	    [(match-url-params (path/param-param (url-path uri)))
 	     => (lambda (ids)
 		  (let* ([invoke-id (string->symbol (cadr ids))]
 			 [k-id (string->symbol (caddr ids))]
@@ -350,7 +359,7 @@
                       (thread
                        (lambda ()
                          (send/back
-                          (with-handlers ([exn:i/o:filesystem:servlet-not-found?
+                          (with-handlers ([exn:fail:filesystem:exists:servlet?
                                            (lambda (exn)
                                              (decapitate method ((responders-file-not-found (host-responders host-info)) uri)))]
                                           [void (lambda (exn)
@@ -379,7 +388,8 @@
       ; to find the file, including searching for implicit index files, and serve it otu
       (define (serve-file a-resource method uri ses host-info)
         (let ([conn (session->resource ses)]
-              [path (url-path->path (resource-base a-resource) (resource-path a-resource))])
+              [path (url-path->path (resource-base a-resource) (resource-path a-resource))]
+              [url-path-str (url-path->string (url-path uri))])
           (cond
             [(file-exists? path)
              (output-file method path ses host-info)]
@@ -390,17 +400,17 @@
                   (let ([full-name (build-path path (car dir-defaults))])
                     (if (file-exists? full-name)
                         (cond
-                          [(looks-like-directory? (url-path uri))
+                          [(looks-like-directory? url-path-str)
                            (output-file method full-name ses host-info)]
                           [else
                            ; more here - look into serving the file _and_ providing a Location header or
                            ; was it a content-location header?
                            (output-headers conn 301 "Moved Permanently"
-                                            `(("Location: " ,(url-path uri) "/")))
+                                            `(("Location: " ,url-path-str "/")))
                            (when (eq? method 'get)
                              (write-xml/content
                               (xexpr->xml `(html (head (title "Add a Slash"))
-                                                 (body "Please use " (a ([href ,(string-append (url-path uri) "/")]) "this url") " instead.")))
+                                                 (body "Please use " (a ([href ,(string-append url-path-str "/")]) "this url") " instead.")))
                               (connection-o-port conn)))])
                         (loop (cdr dir-defaults))))]
                  [else (report-error conn method ((responders-file-not-found (host-responders host-info)) uri))]))]
@@ -427,9 +437,9 @@
       ; pass-entry = (make-pass-entry str regexp (list sym str))
       (define-struct pass-entry (domain pattern users))
       
-      ; access-denied? : Method URL x-table host Access-table -> (+ false str)
+      ; access-denied? : Method string x-table host Access-table -> (+ false str)
       ; the return string is the prompt for authentication
-      (define (access-denied? method uri headers host-info access-table)
+      (define (access-denied? method uri-str headers host-info access-table)
         ;; denied?: str sym str -> (U str #f)
         ;; a function to authenticate the user
         (let ([denied?
@@ -445,8 +455,32 @@
                     f)))])
           (let ([user-pass (extract-user-pass headers)])
             (if user-pass
-                (denied? (url-path uri) (lowercase-symbol! (car user-pass)) (cdr user-pass))
-                (denied? (url-path uri) fake-user "")))))
+                (denied? uri-str (lowercase-symbol! (car user-pass)) (cdr user-pass))
+                (denied? uri-str fake-user "")))))
+
+
+      ;; ripped this off from url-unit.ss
+      (define (url-path->string strs)
+        (apply
+         string-append
+         (let loop ([strs strs])
+           (cond
+             [(null? strs) '()]
+             [else (list* "/"
+                          (maybe-join-params (car strs))
+                          (loop (cdr strs)))]))))
+      
+      ;; needs to unquote things!
+      (define (maybe-join-params s)
+        (cond
+          [(string? s) s]
+          [else (path/param-path s)]))
+
+      ; don't think I need the path/param nonsense
+      ;    [else (string-append (path/param-path s)
+;                               ";"
+;                               (path/param-param s))]))
+
       
       (define-struct (exn:password-file exn) ())
       

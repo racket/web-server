@@ -2,7 +2,7 @@
   (require (lib "list.ss")
            (lib "etc.ss")
 	   "util.ss"
-           (lib "servlet-sig.ss" "web-server")
+           "min-servlet.ss"
            (lib "xml.ss" "xml")
            (lib "errortrace-lib.ss" "errortrace")
 	   (lib "base64.ss" "net"))
@@ -20,7 +20,9 @@
            temporarily
            see-other
            exn->string
-           let*-bindings)
+           ;let*-bindings
+           (all-from "min-servlet.ss")
+           )
 
   ; extract-binding/single : sym (listof (cons sym str)) -> str
   (define (extract-binding/single name bindings)
@@ -105,46 +107,46 @@
           (get-output-string op))
         (format "~s\n" exn)))
   
-  (define-syntax let*-bindings
-    (lambda (stx)
-      (syntax-case stx ()
-        [(let*-bindings-stx ([(field ...) bindings]
-                             clauses ...)
-                            body0 body ...)
-         (syntax
-          (let ([b bindings])
-            (let ([field (extract-binding/single 'field b)] ...)
-              (let*-bindings-stx (clauses ...)
-                                 body0 body ...))))]
-        [(let*-bindings-stx () body0 body ...)
-         (syntax (begin body0 body ...))])))
+;  (define-syntax let*-bindings
+;    (lambda (stx)
+;      (syntax-case stx ()
+;        [(let*-bindings-stx ([(field ...) bindings]
+;                             clauses ...)
+;                            body0 body ...)
+;         (syntax
+;          (let ([b bindings])
+;            (let ([field (extract-binding/single 'field b)] ...)
+;              (let*-bindings-stx (clauses ...)
+;                                 body0 body ...))))]
+;        [(let*-bindings-stx () body0 body ...)
+;         (syntax (begin body0 body ...))])))
     
-  (define-syntax anchor-case
-    (lambda (stx)
-      (syntax-case stx ()
-        [(src-anchor-case
-          page
-          ((anchor-pattern anchor-patterns ...) body bodies ...) ...)
-         ; FIX - catching send/suspend from the unit is messy.
-         (with-syntax ([send/suspend (syntax (eval 'send/suspend))])
-           (syntax (let ([format-href (lambda (k-url id) (format "~a?link=~a" k-url id))])
-                     ; Format-href should check that gensym only generates okay characters, but gensym always does.
-                     (let ([request
-                            (send/suspend
-                             (lambda (k-url)
-                               ; FIX provide k-url somehow for forms?
-                               ;     add an else clause for form submission
-                               (let-values ([(anchor-pattern anchor-patterns ...)
-                                             (values (format-href k-url 'anchor-pattern)
-                                                     (format-href k-url 'anchor-patterns) ...)]
-                                            ...)
-                                 page)))])
-                       (let ([link (string->symbol (extract-binding/single 'link (request-bindings request)))])
-                         (case link
-                           [(anchor-pattern anchor-patterns ...)
-                            body bodies ...]
-                           ...
-                           [else (error 'src-anchor-case "unmatched response ~s" link)]))))))])))
+;  (define-syntax anchor-case
+;    (lambda (stx)
+;      (syntax-case stx ()
+;        [(src-anchor-case
+;          page
+;          ((anchor-pattern anchor-patterns ...) body bodies ...) ...)
+;         ; FIX - catching send/suspend from the unit is messy.
+;         (with-syntax ([send/suspend (syntax (eval 'send/suspend))])
+;           (syntax (let ([format-href (lambda (k-url id) (format "~a?link=~a" k-url id))])
+;                     ; Format-href should check that gensym only generates okay characters, but gensym always does.
+;                     (let ([request
+;                            (send/suspend
+;                             (lambda (k-url)
+;                               ; FIX provide k-url somehow for forms?
+;                               ;     add an else clause for form submission
+;                               (let-values ([(anchor-pattern anchor-patterns ...)
+;                                             (values (format-href k-url 'anchor-pattern)
+;                                                     (format-href k-url 'anchor-patterns) ...)]
+;                                            ...)
+;                                 page)))])
+;                       (let ([link (string->symbol (extract-binding/single 'link (request-bindings request)))])
+;                         (case link
+;                           [(anchor-pattern anchor-patterns ...)
+;                            body bodies ...]
+;                           ...
+;                           [else (error 'src-anchor-case "unmatched response ~s" link)]))))))])))
 
   ; Authentication
 

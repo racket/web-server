@@ -2,7 +2,7 @@
 (module configuration mzscheme
   (require "configuration-structures.ss"
            "configuration-table-structs.ss"
-           "servlet-sig.ss"
+           "sig.ss"
            "util.ss"
            "parse-table.ss"
            "dispatcher.ss"
@@ -23,7 +23,7 @@
    [load-configuration (path? . -> . unit/sig?)]
    [load-developer-configuration (path? . -> . unit/sig?)])
   
-  
+
   (define default-configuration-table-path
     (build-path (collection-path "web-server") "configuration-table"))
   
@@ -91,7 +91,7 @@
       ;; allow people (SamTH) to use MrEd primitives from servlets.
       ;; GregP: Put this back in if Sam's code is broken.
       ;(lib "mred.ss" "mred")
-      (lib "servlet-sig.ss" "web-server")
+      (lib "min-servlet.ss" "web-server")
       ; internal structs needed for parameter
       (lib "internal-structs.ss" "web-server")))
   

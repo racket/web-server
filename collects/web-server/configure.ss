@@ -1,8 +1,7 @@
 (module configure mzscheme
   (provide servlet servlet-maker)
-  (require (lib "servlet-sig.ss" "web-server")
-           (lib "servlet-helpers.ss" "web-server")
-           (lib "unitsig.ss")
+  (require (lib "unitsig.ss")
+           (lib "servlet-sig.ss" "web-server")
            (lib "url.ss" "net")
            (lib "etc.ss")
            (lib "list.ss")
@@ -106,7 +105,7 @@
                       (configure-top-level configuration-path)
                       (send/finish (permission-error-page configuration-path))))
                 (begin (send/suspend (copy-configuration-file configuration-path))
-                       (with-handlers ([exn:i/o:filesystem? send-exn])
+                       (with-handlers ([exn:fail:filesystem:exists? send-exn])
                          (let-values ([(base name must-be-dir) (split-path configuration-path)])
                            (ensure-directory-shallow base))
                          (copy-file default-configuration-path configuration-path))
@@ -147,7 +146,7 @@
       
       ; configure-top-level : str -> doesn't
       (define (configure-top-level configuration-path)
-        (with-handlers ([exn:i/o:filesystem? send-exn])
+        (with-handlers ([exn:fail:filesystem:exists? send-exn])
           (let ([original-configuration (read-configuration configuration-path)])
             (let loop ([configuration original-configuration])
               (let* ([update-bindings (interact (request-new-configuration-table configuration original-configuration))]
