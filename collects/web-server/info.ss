@@ -1,7 +1,8 @@
 (module info (lib "infotab.ss" "setup")
   (define name "Web Server")
-  (define mzscheme-launcher-libraries (list "monitor-launch.ss"))
-  (define mzscheme-launcher-names (list "web-server-monitor"))
+  (define mzscheme-launcher-libraries (list "launch.ss" "monitor-launch.ss"))
+  (define mzscheme-launcher-names (list "web-server-text" "web-server-monitor"))
+
   (define mred-launcher-libraries (list "launch.ss"))
   (define mred-launcher-names (list "web-server"))
   
