@@ -24,17 +24,21 @@
   ; -------------------------------------------------------------------------------
   ; The Server
   
-  ; serve : configuration [Nat] -> -> Void
+  ; serve : configuration [Nat] [str | #f] -> -> Void
   ; to start the server on the given port and return an un-server to shut it down
   ; the optional port argument overrides the configuration's port
+  ; the optional host argument only accepts connections from that host ip address
+  ; (a host of #f places no restrictions on the connecting host)
   (define serve
     ; use default values from configuration.ss by default
-    (opt-lambda (configuration [port (configuration-port configuration)])
+    (opt-lambda (configuration
+                 [port (configuration-port configuration)]
+                 [only-from-host #f])
       (let ([virtual-hosts (configuration-virtual-hosts configuration)]
             [max-waiting (configuration-max-waiting configuration)]
             [custodian (make-custodian)])
         (parameterize ([current-custodian custodian])
-          (let ([listener (tcp-listen port max-waiting #t)])
+          (let ([listener (tcp-listen port max-waiting #t only-from-host)])
             ; If tcp-listen fails, the exception will be raised in the caller's thread.
             (thread
              (lambda ()
