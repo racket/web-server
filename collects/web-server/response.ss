@@ -7,8 +7,8 @@
 
   ;; **************************************************
   ;; DATA DEF for response
-  ;; (make-response/basic number string (listof (cons symbol string)) number string)
-  (define-struct response/basic (code message extras seconds mime))
+  ;; (make-response/basic number string number string  (listof (cons symbol string)))
+  (define-struct response/basic (code message seconds mime extras))
   ;; (make-response/full ... (listof string))
   (define-struct (response/full response/basic) (body))
   ;; (make-response/incremental ... ((string* -> void) -> void))
@@ -37,23 +37,28 @@
   (provide/contract
    [struct (response/full response/basic) ([code number?]
                                            [message string?]
+
+                                           [seconds number?]
+                                           [mime bytes?]
                                            [extras (listof
                                                     (lambda (p) (and (pair? p)
                                                                      (symbol? (car p))
                                                                      (string? (cdr p)))))]
-                                           [seconds number?]
-                                           [mime bytes?]
-                                           [body (listof (union string? bytes?))])]
+                                           [body (listof (union string?
+                                                                bytes?))])])
+
    [struct (response/incremental response/basic)
            ([code number?]
             [message string?]
+            [seconds number?]
+            [mime string?]
             [extras (listof
                      (lambda (p) (and (pair? p)
                                       (symbol? (car p))
                                       (string? (cdr p)))))]
-            [seconds number?]
-            [mime string?]
-            [generator ((() (listof (union bytes? string?)) . ->* . any) . -> . any)])]
+            [generator ((() (listof (union bytes? string?)) . ->* . any) . ->
+                        . any)]
+            )]
    [response? (any? . -> . boolean?)]
    [output-response (connection? response? . -> . any)]
    [output-response/method (connection? response? symbol? . -> . any)]

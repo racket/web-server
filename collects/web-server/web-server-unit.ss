@@ -302,9 +302,9 @@
          conn
          (make-response/full
           301 "Moved Permanently"
-          `(("Location: " ,url-path-str "/"))
           (current-seconds)
           TEXT/HTML-MIME-TYPE
+          `(("Location: " ,url-path-str "/"))
           (list
            (xml->string
             (xexpr->xml
@@ -333,8 +333,8 @@
               (output-response/method
                conn
                (make-response/full
-                200 "Okay" '() (current-seconds) TEXT/HTML-MIME-TYPE
-                (list "ignored"))
+                200 "Okay" (current-seconds) TEXT/HTML-MIME-TYPE
+                '() (list "ignored"))
                meth)
               (let ([uri (request-uri req)])
                 (set-request-bindings!

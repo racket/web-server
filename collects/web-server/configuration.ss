@@ -148,8 +148,8 @@
   ; configuration tool still runs.  (Alternatively, find an work around.)
   (define (error-response code short text-file . extra-headers)
     (make-response/full code short
-                        extra-headers
                         (current-seconds) TEXT/HTML-MIME-TYPE
+                        extra-headers
                         (list (read-file text-file))))
 
 
@@ -158,9 +158,9 @@
   ; This is slightly tricky since the (interesting) content comes from the exception.
   (define (servlet-loading-responder url exn)
     (make-response/full 500 "Servlet didn't load"
-                        '() ; check
                         (current-seconds)
                         #"text/plain" ;TEXT/HTML-MIME-TYPE
+                        '() ; check
                         (list "Servlet didn't load.\n"
                               (exn->string exn))))
 
