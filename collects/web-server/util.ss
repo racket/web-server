@@ -17,7 +17,7 @@
    [lowercase-symbol! ((union string? bytes?) . -> . symbol?)]
    [exn->string ((union exn? any?) . -> . string?)]
    [get-mime-type (path? . -> . bytes?)]
-   [build-path-unless-absolute (path? string? . -> . path?)])
+   [build-path-unless-absolute (path? (union string? path?) . -> . path?)])
 
   ;; build-path-unless-absolute : str str -> str
   (define (build-path-unless-absolute base path)
