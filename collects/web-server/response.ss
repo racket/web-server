@@ -45,7 +45,7 @@
                                                                      (symbol? (car p))
                                                                      (string? (cdr p)))))]
                                            [body (listof (union string?
-                                                                bytes?))])])
+                                                                bytes?))])]
 
    [struct (response/incremental response/basic)
            ([code number?]
