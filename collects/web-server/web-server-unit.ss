@@ -564,12 +564,17 @@
                (make-execution-context
                 conn req (lambda () (suspend #t))))
               (semaphore-wait (servlet-instance-mutex inst))
-              ((hash-table-get k-table (cadr k-ref)
-                               (lambda ()
-                                 (raise
-                                  (make-exn:servlet-continuation
-                                   "" (current-continuation-marks)))))
-               req))
+              (let ((k*salt
+                     (hash-table-get k-table (cadr k-ref)
+                                     (lambda ()
+                                       (raise
+                                        (make-exn:servlet-continuation
+                                         "" (current-continuation-marks)))))))
+                (if (= (cadr k*salt) (caddr k-ref))
+                    ((car k*salt) req)
+                    (raise
+                     (make-exn:servlet-continuation
+                      "" (current-continuation-marks))))))
         (semaphore-post (servlet-instance-mutex inst)))))
 
       ;; ************************************************************
@@ -648,7 +653,3 @@
                   (raise (format "Loading ~e produced ~n~e~n instead of a servlet." a-path s))]))))
 
       )))
-
-
-
-
