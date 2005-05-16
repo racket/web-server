@@ -63,7 +63,10 @@
             (let ([get-ports
                    (let ([listener (tcp-listen config:port config:max-waiting
                                                #t config:listen-ip)])
-                     (lambda () (tcp-accept listener)))])
+                     (lambda () 
+                       (let-values ([(ip op) (tcp-accept listener)])
+                         (file-stream-buffer-mode op 'none)
+                         (values ip op))))])
               (thread
                (lambda ()
                  (server-loop get-ports)))))
