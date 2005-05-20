@@ -346,7 +346,7 @@
           301 "Moved Permanently"
           (current-seconds)
           TEXT/HTML-MIME-TYPE
-          `(("Location: " ,url-path-str "/"))
+          `([Location . ,(string-append url-path-str "/")])
           (list
            (xml->string
             (xexpr->xml
@@ -355,11 +355,12 @@
                (body "Please use "
                      (a ([href ,(string-append
                                  url-path-str "/")])
-                        "this url") " instead."))))))))
+                        "this url") " instead."))))))
+         method))
 
       ;; xml->string: xml -> string
       (define (xml->string some-xml)
-        (let ([o-port open-input-string])
+        (let ([o-port (open-output-string)])
           (write-xml/content some-xml o-port)
           (get-output-string o-port)))
 
