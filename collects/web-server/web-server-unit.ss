@@ -7,6 +7,7 @@
            "response.ss"
            "servlet-tables.ss"
            "servlet.ss"
+           "servlet-helpers.ss"
            "timer.ss"
            (lib "tcp-sig.ss" "net")
            (lib "unitsig.ss")
@@ -129,7 +130,7 @@
       (define (dispatch conn req host-info)
         (let* ([uri (request-uri req)]
                [method (request-method req)]
-               [path (url-path->string (url-path uri))])
+               [path (translate-escapes (url-path->string (url-path uri)))])
           (cond
            [(access-denied? method path (request-headers req) host-info
                             config:access)
@@ -304,7 +305,7 @@
       ;; to find the file, including searching for implicit index files, and serve it out
       (define (serve-file conn method uri host-info)
         (let ([path (url-path->path (paths-htdocs (host-paths host-info))
-                                    (url-path->string (url-path uri)))])
+                                    (translate-escapes (url-path->string (url-path uri))))])
           (cond
             [(file-exists? path)
              (output-file conn path method (get-mime-type path))]

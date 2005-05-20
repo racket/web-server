@@ -141,7 +141,6 @@
 
   ; more here - ".." should probably raise an error instead of disappearing.
   (define (url-path->path base p)
-    (myprint "url-path->path p = ~s~n" p)
     (let ((path-elems (chop-string #\/ p)))
       ;;; Hardcoded, bad, and wrong
       (if (or (string=? (car path-elems) "servlets")
