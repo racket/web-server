@@ -4,11 +4,12 @@
            (lib "list.ss")
            (lib "url.ss" "net")
            (lib "errortrace-lib.ss" "errortrace"))
-
+  
   (provide provide-define-struct
            extract-flag
+           translate-escapes
            hash-table-empty?)
-
+  
   (provide/contract
    [path->list  (path? . -> . (cons/c (union path? (symbols 'up 'same))
                                       (listof (union path? (symbols 'up 'same)))))]
@@ -18,13 +19,13 @@
    [exn->string ((union exn? any/c) . -> . string?)]
    [get-mime-type (path? . -> . bytes?)]
    [build-path-unless-absolute (path? (union string? path?) . -> . path?)])
-
+  
   ;; build-path-unless-absolute : path (union string? path?) -> path?
   (define (build-path-unless-absolute base path)
     (if (absolute-path? path)
         (build-path path)
         (build-path base path)))
-
+  
   ;; exn->string : (union exn any) -> string
   ;; builds an error message, including errortrace annotations (if present)
   ;; TODO: do we really need this? Ask Robby about better ways to print exceptions.
@@ -36,15 +37,15 @@
           (print-error-trace op exn)
           (get-output-string op))
         (format "~s\n" exn)))
-
-    ; lowercase-symbol! : (union string bytes) -> symbol
+  
+  ; lowercase-symbol! : (union string bytes) -> symbol
   (define (lowercase-symbol! s)
     (let ([s (if (bytes? s)
                  (bytes->string/utf-8 s)
                  s)])
       (string-lowercase! s)
       (string->symbol s)))
-
+  
   ; prefix? : str -> str -> bool
   ; more here - consider moving this to mzlib's string.ss
   ;; Notes: (GregP)
@@ -58,15 +59,15 @@
            [last (string-ref prefix (sub1 len))]
            [ascii (char->integer last)])
       (if (= 255 ascii)
-                                        ; something could be done about this - ab255 -> ac
-                                        ; and all 255's eliminates upper range check
+          ; something could be done about this - ab255 -> ac
+          ; and all 255's eliminates upper range check
           (error 'prefix? "prefix can't end in the largest character")
           (let ([next (string-append (substring prefix 0 (sub1 len))
                                      (string (integer->char (add1 ascii))))])
             (lambda (x)
               (and (string<=? prefix x) (string<? x next)))))))
-
-
+  
+  
   ;; get-mime-type: path -> bytes
   ;; determine the mime type based on the filename's suffix
   ;;
@@ -81,10 +82,10 @@
                           (lowercase-symbol! sffx)
                           ;(string->symbol (bytes->string/utf-8 sffx))
                           (lambda () DEFAULT-MIME-TYPE))))))
-
-
+  
+  
   (define DEFAULT-MIME-TYPE #"text/plain")
-
+  
   (define MIME-TYPE-TABLE
     (let ([table (make-hash-table)])
       (for-each (lambda (x) (hash-table-put! table (car x) (cdr x)))
@@ -130,7 +131,7 @@
                   (tif  . #"image/tiff")
                   (pic  . #"image/x-pict")))
       table))
-
+  
   (define (directory-part path)
     (let-values ([(base name must-be-dir) (split-path path)])
       (cond
@@ -138,8 +139,6 @@
         [(not base) (error 'directory-part "~a is a top-level directory" path)]
         [(path? base) base])))
 
-  (define myprint printf)
-  
   ; more here - ".." should probably raise an error instead of disappearing.
   (define (url-path->path base p)
     (myprint "url-path->path p = ~s~n" p)
@@ -148,45 +147,44 @@
       (if (or (string=? (car path-elems) "servlets")
               (and (string=? (car path-elems) "")
                    (string=? (cadr path-elems) "servlets")))
-        ;; Servlets can have extra stuff after them
-        (let loop ((p-e (if (string=? (car path-elems) "")
-                          (cddr path-elems)
-                          (cdr path-elems)))
-                   (f (build-path base 
-                                  (if (string=? (car path-elems) "")
-                                    (cadr path-elems)
-                                    (car path-elems)))))
-          (myprint "f = ~s~n" f)
-          (cond
-            ((null? p-e) f)
-            ((directory-exists? f) (loop (cdr p-e) (build-path f (car p-e))))
-            ((file-exists? f) f)
-            (else f))) ;; Don't worry about e.g. links for now
-        ; spidey can't check build-path's use of only certain symbols
-        (apply build-path base
-               (foldr (lambda (x acc)
-                        (cond
-                          [(string=? x "") acc]
-                          [(string=? x ".") acc]
-                          [(string=? x "..") acc] ; ignore ".." (cons 'up acc)]
-                          [else (cons x acc)]))
-                      null
-                      (chop-string #\/ p))))))
-
+          ;; Servlets can have extra stuff after them
+          (let loop ((p-e (if (string=? (car path-elems) "")
+                              (cddr path-elems)
+                              (cdr path-elems)))
+                     (f (build-path base 
+                                    (if (string=? (car path-elems) "")
+                                        (cadr path-elems)
+                                        (car path-elems)))))
+            (cond
+              ((null? p-e) f)
+              ((directory-exists? f) (loop (cdr p-e) (build-path f (car p-e))))
+              ((file-exists? f) f)
+              (else f))) ;; Don't worry about e.g. links for now
+          ; spidey can't check build-path's use of only certain symbols
+          (apply build-path base
+                 (foldr (lambda (x acc)
+                          (cond
+                            [(string=? x "") acc]
+                            [(string=? x ".") acc]
+                            [(string=? x "..") acc] ; ignore ".." (cons 'up acc)]
+                            [else (cons x acc)]))
+                        null
+                        (chop-string #\/ p))))))
+  
   ; update-params : Url (U #f String) -> String
   ; to create a new url just like the old one, but with a different parameter part
   ;; GREGP: this is broken! replace with the version from new-kernel
-;  (define (update-params uri params)
-;    (url->string
-;     (make-url (url-scheme uri)
-;               (url-user uri)
-;               (url-host uri)
-;               (url-port uri)
-;               (url-path uri)
-;               params
-;               (url-query uri)
-;               (url-fragment uri))))
-
+  ;  (define (update-params uri params)
+  ;    (url->string
+  ;     (make-url (url-scheme uri)
+  ;               (url-user uri)
+  ;               (url-host uri)
+  ;               (url-port uri)
+  ;               (url-path uri)
+  ;               params
+  ;               (url-query uri)
+  ;               (url-fragment uri))))
+  
   ; to convert a platform dependent path into a listof path parts such that
   ; (forall x (equal? (path->list x) (path->list (apply build-path (path->list x)))))
   (define (path->list p)
@@ -197,7 +195,7 @@
             [(string? base) (loop base new-acc)]
             [else ; conflate 'relative and #f
              new-acc])))))
-
+  
   ; chop-string : Char String -> (listof String)
   (define (chop-string separator s)
     (let ([p (open-input-string s)])
@@ -213,8 +211,8 @@
               (cond
                 [(eof-object? (read-char p)) null]
                 [else (extract-parts)])))))
-
-
+  
+  
   ; this should go somewhere that other collections can use it too
   (define-syntax provide-define-struct
     (lambda (stx)
@@ -225,7 +223,7 @@
         [(_ struct-name (field ...))
          (syntax (begin (define-struct struct-name (field ...))
                         (provide (struct struct-name (field ...)))))])))
-
+  
   ; this is used by launchers
   ; extract-flag : sym (listof (cons sym alpha)) alpha -> alpha
   (define (extract-flag name flags default)
@@ -233,10 +231,43 @@
       (if x
           (cdr x)
           default)))
-
+  
   ; hash-table-empty? : hash-table -> bool
   (define (hash-table-empty? table)
     (let/ec out
       (hash-table-for-each table (lambda (k v) (out #f)))
       #t))
+  
+  ; This comes from Shriram's collection, and should be exported form there.
+  ; translate-escapes : String -> String
+  (define-struct servlet-error ())
+  (define-struct (invalid-%-suffix servlet-error) (chars))
+  (define-struct (incomplete-%-suffix invalid-%-suffix) ())
+  (define (translate-escapes raw)
+    (list->string
+     (let loop ((chars (string->list raw)))
+       (if (null? chars) null
+           (let ((first (car chars))
+                 (rest (cdr chars)))
+             (let-values (((this rest)
+                           (cond
+                             ((char=? first #\+)
+                              (values #\space rest))
+                             ((char=? first #\%)
+                              ; MF: I rewrote this code so that Spidey could eliminate all checks.
+                              ; I am more confident this way that this hairy expression doesn't barf.
+                              (if (pair? rest)
+                                  (let ([rest-rest (cdr rest)])
+                                    (if (pair? rest-rest)
+                                        (values (integer->char
+                                                 (or (string->number (string (car rest) (car rest-rest)) 16)
+                                                     (raise (make-invalid-%-suffix
+                                                             (if (string->number (string (car rest)) 16)
+                                                                 (car rest-rest)
+                                                                 (car rest))))))
+                                                (cdr rest-rest))
+                                        (raise (make-incomplete-%-suffix rest))))
+                                  (raise (make-incomplete-%-suffix rest))))
+                             (else (values first rest)))))
+               (cons this (loop rest))))))))
   )

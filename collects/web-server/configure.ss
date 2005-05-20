@@ -11,7 +11,7 @@
                    default-configuration-table-path default-configuration-table-path)
            (lib "configuration-table-structs.ss" "web-server")
            (lib "parse-table.ss" "web-server")
-           (lib "util.ss" "web-server"))
+           (all-except (lib "util.ss" "web-server") translate-escapes))
 
   ;; FIX
   ; - fuss with changing absolute paths into relative ones internally

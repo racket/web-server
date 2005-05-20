@@ -21,42 +21,8 @@
            (all-from-except "request-parsing.ss" request-bindings)
            (rename request-bindings request-bindings/raw)
            (rename get-parsed-bindings request-bindings)
+           translate-escapes
            )
-
-  (define-struct servlet-error ())
-  (define-struct (invalid-%-suffix servlet-error) (chars))
-  (define-struct (incomplete-%-suffix invalid-%-suffix) ())
-
-  ; This comes from Shriram's collection, and should be exported form there.
-  ; translate-escapes : String -> String
-  (define (translate-escapes raw)
-    (list->string
-     (let loop ((chars (string->list raw)))
-       (if (null? chars) null
-           (let ((first (car chars))
-                 (rest (cdr chars)))
-             (let-values (((this rest)
-                           (cond
-                             ((char=? first #\+)
-                              (values #\space rest))
-                             ((char=? first #\%)
-                              ; MF: I rewrote this code so that Spidey could eliminate all checks.
-                              ; I am more confident this way that this hairy expression doesn't barf.
-                              (if (pair? rest)
-                                  (let ([rest-rest (cdr rest)])
-                                    (if (pair? rest-rest)
-                                        (values (integer->char
-                                                 (or (string->number (string (car rest) (car rest-rest)) 16)
-                                                     (raise (make-invalid-%-suffix
-                                                             (if (string->number (string (car rest)) 16)
-                                                                 (car rest-rest)
-                                                                 (car rest))))))
-                                                (cdr rest-rest))
-                                        (raise (make-incomplete-%-suffix rest))))
-                                  (raise (make-incomplete-%-suffix rest))))
-                             (else (values first rest)))))
-               (cons this (loop rest))))))))
-
 
   ;; get-parsed-bindings : request -> (listof (cons sym str))
   (define (get-parsed-bindings r)
