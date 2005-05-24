@@ -758,7 +758,7 @@
         (let ([p (build-path from name)])
           (cond
             [(directory-exists? p)
-             (unless (string=? "CVS" (path->string name)) ; yuck
+             (unless (member (path->string name) '("CVS" ".svn")) ; yuck
                (let ([dest (build-path to name)])
                  (ensure-directory-shallow dest)
                  (for-each (lambda (x) (ensure* p dest x))
