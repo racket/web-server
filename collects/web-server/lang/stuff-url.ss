@@ -2,7 +2,7 @@
   (require (lib "contract.ss")
            (lib "url.ss" "net")
            (lib "serialize.ss")
-           "../../private/util.ss"
+           "../private/util.ss"
            "../private/url-param.ss"
            "../private/mod-map.ss")
   

@@ -1,7 +1,7 @@
-(module add-simple (lib "lang.ss" "web-server" "prototype-web-server")
+(module add-param (lib "lang.ss" "web-server")
   (provide start)
   
-  (define msg (make-web-parameter "unknown"))
+  (define msg (make-parameter "unknown"))
   
   (define (gn)
     (printf "gn ~a~n" (msg))
@@ -31,7 +31,7 @@
            (body
             (h1 "Final Page")
             (p ,(format "The answer is ~a"
-                        (+ (web-parameterize ([msg "first"])
-                                             (gn))
-                           (web-parameterize ([msg "second"])
-                                             (gn)))))))))
+                        (+ (parameterize ([msg "first"])
+                             (gn))
+                           (parameterize ([msg "second"])
+                             (gn)))))))))

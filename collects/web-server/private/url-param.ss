@@ -3,7 +3,7 @@
            (lib "url.ss" "net")
            (lib "plt-match.ss")
            (lib "list.ss")
-           "../../private/util.ss")
+           "util.ss")
   
   (provide/contract
    [extract-param (url? string? . -> . (or/c string? false/c))]

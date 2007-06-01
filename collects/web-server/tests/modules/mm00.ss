@@ -1,4 +1,4 @@
-(module mm00 (lib "lang.ss" "web-server" "prototype-web-server")
+(module mm00 (lib "lang.ss" "web-server")
   (provide start)
   
   (define (gn which)

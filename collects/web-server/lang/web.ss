@@ -2,7 +2,7 @@
   (require (lib "serialize.ss")
            (lib "plt-match.ss")
            (lib "url.ss" "net")           
-           "../../private/request-structs.ss"
+           "../private/request-structs.ss"
            "abort-resume.ss"
            "../private/session.ss"
            "stuff-url.ss"

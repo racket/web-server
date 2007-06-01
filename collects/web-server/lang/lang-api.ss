@@ -1,8 +1,8 @@
 (module lang-api mzscheme
   (require (lib "url.ss" "net")
-           "../../private/request-structs.ss"
-           "../../private/response-structs.ss"
-           "../../servlet/helpers.ss"
+           "../private/request-structs.ss"
+           "../private/response-structs.ss"
+           "../servlet/helpers.ss"
            "abort-resume.ss"
            "web.ss"
            "web-cells.ss"
@@ -11,9 +11,9 @@
            "web-extras.ss")
   (provide (all-from-except mzscheme #%module-begin)
            (all-from (lib "url.ss" "net"))
-           (all-from "../../private/request-structs.ss")
-           (all-from "../../private/response-structs.ss")
-           (all-from "../../servlet/helpers.ss")
+           (all-from "../private/request-structs.ss")
+           (all-from "../private/response-structs.ss")
+           (all-from "../servlet/helpers.ss")
            (all-from "abort-resume.ss")
            (all-from "web.ss")
            (all-from "web-cells.ss")

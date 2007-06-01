@@ -1,4 +1,4 @@
-(module mm01 (lib "lang.ss" "web-server" "prototype-web-server")
+(module mm01 (lib "lang.ss" "web-server")
   (provide start)
   (define (gn which)
     (cadr

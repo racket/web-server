@@ -1,4 +1,4 @@
-(module check-dir (lib "lang.ss" "web-server" "prototype-web-server")
+(module check-dir (lib "lang.ss" "web-server")
   (require (lib "url.ss" "net"))
   (provide start)
   

@@ -5,7 +5,7 @@
            (lib "file.ss")
            "../lang/labels.ss")
              
-  (require/expose (lib "labels.ss" "web-server" "prototype-web-server" "lang") (add1/string))
+  (require/expose (lib "labels.ss" "web-server" "lang") (add1/string))
   
   (define THE-TEST-FILENAME (make-temporary-file))
   

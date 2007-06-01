@@ -1,6 +1,6 @@
-(module add04 (lib "lang.ss" "web-server" "prototype-web-server")
+(module add02 (lib "lang.ss" "web-server")
   (provide start)
-  
+
   ;; get-number-from-user: string -> number
   ;; ask the user for a number
   (define (gn msg)
@@ -10,16 +10,13 @@
               `(hmtl (head (title ,(format "Get ~a number" msg)))
                      (body
                       (form ([action ,(url->string k-url)]
-                             [method "post"]
+                             [method "get"]
                              [enctype "application/x-www-form-urlencoded"])
                             ,(format "Enter the ~a number to add: " msg)
                             (input ([type "text"] [name "number"] [value ""]))
                             (input ([type "submit"])))))))])
       (string->number
-       (bytes->string/utf-8
-        (binding:form-value
-         (bindings-assq #"number" 
-                        (request-bindings/raw req)))))))
+       (cdr (assoc 'number (url-query (request-uri req)))))))
   
   (define (start initial-request)
     `(html (head (title "Final Page"))

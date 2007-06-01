@@ -22,7 +22,7 @@
        "web-parameterize does not overwrite with multiple parameters"
        (let-values ([(meval)
                      (make-module-eval
-                      (module m (lib "lang.ss" "web-server" "prototype-web-server")
+                      (module m (lib "lang.ss" "web-server")
                         (define first (make-web-parameter #f))
                         (define second (make-web-parameter #f))
                         (provide start)
@@ -37,7 +37,7 @@
        
        (let-values ([(meval)
                      (make-module-eval
-                      (module m (lib "lang.ss" "web-server" "prototype-web-server")
+                      (module m (lib "lang.ss" "web-server")
                         (provide start)
                         (define first (make-web-parameter #f))
                         (define second (make-web-parameter #f))

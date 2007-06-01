@@ -1,6 +1,6 @@
 (module stuff-url-tests mzscheme
-  (require (lib "stuff-url.ss" "web-server" "prototype-web-server" "lang")
-           (lib "mod-map.ss" "web-server" "prototype-web-server" "private")
+  (require (lib "stuff-url.ss" "web-server" "lang")
+           (lib "mod-map.ss" "web-server" "private")
            (planet "test.ss" ("schematics" "schemeunit.plt" 2))
            (lib "url.ss" "net")
            "util.ss")
@@ -23,8 +23,8 @@
        (lambda (k*v)
          ((car k*v) k*v))))
   
-  (define m00 '(lib "mm00.ss" "web-server" "prototype-web-server" "tests" "modules")) 
-  (define m01 '(lib "mm01.ss" "web-server" "prototype-web-server" "tests" "modules")) 
+  (define m00 '(lib "mm00.ss" "web-server" "tests" "modules")) 
+  (define m01 '(lib "mm01.ss" "web-server" "tests" "modules")) 
   
   (define stuff-url-suite
     (test-suite

@@ -1,20 +1,20 @@
-(module add-param (lib "lang.ss" "web-server" "prototype-web-server")
+(module add (lib "lang.ss" "web-server")
   (provide start)
   
-  (define msg (make-parameter "unknown"))
-  
-  (define (gn)
-    (printf "gn ~a~n" (msg))
+  ;; get-number-from-user: string -> number
+  ;; ask the user for a number
+  (define (get-number msg)
+    (printf "gn ~a~n" msg)
     (let* ([req
             (send/suspend/url
              (lambda (k-url)
-               (printf "ssu ~S~n" (msg))
-               `(hmtl (head (title ,(format "Get ~a number" (msg))))
+               (printf "ssu~n")
+               `(hmtl (head (title ,(format "Get ~a number" msg)))
                       (body
                        (form ([action ,(url->string k-url)]
                               [method "post"]
                               [enctype "application/x-www-form-urlencoded"])
-                             ,(format "Enter the ~a number to add: " (msg))
+                             ,(format "Enter the ~a number to add: " msg)
                              (input ([type "text"] [name "number"] [value ""]))
                              (input ([type "submit"])))))))]
            [num (string->number
@@ -22,7 +22,7 @@
                   (binding:form-value
                    (bindings-assq #"number" 
                                   (request-bindings/raw req)))))])
-      (printf "gn ~a ~a~n" (msg) num)
+      (printf "gn ~a ~a~n" msg num)
       num))
   
   (define (start initial-request)
@@ -31,7 +31,4 @@
            (body
             (h1 "Final Page")
             (p ,(format "The answer is ~a"
-                        (+ (parameterize ([msg "first"])
-                             (gn))
-                           (parameterize ([msg "second"])
-                             (gn)))))))))
+                        (+ (get-number "first") (get-number "second"))))))))

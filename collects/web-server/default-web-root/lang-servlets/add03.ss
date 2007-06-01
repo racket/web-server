@@ -1,4 +1,4 @@
-(module add03 (lib "lang.ss" "web-server" "prototype-web-server")
+(module add03 (lib "lang.ss" "web-server")
   (provide start)
   
   ;; get-number-from-user: string -> number
