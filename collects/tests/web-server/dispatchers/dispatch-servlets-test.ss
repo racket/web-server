@@ -1,5 +1,5 @@
 #lang scheme/base
-(require (planet "test.ss" ("schematics" "schemeunit.plt" 2))
+(require schemeunit
          (planet "sxml.ss" ("lizorkin" "sxml.plt" 2 0))
          mzlib/etc
          mzlib/list
@@ -60,7 +60,7 @@
                           (build-path example-servlets "add-v2.ss"))
     (test-add-two-numbers mkd "add-ssd.ss - send/suspend/dispatch"
                           (build-path example-servlets "add-ssd.ss"))
-    (test-add-two-numbers mkd "add-ssd.ss - send/formlet"
+    (test-add-two-numbers mkd "add-formlets.ss - send/formlet"
                           (build-path example-servlets "add-formlets.ss"))
     (test-equal? "count.ss - state"
                  (let* ([d (mkd (build-path example-servlets "count.ss"))]

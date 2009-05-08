@@ -1,5 +1,5 @@
 #lang scheme/base
-(require (planet "test.ss" ("schematics" "schemeunit.plt" 2))
+(require schemeunit
          "../util.ss")
 (provide web-param-tests)
 
@@ -41,7 +41,7 @@
                       (define (start ignore)
                         (web-parameterize ([first 1]
                                            [second 2])
-                                          (send/suspend (lambda (k) k))
+                                          (call-with-serializable-current-continuation (lambda (k) k))
                                           (+ (first) (second))))))])
        (let ([first-key (meval '(dispatch-start start #f))])
          (check = 3 (meval `(dispatch ,the-dispatch (list ,first-key #f))))))))))

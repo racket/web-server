@@ -1,5 +1,5 @@
 #lang scheme/base
-(require (planet "test.ss" ("schematics" "schemeunit.plt" 2))
+(require schemeunit
          "bindings-test.ss"
          "basic-auth-test.ss"
          "helpers-test.ss"

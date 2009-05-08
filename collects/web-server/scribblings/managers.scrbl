@@ -1,8 +1,7 @@
 #lang scribble/doc
 @(require "web-server.ss")
 
-@title[#:tag "managers"
-       #:style 'toc]{Continuation Managers}
+@title[#:tag "managers"]{Continuation Managers}
 
 Since Scheme servlets store their continuations on the server, they take
 up memory on the server. Furthermore, garbage collection can not be used
@@ -11,8 +10,6 @@ browsers, bookmarks, brains, and notebooks. Therefore, some other strategy
 must be used if memory usage is to be controlled. This functionality is
 pluggable through the manager interface.
 
-@local-table-of-contents[]
-
 @; ------------------------------------------------------------
 @section[#:tag "manager.ss"]{General}
 @(require (for-label web-server/managers/manager)
@@ -20,7 +17,7 @@ pluggable through the manager interface.
 
 @defmodule[web-server/managers/manager]{
 
-@filepath{managers/manager.ss} defines the manager interface. It is required by
+This module defines the manager interface. It is required by
 the users and implementers of managers.
 
 @defstruct[manager ([create-instance ((-> void) . -> . number?)]
@@ -68,7 +65,7 @@ the users and implementers of managers.
 
 @defmodule[web-server/managers/none]{
 
-@filepath{managers/none.ss} defines a manager constructor:
+This module defines a manager constructor:
 
 @defproc[(create-none-manager (instance-expiration-handler expiration-handler/c))
          manager?]{
@@ -83,7 +80,7 @@ the users and implementers of managers.
 }
 
 If you are considering using this manager, also consider using the
-Web Language. (See @secref["stateless-servlets"].)
+Web Language. (See @secref["stateless"].)
 
 }
 
@@ -93,7 +90,7 @@ Web Language. (See @secref["stateless-servlets"].)
 
 @defmodule[web-server/managers/timeouts]{
 
-@filepath{managers/timeouts.ss} defines a manager constructor:
+This module defines a manager constructor:
 
 @defproc[(create-timeout-manager [instance-exp-handler expiration-handler/c]
                                  [instance-timeout number?]
@@ -125,7 +122,7 @@ deployments of the @web-server .
 
 @defmodule[web-server/managers/lru]{
 
-@filepath{managers/lru.ss} defines a manager constructor:
+This module defines a manager constructor:
 
 @defproc[(create-LRU-manager
           [instance-expiration-handler expiration-handler/c]

@@ -1,5 +1,5 @@
 #lang scheme/base
-(require (planet "test.ss" ("schematics" "schemeunit.plt" 2))
+(require schemeunit
          web-server/private/connection-manager)
 (provide connection-manager-tests)
 

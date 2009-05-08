@@ -1,5 +1,5 @@
 #lang scheme/base
-(require (planet "test.ss" ("schematics" "schemeunit.plt" 2)))
+(require schemeunit)
 (provide all-managers-tests)
 
 (define all-managers-tests

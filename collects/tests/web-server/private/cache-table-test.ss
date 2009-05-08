@@ -1,5 +1,5 @@
 #lang scheme/base
-(require (planet "test.ss" ("schematics" "schemeunit.plt" 2))
+(require schemeunit
          web-server/private/cache-table)
 (provide cache-table-tests)
 
@@ -35,3 +35,8 @@
                    (cache-table-lookup! ct 'foo (lambda () #t))
                    (cache-table-clear! ct)
                    (cache-table-lookup! ct 'foo (lambda () #f)))))))
+
+#|
+(require (planet schematics/schemeunit:3/text-ui))
+(run-tests cache-table-tests)
+|#

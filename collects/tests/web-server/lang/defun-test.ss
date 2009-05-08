@@ -1,5 +1,5 @@
 #lang scheme/base
-(require (planet "test.ss" ("schematics" "schemeunit.plt" 2))
+(require schemeunit
          web-server/lang/defun
          web-server/lang/util)
 (provide defun-tests)

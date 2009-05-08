@@ -1,5 +1,5 @@
 #lang scheme
-(require (planet "test.ss" ("schematics" "schemeunit.plt" 2))
+(require schemeunit
          mzlib/list
          net/url
          web-server/http

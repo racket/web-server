@@ -1,6 +1,5 @@
 #lang scheme/base
-(require (planet "test.ss" ("schematics" "schemeunit.plt" 2))
-         (planet "util.ss" ("schematics" "schemeunit.plt" 2))
+(require schemeunit
          xml/xml
          (only-in mzlib/file
                   make-temporary-file)

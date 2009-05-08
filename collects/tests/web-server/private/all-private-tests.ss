@@ -1,5 +1,5 @@
 #lang scheme/base
-(require (planet "test.ss" ("schematics" "schemeunit.plt" 2))
+(require schemeunit
          "request-test.ss"
          "cache-table-test.ss"
          "response-test.ss"

@@ -1,6 +1,5 @@
 #lang scheme
-(require mzlib/contract
-         mzlib/plt-match
+(require mzlib/plt-match
          net/url
          mzlib/list
          net/uri-codec
@@ -10,7 +9,11 @@
 
 (provide/contract
  [rename ext:read-request read-request
-         ((connection? number? ((input-port?) . ->* . (string? string?))) . ->* . (request? boolean?))])
+         (connection? 
+          port-number?
+          (input-port? . -> . (values string? string?))
+          . -> .
+          (values request? boolean?))])
 
 (define (ext:read-request conn host-port port-addresses)
   (with-handlers ([exn? (lambda (exn)
@@ -149,11 +152,14 @@
 (define (read-bindings&post-data/raw conn meth uri headers)
   (cond
     [(bytes-ci=? #"GET" meth)
-     (values (map (match-lambda
-                    [(list-rest k v)
-                     (make-binding:form (string->bytes/utf-8 (symbol->string k))
-                                        (string->bytes/utf-8 v))])
-                  (url-query uri))
+     (values (filter (lambda (x) x)
+                     (map (match-lambda
+                            [(list-rest k v)
+                             (if (and (symbol? k) (string? v))
+                                 (make-binding:form (string->bytes/utf-8 (symbol->string k))
+                                                    (string->bytes/utf-8 v))
+                                 #f)])
+                          (url-query uri)))
              #f)]
     [(bytes-ci=? #"POST" meth)
      (local
