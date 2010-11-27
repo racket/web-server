@@ -14,6 +14,7 @@
          web-server/private/mime-types
          web-server/servlet/setup
          web-server/servlet-dispatch
+         unstable/contract
          (prefix-in lift: web-server/dispatchers/dispatch-lift)
          (prefix-in fsmap: web-server/dispatchers/filesystem-map)
          (prefix-in sequencer: web-server/dispatchers/dispatch-sequencer)
@@ -38,12 +39,13 @@
 
 (provide/contract
  [serve/servlet (((request? . -> . response/c))
-                 (#:command-line? boolean?
+                 (#:connection-close? boolean?
+                  #:command-line? boolean?
                   #:launch-browser? boolean?
                   #:quit? boolean?
                   #:banner? boolean?
                   #:listen-ip (or/c false/c string?)
-                  #:port number?
+                  #:port tcp-listen-port?
                   #:ssl? boolean?
                   #:ssl-cert (or/c false/c path-string?)
                   #:ssl-key (or/c false/c path-string?)
@@ -74,6 +76,8 @@
 
 (define (serve/servlet
          start
+         #:connection-close?
+         [connection-close? #f]
          #:command-line?
          [command-line? #f]
          #:launch-browser?
@@ -144,7 +148,6 @@
      (dispatch/servlet 
       start
       #:regexp servlet-regexp
-      #:namespace servlet-namespace
       #:stateless? stateless?
       #:stuffer stuffer
       #:current-directory servlet-current-directory
@@ -171,7 +174,8 @@
       #:indices (list "index.html" "index.htm"))
      (lift:make file-not-found-responder)))
   (serve/launch/wait
-   dispatcher   
+   dispatcher  
+   #:connection-close? connection-close?
    #:launch-path (if launch-browser? servlet-path #f) 
    #:banner? banner?   
    #:listen-ip listen-ip
