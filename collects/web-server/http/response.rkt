@@ -13,6 +13,7 @@
          web-server/private/util)
 
 (provide/contract
+ [print-headers (output-port? (listof header?) . -> . void)]
  [rename ext:output-response output-response (connection? response/c . -> . void)]
  [rename ext:output-response/method output-response/method (connection? response/c bytes? . -> . void)]
  [rename ext:output-file output-file (connection? path-string? bytes? bytes? (or/c pair? false/c) . -> . void)])
@@ -102,6 +103,8 @@
      (for-each
       (lambda (str) (display str o-port))
       (response/full-body bresp))]
+    [(? response/port?)
+     ((response/port-output bresp) o-port)]
     [(? response/incremental?)
      (if (connection-close? conn)
          ((response/incremental-generator bresp)
@@ -124,9 +127,7 @@
 ; format is rfc1123 compliant according to rfc2068 (http/1.1)
 (define (seconds->gmt-string s)
   (let* ([local-date (seconds->date s)]
-         [date (seconds->date (- s
-                                 (date-time-zone-offset local-date)
-                                 (if (date-dst? local-date) 3600 0)))])
+         [date (seconds->date (- s (date-time-zone-offset local-date)))])
     (format "~a, ~a ~a ~a ~a:~a:~a GMT"
             (vector-ref DAYS (date-week-day date))
             (two-digits (date-day date))
@@ -263,7 +264,7 @@
                          (- (cdr range) (car range)))
                        converted-ranges)))
         (with-handlers ([exn:fail? (lambda (exn) (network-error 'output-file (exn-message exn)))])
-          (call-with-input-file file-path
+          (call-with-input-file* file-path
             (lambda (input)
               (if (= (length converted-ranges) 1)
                   ; Single ranges (in 200 or 206 responses) are sent straight out

@@ -176,7 +176,7 @@ Here is an example typical of what you will find in many applications:
    301 #"Moved Permanently"
    (current-seconds) TEXT/HTML-MIME-TYPE
    (list (make-header #"Location"
-                      #"http://www.racket-lang.org/downloads")))
+                      #"http://racket-lang.org/downloads")))
  ]
 }
 
@@ -191,12 +191,34 @@ Here is an example typical of what you will find in many applications:
    301 #"Moved Permanently"
    (current-seconds) TEXT/HTML-MIME-TYPE
    (list (make-header #"Location"
-                      #"http://www.racket-lang.org/downloads"))
+                      #"http://racket-lang.org/downloads"))
    (list #"<html><body><p>"
          #"Please go to <a href=\""
-         #"http://www.racket-lang.org/downloads"
+         #"http://racket-lang.org/downloads"
          #"\">here</a> instead."
          #"</p></body></html>"))
+ ]
+}
+                                    
+@defstruct[(response/port response/basic)
+           ([output (output-port? . -> . void)])]{
+ As with @racket[response/basic], except where @racket[output] generates the response
+ body. This response type is not as safe and efficient for clients as @racket[response/incremental],
+ but can be convenient on the server side.
+
+ Example:
+ @racketblock[
+  (make-response/full
+   301 #"Moved Permanently"
+   (current-seconds) TEXT/HTML-MIME-TYPE
+   (list (make-header #"Location"
+                      #"http://racket-lang.org/downloads"))
+   (λ (op)
+     (write-bytes #"<html><body><p>" op)
+     (write-bytes #"Please go to <a href=\"" op)
+     (write-bytes #"http://racket-lang.org/downloads" op)
+     (write-bytes #"\">here</a> instead." op)
+     (write-bytes #"</p></body></html>" op)))
  ]
 }
 
@@ -237,17 +259,18 @@ Here is an example typical of what you will find in many applications:
                               [#:message message bytes? #"Okay"]
                               [#:seconds seconds number? (current-seconds)]
                               [#:mime-type mime-type bytes? TEXT/HTML-MIME-TYPE]
-                              [#:headers headers (listof header?) empty])
+                              [#:headers headers (listof header?) empty]
+                              [#:preamble preamble bytes? #""])
          response/full?]{
  Equivalent to
  @racketblock[
  (make-response/full 
   code message seconds mime-type headers
-  (list (string->bytes/utf-8 (xexpr->string xexpr))))
+  (list preamble (string->bytes/utf-8 (xexpr->string xexpr))))
  ]}
                          
 @defproc[(normalize-response [response response/c] [close? boolean? #f])
-         (or/c response/full? response/incremental?)]{
+         (or/c response/full? response/incremental? response/port?)]{
  Coerces @racket[response] into a full response, filling in additional details where appropriate.
          
  @racket[close?] represents whether the connection will be closed after the response is sent (i.e. if HTTP 1.0 is being used.) The accuracy of this only matters if
