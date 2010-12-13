@@ -2,7 +2,7 @@
 
 ;; A roster is a (make-roster names)
 ;; where names is a list of string.
-(define-struct roster (names) #:mutable)
+(struct roster (names) #:mutable)
 
 ;; roster-add-name!: roster string -> void
 ;; Given a roster and a name, adds the name
@@ -12,23 +12,24 @@
                     (append (roster-names a-roster)
                             (list a-name))))
 
-(define ROSTER (make-roster '("kathi" "shriram" "dan")))
+(define ROSTER (roster '("kathi" "shriram" "dan")))
 
-;; start: request -> html-response
+;; start: request -> doesn't
 (define (start request)
   (show-roster request))
 
-;; show-roster: request -> html-response
+;; show-roster: request -> doesn't
 (define (show-roster request)
   (local [(define (response-generator make-url)
-            `(html (head (title "Roster"))
-                   (body (h1 "Roster")
-                         ,(render-as-itemized-list
-                           (roster-names ROSTER))
-                         (form ((action
-                                 ,(make-url add-name-handler)))
-                               (input ((name "a-name")))
-                               (input ((type "submit")))))))
+            (response/xexpr
+             `(html (head (title "Roster"))
+                    (body (h1 "Roster")
+                          ,(render-as-itemized-list
+                            (roster-names ROSTER))
+                          (form ((action
+                                  ,(make-url add-name-handler)))
+                                (input ((name "a-name")))
+                                (input ((type "submit"))))))))
           (define (parse-name bindings)
             (extract-binding/single 'a-name bindings))
             
@@ -38,10 +39,10 @@
             (show-roster (redirect/get)))]
     (send/suspend/dispatch response-generator))) 
 
-;; render-as-itemized-list: (listof html-response) -> html-response
+;; render-as-itemized-list: (listof xexpr) -> xexpr
 (define (render-as-itemized-list fragments)
   `(ul ,@(map render-as-item fragments)))
 
-;; render-as-item: html-response -> html-response
+;; render-as-item: xexpr -> xexpr
 (define (render-as-item a-fragment)
   `(li ,a-fragment))

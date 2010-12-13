@@ -1,6 +1,7 @@
 #lang scribble/doc
 @(require "web-server.rkt"
-          (for-label web-server/lang/soft
+          (for-label web-server/http
+                     web-server/lang/soft
                      web-server/lang/web))
 
 @title[]{Soft State}
@@ -38,16 +39,17 @@ Here's an example servlet that uses soft state:
  
  (define softie
    (soft-state
-    (printf "Doing a long computation...~n")
+    (printf "Doing a long computation...\n")
     (sleep 1)))
  
  (define (start req)
    (soft-state-ref softie)
-   (printf "Done~n")
+   (printf "Done\n")
    (start
     (send/suspend
      (lambda (k-url)
-       `(html (body (a ([href ,k-url]) "Done")))))))
+       (response/xexpr
+        `(html (body (a ([href ,k-url]) "Done"))))))))
 ]
 
 When this is run and the link is clicked a few times, the output is:

@@ -29,9 +29,10 @@ We will be using the DrRacket Module language. Enter the following into the Defi
 @racketmod[
 web-server/insta
 (define (start request)
- '(html
-   (head (title "My Blog"))
-   (body (h1 "Under construction"))))
+  (response/xexpr
+   '(html
+     (head (title "My Blog"))
+     (body (h1 "Under construction")))))
 ]
 
 Press the @onscreen{Run} button.  If a web browser comes up with an ``Under
@@ -62,9 +63,9 @@ By the end of this tutorial, we'll have a simple blogging application.
 We start by considering our data definitions.  We want to represent a
 list of posts.  Let's say that a post is:
 
-@racketblock[(define-struct post (title body))]
+@racketblock[(struct post (title body))]
 
-@(defstruct post ([title string?] [body string?]))
+@(defstruct* post ([title string?] [body string?]))
 
 @bold{Exercise.} Make a few examples of posts.
 
@@ -75,8 +76,8 @@ A blog, then, will be a list of posts:
 As a very simple example of a blog:
 
 @racketblock[
-(define BLOG (list (make-post "First Post!"
-                              "Hey, this is my first post!")))
+(define BLOG (list (post "First Post!"
+                         "Hey, this is my first post!")))
 ]
 
 Now that we have a sample blog structure, let's get our web
@@ -88,17 +89,19 @@ application to show it.
 When a web browser visits our application's URL, the browser
 constructs a request structure and sends it off to our web
 application.  Our start function will consume requests and produce
-responses.  One basic kind of response is to show an HTML page.
+responses.  One basic kind of response is to show an HTML page,
+represented as an X-expression in Racket, by using
+@racket[response/xexpr].
 
 @racketblock[
- (define html-response/c
+ (define xexpr/c
   (flat-rec-contract 
-   html-response
+   xexpr
    (or/c string?
-         (or/c (cons/c symbol? (listof html-response))
+         (or/c (cons/c symbol? (listof xexpr))
                (cons/c symbol?
                        (cons/c (listof (list/c symbol? string?))
-                               (listof html-response)))))))]
+                               (listof xexpr)))))))]
 
 For example:
 
@@ -116,7 +119,7 @@ The HTML @tt{hello} is represented as @racket["hello"]. Strings are automaticall
 
 @racket['(p "This is " (div ((class "emph")) "another") " example.")].
 
-We can produce these @racket[html-response]s by using @racket[cons] and @racket[list] directly.
+We can produce these @racket[xexpr]s by using @racket[cons] and @racket[list] directly.
 Doing so, however, can be notationally heavy.  Consider:
 
 @racketblock[
@@ -131,7 +134,7 @@ vs:
          (body (p "This is a simple static page.")))
 ]
 
-They both produce the same @racket[html-response], but the latter is a lot
+They both produce the same @racket[xexpr], but the latter is a lot
 easier to type and read.  We've been using the extended list
 abbreviation form described in @link["http://htdp.org/2003-09-26/Book/curriculum-Z-H-17.html#node_chap_13"]{Section 13} of @link["http://htdp.org/"]{How to Design Programs}:
 by using a leading forward quote mark to concisely represent the list
@@ -139,7 +142,7 @@ structure, we can construct static html responses with aplomb.
 
 However, we can run into a problem when we use simple list
 abbreviation with dynamic content.  If we have expressions to inject
-into the @racket[html-response] structure, we can't use a simple list-abbreviation
+into the @racket[xexpr] structure, we can't use a simple list-abbreviation
 approach because those expressions will be treated literally as part
 of the list structure!
 
@@ -157,22 +160,23 @@ prepend an unquoting comma in front of the subexpression.  As an
 example:
 
 @racketblock[
-@code:comment{render-greeting: string -> html-response}
-@code:comment{Consumes a name, and produces a dynamic html-response.}
+@code:comment{render-greeting: string -> response}
+@code:comment{Consumes a name, and produces a dynamic response.}
 (define (render-greeting a-name)
-  `(html (head (title "Welcome"))
-         (body (p ,(string-append "Hello " a-name)))))
+  (response/xexpr
+   `(html (head (title "Welcome"))
+          (body (p ,(string-append "Hello " a-name))))))
 ]
 
 @bold{Exercise.} Write a function that consumes a @racket[post] and produces
-an @racket[html-response] representing that content.
+an @racket[xexpr] representing that content.
 
-@defthing[render-post (post? . -> . html-response/c)]
+@defthing[render-post (post? . -> . xexpr/c)]
 
 As an example, we want:
 
 @racketblock[
-    (render-post (make-post "First post!" "This is a first post."))
+    (render-post (post "First post!" "This is a first post."))
 ]
 
 to produce:
@@ -186,33 +190,33 @@ to a post.
 
 @centerline{------------}
 
-If an expression produces a list of @racket[html-response] fragments, we may
+If an expression produces a list of @racket[xexpr] fragments, we may
 want to splice in the elements of a list into our template, rather
 plug in the whole list itself.  In these situations, we can use the
 splicing form @racket[,@expression].
 
 As an example, we may want a helper function that transforms a
-@racket[html-response] list into a fragment representing an unordered, itemized
+@racket[xexpr] list into a fragment representing an unordered, itemized
 HTML list:
 
 @racketblock[
-@code:comment{render-as-itemized-list: (listof html-response) -> html-response}
+@code:comment{render-as-itemized-list: (listof xexpr) -> xexpr}
 @code:comment{Consumes a list of items, and produces a rendering}
 @code:comment{as an unordered list.}
 (define (render-as-itemized-list fragments)
   `(ul ,@(map render-as-item fragments)))
 
-@code:comment{render-as-item: html-response -> html-response}
-@code:comment{Consumes an html-response, and produces a rendering}
+@code:comment{render-as-item: xexpr -> xexpr}
+@code:comment{Consumes an xexpr, and produces a rendering}
 @code:comment{as a list item.}
 (define (render-as-item a-fragment)
   `(li ,a-fragment))
 ]
 
 @bold{Exercise.} Write a function @racket[render-posts] that consumes a @racket[(listof post?)]
-and produces an @racket[html-response] for that content.
+and produces an @racket[xexpr] for that content.
 
-@defthing[render-posts ((listof post?) . -> . html-response/c)]
+@defthing[render-posts ((listof post?) . -> . xexpr/c)]
 
 As examples:
 
@@ -229,8 +233,8 @@ should produce:
 While
 
 @racketblock[
-(render-posts (list (make-post "Post 1" "Body 1")
-                    (make-post "Post 2" "Body 2")))
+(render-posts (list (post "Post 1" "Body 1")
+                    (post "Post 2" "Body 2")))
 ]
 
 should produce:
@@ -245,7 +249,7 @@ should produce:
 
 Now that we have the @racket[render-posts] function handy, let's revisit our
 web application and change our @racket[start] function to return an interesting
-@racket[html-response].
+@racket[response].
 
 @external-file["iteration-1.rkt"]
 
@@ -337,26 +341,28 @@ enter the following in the definition window.
 
 @racketmod[
 web-server/insta
-@code:comment{start: request -> html-response}
+@code:comment{start: request -> response}
 (define (start request)
   (phase-1 request))
 
-@code:comment{phase-1: request -> html-response}
+@code:comment{phase-1: request -> response}
 (define (phase-1 request)
   (local [(define (response-generator embed/url)
-            `(html 
-              (body (h1 "Phase 1")
-                    (a ((href ,(embed/url phase-2)))
-                       "click me!"))))]
+            (response/xexpr
+             `(html 
+               (body (h1 "Phase 1")
+                     (a ((href ,(embed/url phase-2)))
+                        "click me!")))))]
     (send/suspend/dispatch response-generator)))
 
-@code:comment{phase-2: request -> html-response}
+@code:comment{phase-2: request -> response}
 (define (phase-2 request)
   (local [(define (response-generator embed/url)
-            `(html 
-              (body (h1 "Phase 2")
-                    (a ((href ,(embed/url phase-1)))
-                       "click me!"))))]    
+            (response/xexpr
+             `(html 
+               (body (h1 "Phase 2")
+                     (a ((href ,(embed/url phase-1)))
+                        "click me!")))))]    
     (send/suspend/dispatch response-generator)))
 ]
 
@@ -383,19 +389,20 @@ definition.  Here's another loopy example:
 
 @racketmod[
 web-server/insta
-@code:comment{start: request -> html-response}
+@code:comment{start: request -> response}
 (define (start request)
   (show-counter 0 request))
 
-@code:comment{show-counter: number request -> html-response}
+@code:comment{show-counter: number request -> doesn't}
 @code:comment{Displays a number that's hyperlinked: when the link is pressed,}
 @code:comment{returns a new page with the incremented number.}
 (define (show-counter n request)
   (local [(define (response-generator embed/url)
-            `(html (head (title "Counting example"))
-                   (body 
-                    (a ((href ,(embed/url next-number-handler)))
-                       ,(number->string n)))))
+            (response/xexpr
+             `(html (head (title "Counting example"))
+                    (body 
+                     (a ((href ,(embed/url next-number-handler)))
+                        ,(number->string n))))))
                     
           (define (next-number-handler request)
             (show-counter (+ n 1) request))]
@@ -441,9 +448,9 @@ Earlier, we had said that a @racket[blog] was a list of @racket[post]s,
 but because we want to allow the blog to be changed, let's revisit our
 definition so that a blog is a mutable structure:
 
-@racketblock[(define-struct blog (posts) #:mutable)]
+@racketblock[(struct blog (posts) #:mutable)]
 
-@defstruct[blog ([posts (listof post?)])]
+@defstruct*[blog ([posts (listof post?)])]
 
 Mutable structures provide functions to change the fields of a
 structure; in this case, we now have a structure mutator called
@@ -484,7 +491,7 @@ the same blog.
 Next, let's extend the application so that each post can hold a list
 of comments.  We refine the data definition of a blog to be:
 
-@defstruct[post ([title string?] [body string?] [comments (listof string?)]) #:mutable]
+@defstruct*[post ([title string?] [body string?] [comments (listof string?)]) #:mutable]
 
 @bold{Exercise.} Write the updated data structure definition for posts.  Make
 sure to make the structure mutable, since we intend to add comments to
@@ -504,14 +511,14 @@ comments in an itemized list.
 
 @bold{Exercise.} Because we've extended a post to include comments, other
 post-manipulating parts of the application may need to be adjusted,
-such as uses of @racket[make-post].  Identify and fix any other part of the
+such as uses of @racket[post].  Identify and fix any other part of the
 application that needs to accommodate the post's new structure.
 
 @centerline{------------}
 
 Once we've changed the data structure of the posts and adjusted our
 functions to deal with this revised structure, the web application
-should be runnable.  The user may even may even see some of the fruits
+should be runnable.  The user may even see some of the fruits
 of our labor: if the initial @racket[BLOG] has a post with a comment, the user
 should see those comments now.  But obviously, there's something
 missing: the user doesn't have the user interface to add comments to a
@@ -594,7 +601,7 @@ handlers, our web application is fairly functional.
 
 We have an application that's functionally complete, but is visual
 lacking.  Let's try to improve its appearance.  One way we can do this
-is to use a cascading style sheet.  A style sheet can visual panache
+is to use a cascading style sheet.  A style sheet can add visual panache
 to our web pages.  For example, if we'd like to turn all of our
 paragraphs green, we might add the following style declaration within
 our response.
@@ -602,7 +609,7 @@ our response.
 @racket['(style ((type "text/css")) "p { color: green }")]
 
 It's tempting to directly embed this style information into our
-@racket[html-response]s.  However, our source file is already quite busy.  We
+@racket[response]s.  However, our source file is already quite busy.  We
 often want to separate the logical representation of our application
 from its presentation.  Rather than directly embed the .css in the
 HTML response, let's instead add a link reference to an separate .css
@@ -630,13 +637,14 @@ following content:
 @racketmod[
 web-server/insta
 (define (start request)
-  '(html (head (title "Testing"))
-         (link ((rel "stylesheet")
-                (href "/test-static.css")
-                (type "text/css")))
-         (body (h1 "Testing")
-               (h2 "This is a header")
-               (p "This is " (span ((class "hot")) "hot") "."))))
+  (response/xexpr
+   '(html (head (title "Testing"))
+          (link ((rel "stylesheet")
+                 (href "/test-static.css")
+                 (type "text/css")))
+          (body (h1 "Testing")
+                (h2 "This is a header")
+                (p "This is " (span ((class "hot")) "hot") ".")))))
 
 (static-files-path "htdocs")
 ]
@@ -736,8 +744,8 @@ between the model of our blog, and the web application that uses that
 model.  Let's isolate the model: it's all the stuff near the top:
 
 @racketblock[
-    (define-struct blog (posts) #:mutable)
-    (define-struct post (title body comments) #:mutable)
+    (struct blog (posts) #:mutable)
+    (struct post (title body comments) #:mutable)
     (define BLOG ...)
     (define (blog-insert-post! ...) ...)
     (define (post-insert-comment! ...) ...)
@@ -794,7 +802,7 @@ started running---which is exactly what we want when restoring the blog data fro
 Our blog structure definition now looks like:
 
 @racketblock[
-    (define-struct blog (posts) #:mutable #:prefab)
+    (struct blog (posts) #:mutable #:prefab)
 ]
 
 Now @racket[blog] structures can be read from the outside world with @racket[read] and written
@@ -809,7 +817,7 @@ At this point, we @emph{can} read and write the blog to disk. Now let's actually
 First, we'll make a place to record in the model where the blog lives on disk. So, we need to change
 the blog structure again. Now it will be:
 
-@defstruct[blog ([home string?] [posts (listof post?)]) #:mutable]
+@defstruct*[blog ([home string?] [posts (listof post?)]) #:mutable]
 
 @bold{Exercise.} Write the new structure definition for blogs.
 
@@ -820,14 +828,14 @@ Then, we'll make a function that allows our application to initialize the blog:
 @code:comment{Reads a blog from a path, if not present, returns default}
 (define (initialize-blog! home)
   (local [(define (log-missing-exn-handler exn)
-            (make-blog
+            (blog
              (path->string home)
-             (list (make-post "First Post"
-                              "This is my first post"
-                              (list "First comment!"))
-                   (make-post "Second Post"
-                              "This is another post"
-                              (list)))))
+             (list (post "First Post"
+                         "This is my first post"
+                         (list "First comment!"))
+                   (post "Second Post"
+                         "This is another post"
+                         (list)))))
           (define the-blog
             (with-handlers ([exn? log-missing-exn-handler])
               (with-input-from-file home read)))]
@@ -983,7 +991,7 @@ By adding a new comments table, we are more in accord with the relational style.
 
 A @racket[blog] structure will simply be a container for the database handle:
 
-@defstruct[blog ([db sqlite:db?])]
+@defstruct*[blog ([db sqlite:db?])]
 
 @bold{Exercise.} Write the @racket[blog] structure definition. (It does not need to be mutable or serializable.)
 
@@ -993,7 +1001,7 @@ We can now write the code to initialize a @racket[blog] structure:
 @code:comment{Sets up a blog database (if it doesn't exist)}
 (define (initialize-blog! home)
   (define db (sqlite:open home))
-  (define the-blog (make-blog db))
+  (define the-blog (blog db))
   (with-handlers ([exn? void])
     (sqlite:exec/ignore db
                         (string-append
@@ -1056,7 +1064,7 @@ However, we cannot tell from this structure
 what blog this posts belongs to, and therefore, what database; so, we could not extract the title or body values,
 since we do not know what to query. Therefore, we should associate the blog with each post:
 
-@defstruct[post ([blog blog?] [id integer?])]
+@defstruct*[post ([blog blog?] [id integer?])]
 
 @bold{Exercise.} Write the structure definition for posts.
 
@@ -1067,7 +1075,7 @@ The only function that creates posts is @racket[blog-posts]:
 @code:comment{Queries for the post ids}
 (define (blog-posts a-blog)
   (local [(define (row->post a-row)
-            (make-post 
+            (post 
              a-blog
              (vector-ref a-row 0)))
           (define rows (sqlite:select
@@ -1129,21 +1137,22 @@ web-server/insta
 We'll now go back to the application code. One of the poor design choices we made earlier is the loose connection between the names of form elements in the display and in the form processing code:
 
 @racketblock[
-@code:comment{render-blog-page: blog request -> html-response}
-@code:comment{Produces an html-response page of the content of the}
+@code:comment{render-blog-page: blog request -> doesnt'}
+@code:comment{Send an HTML page of the content of the}
 @code:comment{blog.}
 (define (render-blog-page a-blog request)
-  (local [(define (response-generator make-url)        
-            `(html (head (title "My Blog"))
-                   (body 
-                    (h1 "My Blog")
-                    ,(render-posts a-blog make-url)
-                    (form ((action 
-                            ,(make-url insert-post-handler)))
-                          @code:comment{"title" is used here}
-                          (input ((name "title")))
-                          (input ((name "body")))
-                          (input ((type "submit")))))))          
+  (local [(define (response-generator make-url) 
+            (response/xexpr
+             `(html (head (title "My Blog"))
+                    (body 
+                     (h1 "My Blog")
+                     ,(render-posts a-blog make-url)
+                     (form ((action 
+                             ,(make-url insert-post-handler)))
+                           @code:comment{"title" is used here}
+                           (input ((name "title")))
+                           (input ((name "body")))
+                           (input ((type "submit"))))))))          
           
           (define (insert-post-handler request)
             (define bindings (request-bindings request))
@@ -1196,22 +1205,24 @@ And @racket[(formlet-process new-post-formlet _request)] where @racket[_request]
 
 We can use @racket[new-post-formlet] in @racket[render-blog-page] as follows:
 @racketblock[
-@code:comment{render-blog-page: blog request -> html-response}
-@code:comment{Produces an html-response page of the content of the}
+@code:comment{render-blog-page: blog request -> doesn't}
+@code:comment{Sends an HTML page of the content of the}
 @code:comment{blog.}
 (define (render-blog-page a-blog request)
-  (local [(define (response-generator make-url)        
-            `(html (head (title "My Blog"))
-                   (body 
-                    (h1 "My Blog")
-                    ,(render-posts a-blog make-url)
-                    (form ([action 
-                            ,(make-url insert-post-handler)])
-                          ,@(formlet-display new-post-formlet)
-                          (input ([type "submit"]))))))
+  (local [(define (response-generator make-url)
+            (response/xexpr
+             `(html (head (title "My Blog"))
+                    (body 
+                     (h1 "My Blog")
+                     ,(render-posts a-blog make-url)
+                     (form ([action 
+                             ,(make-url insert-post-handler)])
+                           ,@(formlet-display new-post-formlet)
+                           (input ([type "submit"])))))))
           
           (define (insert-post-handler request)
-            (define-values (title body) (formlet-process new-post-formlet request))
+            (define-values (title body) 
+              (formlet-process new-post-formlet request))
             (blog-insert-post! a-blog title body)
             (render-blog-page a-blog (redirect/get)))]
     
@@ -1246,7 +1257,7 @@ to
 racket
 
 (require web-server/servlet)
-(provide/contract (start (request? . -> . response/c)))
+(provide/contract (start (request? . -> . response?)))
 ]
 
 Second, add the following at the bottom of your application:
