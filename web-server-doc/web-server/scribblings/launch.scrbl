@@ -10,11 +10,9 @@
                      web-server/private/dispatch-server-unit
                      web-server/private/dispatch-server-sig
                      web-server/dispatchers/dispatch
-                     net/tcp-sig
                      racket/async-channel
                      unstable/contract
                      web-server/configuration/configuration-table)
-          (prefix-in raw: (for-label net/tcp-unit))
           (prefix-in files: (for-label web-server/dispatchers/dispatch-files)))
 
 @defmodule[web-server/web-server]{
@@ -24,7 +22,7 @@ This module provides functions for launching dispatching servers.
 @defproc[(serve [#:dispatch dispatch dispatcher/c]
                 [#:confirmation-channel confirmation-channel (or/c false/c async-channel?) #f]
                 [#:connection-close? connection-close? boolean? #f]
-                [#:tcp@ tcp@ (unit/c (import) (export tcp^)) raw:tcp@]
+                [#:tcp@ tcp@ (unit/c (import) (export dispatch-server-tcp^)) raw:tcp@]
                 [#:port port tcp-listen-port? 80]
                 [#:listen-ip listen-ip (or/c string? false/c) #f]
                 [#:max-waiting max-waiting integer? 511]
@@ -57,7 +55,8 @@ from a given path:
 @defproc[(serve/ports [#:dispatch dispatch dispatcher/c]
                       [#:confirmation-channel confirmation-channel (or/c false/c async-channel?) #f]
                       [#:connection-close? connection-close? boolean? #f]
-                      [#:tcp@ tcp@ (unit/c (import) (export tcp^)) raw:tcp@]
+                      [#:tcp@ tcp@ (unit/c (import) (export dispatch-server-tcp^))
+                              raw:tcp@]
                       [#:ports ports (listof tcp-listen-port?) (list 80)]
                       [#:listen-ip listen-ip (or/c string? false/c) #f]
                       [#:max-waiting max-waiting integer? 511]
@@ -70,7 +69,8 @@ from a given path:
 @defproc[(serve/ips+ports [#:dispatch dispatch dispatcher/c]
                           [#:confirmation-channel confirmation-channel (or/c false/c async-channel?) #f]
                           [#:connection-close? connection-close? boolean? #f]
-                          [#:tcp@ tcp@ (unit/c (import) (export tcp^)) raw:tcp@]
+                          [#:tcp@ tcp@ (unit/c (import) (export dispatch-server-tcp^))
+                                  raw:tcp@]
                           [#:ips+ports ips+ports (listof (cons/c (or/c string? false/c) (listof tcp-listen-port?))) (list (cons #f (list 80)))]
                           [#:max-waiting max-waiting integer? 511]
                           [#:initial-connection-timeout initial-connection-timeout integer? 60])
@@ -80,7 +80,8 @@ from a given path:
 }
                   
 @defproc[(serve/web-config@ [config@ (unit/c (import) (export web-config^))]
-                            [#:tcp@ tcp@ (unit/c (import) (export tcp^)) raw:tcp@])
+                            [#:tcp@ tcp@ (unit/c (import) (export dispatch-server-tcp^))
+                                    raw:tcp@])
          (-> void)]{
  Starts the @web-server with the settings defined by the given @racket[web-config^] unit.
         
@@ -91,6 +92,12 @@ from a given path:
    (configuration-table->web-config@ 
     default-configuration-table-path))]
 }
+
+@defthing[raw:tcp@ (unit/c (import) (export dispatch-server-tcp^))]{A default implementation of the dispatch server's TCP abstraction.}
+
+@defproc[(make-ssl-tcp@ [server-cert-file path-string?] 
+                        [server-key-file path-string?])
+(unit/c (import) (export dispatch-server-tcp^))]{Constructs an implementation of the dispatch server's TCP abstraction for OpenSSL.}
 
 @defproc[(do-not-return) void]{
  This function does not return. If you are writing a script to load the @web-server

@@ -1,6 +1,11 @@
 #lang racket/unit
-(require net/tcp-sig
-         racket/async-channel
+(require racket/async-channel
+         (only-in racket/tcp
+                  tcp-listen
+                  tcp-addresses
+                  tcp-close
+                  tcp-accept
+                  tcp-accept/enable-break)
          racket/port
          mzlib/thread)
 (require racket/format)
@@ -9,7 +14,8 @@
          "dispatch-server-sig.rkt")
 
 ;; ****************************************
-(import tcp^ (prefix config: dispatch-server-config^))
+(import (prefix tcp: dispatch-server-tcp^)
+        (prefix config: dispatch-server-config^))
 (export dispatch-server^)
 
 (define (async-channel-put* ac v)
@@ -75,8 +81,13 @@
 
 ;; handle-connection : connection-manager input-port output-port (input-port -> string string) -> void
 (define ((handle-connection/cm cm)
-         ip op
-         #:port-addresses [port-addresses tcp-addresses])
+         i-ip i-op
+         #:port-addresses [real-port-addresses tcp-addresses])
+  (define-values (ip op) (tcp:port->real-ports i-ip i-op))
+  (define (port-addresses some-ip)
+    (if (eq? ip some-ip)
+        (real-port-addresses i-ip)
+        (real-port-addresses ip)))
   (define conn
     (new-connection cm config:initial-connection-timeout
                     ip op (current-custodian) #f))

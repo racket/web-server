@@ -1,6 +1,5 @@
 #lang racket/base
-(require net/tcp-sig
-         racket/unit)
+(require racket/unit)
 (require web-server/web-server-sig
          web-server/web-config-sig
          web-server/private/dispatch-server-unit
@@ -101,6 +100,6 @@
      (lift:make (responders-file-not-found (host-responders host-info))))))
 
 (define-compound-unit/infer web-server@
-  (import tcp^ web-config^)
+  (import dispatch-server-tcp^ web-config^)
   (export web-server^)
   (link web-config@->dispatch-server-config@ dispatch-server@))

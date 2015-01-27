@@ -4,7 +4,8 @@
 @title[#:tag "web-server-unit"]{Server Units}
 @(require (for-label web-server/web-server-sig
                      web-server/web-server-unit
-                     net/tcp-sig
+                     web-server/private/dispatch-server-sig
+                     web-server/private/dispatch-server-unit
                      web-server/dispatchers/dispatch
                      web-server/web-config-sig
                      web-server/web-config-unit))
@@ -33,7 +34,7 @@
 
 @defmodule[web-server/web-server-unit]{
 
-@defthing[web-server@ (unit/c (web-config^ tcp^)
+@defthing[web-server@ (unit/c (web-config^ dispatch-servertcp^)
                               (web-server^))]{
 
 Uses the @racket[web-config^] to construct a @racket[dispatcher/c]

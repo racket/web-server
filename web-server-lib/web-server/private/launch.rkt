@@ -1,9 +1,7 @@
 #lang racket/base
 (require racket/cmdline
          racket/unit
-         net/tcp-sig
-         net/tcp-unit
-         net/ssl-tcp-unit)
+         web-server/private/dispatch-server-sig)
 (require web-server/configuration/configuration-table
          (except-in web-server/web-server serve)
          web-server/web-config-unit)
@@ -68,13 +66,8 @@
   (serve/web-config@ 
    configuration@
    #:tcp@ (if (ssl)
-              (let ()
-                (define-unit-binding ssl-tcp@
-                  (make-ssl-tcp@ (build-path (current-directory) "server-cert.pem")
-                                 (build-path (current-directory) "private-key.pem")
-                                 #f #f #f #f #f)
-                  (import) (export tcp^))
-                ssl-tcp@)
-              tcp@)))
+              (make-ssl-tcp@ (build-path (current-directory) "server-cert.pem")
+                             (build-path (current-directory) "private-key.pem"))
+              raw:tcp@)))
 
 (provide serve)

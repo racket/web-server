@@ -6,7 +6,6 @@
                      web-server/private/dispatch-server-sig
                      web-server/private/util
                      web-server/private/connection-manager
-                     net/tcp-sig
                      unstable/contract
                      racket/async-channel
                      racket/tcp
@@ -38,6 +37,18 @@ The @racket[dispatch-server^] signature is an alias for
  }
 }
 
+@defsignature[dispatch-server-tcp^ ()]{
+
+The @racket[dispatch-server-tcp^] signature abstracts the TCP
+implementation used by the dispatch server.
+
+ @defproc[(port->real-ports [ip input-port?]
+                            [op output-port?])
+          (values input-port? output-port?)]{
+  Wraps the ports as necessary.
+ }
+}
+
 @defsignature[dispatch-server-config^ ()]{
 
  @defthing[port tcp-listen-port?]{Specifies the port to serve on.}
@@ -64,7 +75,8 @@ The @racket[dispatch-server^] signature is an alias for
 The @racketmodname[web-server/private/dispatch-server-unit] module
 provides the unit that actually implements a dispatching server.
 
-@defthing[dispatch-server@ (unit/c (import tcp^ dispatch-server-config^) 
+@defthing[dispatch-server@ (unit/c (import dispatch-server-tcp^
+                                           dispatch-server-config^) 
                                    (export dispatch-server^))]{
  Runs the dispatching server config in a very basic way, except that it uses
  @secref["connection-manager"] to manage connections.
