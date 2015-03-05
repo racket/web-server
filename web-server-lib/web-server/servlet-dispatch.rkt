@@ -118,9 +118,9 @@
            #:listen-ip listen-ip
            #:port port-arg
            #:max-waiting max-waiting
-           #:tcp@ (if ssl?
-                      (make-ssl-tcp@ ssl-cert ssl-key)
-                      raw:tcp@)))
+           #:dispatch-server-connect@ (if ssl?
+                                          (make-ssl-connect@ ssl-cert ssl-key)
+                                          raw:dispatch-server-connect@)))
   (define serve-res (async-channel-get confirm-ch))
   (if (exn? serve-res)
       (begin

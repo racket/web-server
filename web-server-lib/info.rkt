@@ -15,3 +15,5 @@
 (define pkg-desc "implementation (no documentation) part of \"web-server\"")
 
 (define pkg-authors '(jay))
+
+(define version "1.1")

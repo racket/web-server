@@ -1,5 +1,7 @@
 #lang racket/base
 (require racket/match
+         net/tcp-sig
+         (prefix-in raw: net/tcp-unit)
          racket/unit
          racket/async-channel
          racket/contract
@@ -8,6 +10,7 @@
          web-server/dispatchers/dispatch
          web-server/private/dispatch-server-sig
          web-server/private/dispatch-server-unit
+         web-server/private/raw-dispatch-server-connect-unit
          web-server/web-config-sig
          web-server/web-server-sig
          web-server/web-server-unit
@@ -17,7 +20,8 @@
   (->* (#:dispatch dispatcher/c)
        (#:confirmation-channel (or/c false/c async-channel?)
                                #:connection-close? boolean?
-                               #:tcp@ (unit/c (import) (export dispatch-server-tcp^))
+                               #:dispatch-server-connect@ (unit/c (import) (export dispatch-server-connect^))
+                               #:tcp@ (unit/c (import) (export tcp^))
                                #:port tcp-listen-port?
                                #:listen-ip (or/c false/c string?)
                                #:max-waiting exact-nonnegative-integer?
@@ -27,7 +31,8 @@
   (->* (#:dispatch dispatcher/c)
        (#:confirmation-channel (or/c false/c async-channel?)
                                #:connection-close? boolean?
-                               #:tcp@ (unit/c (import) (export dispatch-server-tcp^))
+                               #:dispatch-server-connect@ (unit/c (import) (export dispatch-server-connect^))
+                               #:tcp@ (unit/c (import) (export tcp^))
                                #:ports (listof tcp-listen-port?)
                                #:listen-ip (or/c false/c string?)
                                #:max-waiting exact-nonnegative-integer?
@@ -37,40 +42,37 @@
   (->* (#:dispatch dispatcher/c)
        (#:confirmation-channel (or/c false/c async-channel?)
                                #:connection-close? boolean?
-                               #:tcp@ (unit/c (import) (export dispatch-server-tcp^))
+                               #:dispatch-server-connect@ (unit/c (import) (export dispatch-server-connect^))
+                               #:tcp@ (unit/c (import) (export tcp^))
                                #:ips+ports (listof (cons/c (or/c false/c string?)
                                                            (listof tcp-listen-port?)))
                                #:max-waiting exact-nonnegative-integer?
                                #:initial-connection-timeout number?)
        (-> void))]
- [raw:tcp@ (unit/c (import) (export dispatch-server-tcp^))]
- [make-ssl-tcp@ 
+ [raw:dispatch-server-connect@ (unit/c (import) (export dispatch-server-connect^))]
+ [make-ssl-connect@ 
   (-> path-string? path-string?
-      (unit/c (import) (export dispatch-server-tcp^)))]
+      (unit/c (import) (export dispatch-server-connect^)))]
  [do-not-return (-> void)]
  [serve/web-config@ 
   (->*
    ((unit/c (import) (export web-config^)))
-   (#:tcp@ (unit/c (import) (export dispatch-server-tcp^)))
+   (#:dispatch-server-connect@ (unit/c (import) (export dispatch-server-connect^))
+    #:tcp@ (unit/c (import) (export tcp^)))
    (-> void?))])
 
-(define (make-ssl-tcp@ server-cert-file server-key-file)
+(define (make-ssl-connect@ server-cert-file server-key-file)
   (define the-ctxt
     (ssl-make-server-context))
   (ssl-load-certificate-chain! the-ctxt server-cert-file)
   (ssl-load-private-key! the-ctxt server-key-file)
-  (define-unit ssl:tcp@
-    (import) (export dispatch-server-tcp^)
+  (define-unit ssl:dispatch-server-connect@
+    (import) (export dispatch-server-connect^)
     (define (port->real-ports ip op)
       (ports->ssl-ports	ip op
                         #:mode 'accept
                         #:context the-ctxt)))
-  ssl:tcp@)
-
-(define-unit raw:tcp@
-  (import) (export dispatch-server-tcp^)
-  (define (port->real-ports ip op)
-    (values ip op)))
+  ssl:dispatch-server-connect@)
 
 (define (do-not-return)
   (semaphore-wait (make-semaphore 0)))
@@ -79,6 +81,7 @@
          #:dispatch dispatch
          #:confirmation-channel [confirmation-channel #f]
          #:connection-close? [connection-close? #f]
+         #:dispatch-server-connect@ [dispatch-server-connect@ raw:dispatch-server-connect@]
          #:tcp@ [tcp@ raw:tcp@]
          #:port [port 80]
          #:listen-ip [listen-ip #f]
@@ -87,11 +90,13 @@
   (define read-request 
     (http:make-read-request
      #:connection-close? connection-close?))
+  (define-unit-binding a-dispatch-server-connect@
+    dispatch-server-connect@ (import) (export dispatch-server-connect^))
   (define-unit-binding a-tcp@
-    tcp@ (import) (export dispatch-server-tcp^))
+    tcp@ (import) (export tcp^))
   (define-compound-unit/infer dispatch-server@/tcp@
     (import dispatch-server-config^)
-    (link a-tcp@ dispatch-server@)
+    (link a-dispatch-server-connect@ a-tcp@ dispatch-server@)
     (export dispatch-server^))
   (define-values/invoke-unit
     dispatch-server@/tcp@
@@ -104,6 +109,7 @@
          #:dispatch dispatch
          #:confirmation-channel [confirmation-channel #f]
          #:connection-close? [connection-close? #f]
+         #:dispatch-server-connect@ [dispatch-server-connect@ raw:dispatch-server-connect@]
          #:tcp@ [tcp@ raw:tcp@]
          #:ports [ports (list 80)]
          #:listen-ip [listen-ip #f]
@@ -115,6 +121,7 @@
             #:dispatch dispatch
             #:confirmation-channel confirmation-channel
             #:connection-close? connection-close?
+            #:dispatch-server-connect@ dispatch-server-connect@
             #:tcp@ tcp@
             #:port port
             #:listen-ip listen-ip
@@ -128,6 +135,7 @@
          #:dispatch dispatch
          #:confirmation-channel [confirmation-channel #f]
          #:connection-close? [connection-close? #f]
+         #:dispatch-server-connect@ [dispatch-server-connect@ raw:dispatch-server-connect@]
          #:tcp@ [tcp@ raw:tcp@]
          #:ips+ports [ips+ports (list (cons #f (list 80)))]
          #:max-waiting [max-waiting 511]
@@ -139,6 +147,7 @@
              #:dispatch dispatch
              #:confirmation-channel confirmation-channel
              #:connection-close? connection-close?
+             #:dispatch-server-connect@ dispatch-server-connect@
              #:tcp@ tcp@
              #:ports ports
              #:listen-ip listen-ip
@@ -149,9 +158,13 @@
     (for-each apply shutdowns)))
 
 ; serve/config@ : configuration -> (-> void)
-(define (serve/web-config@ config@ #:tcp@ [tcp@ raw:tcp@])
+(define (serve/web-config@ config@ 
+                           #:dispatch-server-connect@ [dispatch-server-connect@ raw:dispatch-server-connect@]
+                           #:tcp@ [tcp@ raw:tcp@])
+  (define-unit-binding a-dispatch-server-connect@
+    dispatch-server-connect@ (import) (export dispatch-server-connect^))
   (define-unit-binding a-tcp@
-    tcp@ (import) (export dispatch-server-tcp^))
+    tcp@ (import) (export tcp^))
   (define-unit m@ (import web-server^) (export)
     (init-depend web-server^)
     (serve))
@@ -159,5 +172,5 @@
   (invoke-unit
    (compound-unit/infer
     (import)
-    (link a-tcp@ c@ web-server@ m@)
+    (link a-dispatch-server-connect@ a-tcp@ c@ web-server-with-connect@ m@)
     (export))))

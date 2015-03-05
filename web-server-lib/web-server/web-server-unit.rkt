@@ -1,5 +1,6 @@
 #lang racket/base
-(require racket/unit)
+(require racket/unit
+         net/tcp-sig)
 (require web-server/web-server-sig
          web-server/web-config-sig
          web-server/private/dispatch-server-unit
@@ -8,6 +9,7 @@
          web-server/private/mime-types
          web-server/configuration/configuration-table-structs
          web-server/private/cache-table
+         web-server/private/raw-dispatch-server-connect-unit
          (prefix-in http: web-server/http/request))
 (require web-server/dispatchers/dispatch
          web-server/servlet/setup
@@ -23,7 +25,8 @@
          (prefix-in filter: web-server/dispatchers/dispatch-filter)
          (prefix-in lift: web-server/dispatchers/dispatch-lift))
 
-(provide web-server@)
+(provide web-server-with-connect@
+         web-server@)
 
 (define-unit web-config@->dispatch-server-config@
   (import (prefix config: web-config^))
@@ -99,7 +102,13 @@
                  #:indices (host-indices host-info))
      (lift:make (responders-file-not-found (host-responders host-info))))))
 
-(define-compound-unit/infer web-server@
-  (import dispatch-server-tcp^ web-config^)
+(define-compound-unit/infer web-server-with-connect@
+  (import tcp^ dispatch-server-connect^ web-config^)
   (export web-server^)
   (link web-config@->dispatch-server-config@ dispatch-server@))
+
+(define-compound-unit/infer web-server@
+  (import tcp^ web-config^)
+  (export web-server^)
+  (link [([ws : web-server^]) web-server-with-connect@]
+        [([dsp : dispatch-server-connect^]) raw:dispatch-server-connect@]))

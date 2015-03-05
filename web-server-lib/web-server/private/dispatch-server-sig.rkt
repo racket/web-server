@@ -11,7 +11,7 @@
     [serve (->* () (#:confirmation-channel (or/c false/c async-channel?)) (-> void))]
     [serve-ports (input-port? output-port? . -> . (-> void))])))
 
-(define-signature dispatch-server-tcp^
+(define-signature dispatch-server-connect^
   ((contracted
     [port->real-ports
      (-> input-port? output-port?
@@ -34,5 +34,5 @@
 
 (provide
  dispatch-server^
- dispatch-server-tcp^
+ dispatch-server-connect^
  dispatch-server-config^)
