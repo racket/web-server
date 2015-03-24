@@ -96,7 +96,7 @@
     tcp@ (import) (export tcp^))
   (define-compound-unit/infer dispatch-server@/tcp@
     (import dispatch-server-config^)
-    (link a-dispatch-server-connect@ a-tcp@ dispatch-server@)
+    (link a-dispatch-server-connect@ a-tcp@ dispatch-server-with-connect@)
     (export dispatch-server^))
   (define-values/invoke-unit
     dispatch-server@/tcp@
