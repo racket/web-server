@@ -14,7 +14,7 @@
 (define (mac key v)
   (substring*
    (bytes->string/utf-8
-    (base64-encode (HMAC-SHA1 key (write/bytes v))))
+    (base64-encode (HMAC-SHA1 key (write/bytes v)) #""))
    0 -3))
 
 (define (make-secret-salt/file secret-salt-path)

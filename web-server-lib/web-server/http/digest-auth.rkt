@@ -15,7 +15,8 @@
      (string->bytes/utf-8
       (format "~a ~a"
               timestamp
-              (md5 (string->bytes/utf-8 (string-append timestamp ":" private-key)))))))
+              (md5 (string->bytes/utf-8 (string-append timestamp ":" private-key)))))
+     #""))
   (make-header 
    #"WWW-Authenticate" 
    (string->bytes/utf-8
