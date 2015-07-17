@@ -1,12 +1,12 @@
 #lang racket/base
-(require unstable/bytes
-         net/base64
+(require net/base64
          net/cookie
          racket/match
          racket/file
          racket/contract
          web-server/http
-         web-server/stuffers/hmac-sha1)
+         web-server/stuffers/hmac-sha1
+         web-server/private/util)
 
 (define (substring* s st en)
   (substring s st (+ (string-length s) en)))
