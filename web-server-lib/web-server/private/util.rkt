@@ -1,18 +1,16 @@
 #lang racket/base
 (require racket/contract/base
          racket/list
-         unstable/list
          unstable/contract
          racket/serialize
          net/url-structs)
 (require unstable/bytes
-         unstable/contract
-         unstable/list)
+         unstable/contract)
 (provide
  (all-from-out
   unstable/bytes
-  unstable/contract
-  unstable/list))
+  unstable/contract)
+ list-prefix?)
 
 ;; --
 
