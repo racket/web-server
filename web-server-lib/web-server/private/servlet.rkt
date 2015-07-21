@@ -2,7 +2,7 @@
 (require racket/contract)
 (require web-server/servlet/servlet-structs
          web-server/managers/manager
-         web-server/http)
+         web-server/http/request-structs)
 
 (define servlet-prompt (make-continuation-prompt-tag 'servlet))
 (define-struct servlet (custodian namespace manager directory [handler #:mutable]))

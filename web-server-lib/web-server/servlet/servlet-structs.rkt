@@ -1,6 +1,6 @@
 #lang racket/base
 (require racket/contract
-         web-server/http)  
+         web-server/http/response-structs)  
 
 (define (real-any->response x)
   #f)

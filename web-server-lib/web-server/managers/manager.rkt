@@ -1,6 +1,6 @@
 #lang racket/base
 (require racket/contract
-         web-server/http
+         web-server/http/request-structs
          web-server/servlet/servlet-structs)
 
 (define-struct manager (create-instance 
