@@ -59,3 +59,11 @@
          string?]{
  Formats @racket[exn] with @racket[(error-display-handler)] as a string.
 }
+
+@defproc[(read/bytes [bstr bytes?]) printable/c]{
+ Extracts a value from @racket[bstr] using @racket[read].
+}
+
+@defproc[(write/bytes [v printable/c]) bytes?]{
+ Prints @racket[v] into a byte string using @racket[write].
+}
