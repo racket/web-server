@@ -5,8 +5,8 @@
          racket/unit
          racket/async-channel
          racket/contract
+         (only-in racket/tcp listen-port-number?)
          openssl
-         unstable/contract
          web-server/dispatchers/dispatch
          web-server/private/dispatch-server-sig
          web-server/private/dispatch-server-unit
@@ -22,7 +22,7 @@
                                #:connection-close? boolean?
                                #:dispatch-server-connect@ (unit/c (import) (export dispatch-server-connect^))
                                #:tcp@ (unit/c (import) (export tcp^))
-                               #:port tcp-listen-port?
+                               #:port listen-port-number?
                                #:listen-ip (or/c false/c string?)
                                #:max-waiting exact-nonnegative-integer?
                                #:initial-connection-timeout number?)
@@ -33,7 +33,7 @@
                                #:connection-close? boolean?
                                #:dispatch-server-connect@ (unit/c (import) (export dispatch-server-connect^))
                                #:tcp@ (unit/c (import) (export tcp^))
-                               #:ports (listof tcp-listen-port?)
+                               #:ports (listof listen-port-number?)
                                #:listen-ip (or/c false/c string?)
                                #:max-waiting exact-nonnegative-integer?
                                #:initial-connection-timeout number?)
@@ -45,7 +45,7 @@
                                #:dispatch-server-connect@ (unit/c (import) (export dispatch-server-connect^))
                                #:tcp@ (unit/c (import) (export tcp^))
                                #:ips+ports (listof (cons/c (or/c false/c string?)
-                                                           (listof tcp-listen-port?)))
+                                                           (listof listen-port-number?)))
                                #:max-waiting exact-nonnegative-integer?
                                #:initial-connection-timeout number?)
        (-> void))]

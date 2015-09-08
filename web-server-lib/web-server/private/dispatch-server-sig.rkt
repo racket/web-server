@@ -3,7 +3,6 @@
          racket/contract
          racket/async-channel
          web-server/private/util
-         unstable/contract
          web-server/private/connection-manager)
 
 (define-signature dispatch-server^
@@ -19,13 +18,13 @@
 
 (define-signature dispatch-server-config^
   ((contracted
-    [port tcp-listen-port?]
+    [port listen-port-number?]
     [listen-ip (or/c string? false/c)]
     [max-waiting exact-nonnegative-integer?]
     [initial-connection-timeout integer?]
     [read-request
      (connection? 
-      tcp-listen-port?
+      listen-port-number?
       (input-port? . -> . (values string? string?))
       . -> .
       (values any/c boolean?))]

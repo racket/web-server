@@ -1,5 +1,6 @@
 #lang racket/base
 (require racket/contract
+         (only-in racket/string non-empty-string?)
          web-server/private/util
          web-server/http/response-structs
          web-server/http/request-structs)

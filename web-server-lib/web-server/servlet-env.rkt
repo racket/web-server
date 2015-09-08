@@ -5,6 +5,7 @@
          racket/list
          racket/serialize
          racket/runtime-path
+         (only-in racket/tcp listen-port-number?)
          (for-syntax racket/base))
 (require net/url
          web-server/managers/lru
@@ -17,7 +18,6 @@
          web-server/servlet/setup
          web-server/servlet/servlet-structs
          web-server/servlet-dispatch
-         unstable/contract
          (prefix-in lift: web-server/dispatchers/dispatch-lift)
          (prefix-in fsmap: web-server/dispatchers/filesystem-map)
          (prefix-in sequencer: web-server/dispatchers/dispatch-sequencer)
@@ -47,7 +47,7 @@
                   #:quit? boolean?
                   #:banner? boolean?
                   #:listen-ip (or/c false/c string?)
-                  #:port tcp-listen-port?
+                  #:port listen-port-number?
                   #:max-waiting exact-nonnegative-integer?
                   #:ssl? boolean?
                   #:ssl-cert (or/c false/c path-string?)

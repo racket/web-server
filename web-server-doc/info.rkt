@@ -7,14 +7,12 @@
                      "compatibility-doc"
                      "db-doc"
                      "scribble-doc"
-                     "unstable-doc"
                      "compatibility-lib"
                      "db-lib"
 		     "net-lib"
                      "rackunit-lib"
                      "sandbox-lib"
                      "scribble-lib"
-                     "unstable-contract-lib"
                      "web-server-lib"
                      "racket-doc"))
 (define deps '("base"))

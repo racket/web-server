@@ -2,14 +2,12 @@
 (require racket/contract/base
          racket/exn
          racket/list
-         unstable/contract
          racket/serialize
+         racket/tcp
          net/url-structs)
-(require unstable/contract)
-(provide
- (all-from-out
-  unstable/contract)
- list-prefix?)
+(provide list-prefix?
+         port-number?
+         listen-port-number?)
 
 ;; --
 
@@ -23,6 +21,14 @@
 
 (provide/contract
  [bytes-ci=? (bytes? bytes? . -> . boolean?)])
+
+;; --
+
+(define path-piece?
+  (or/c path-string? (symbols 'up 'same)))
+
+(provide/contract
+ [path-piece? predicate/c])
 
 ;; --
 

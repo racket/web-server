@@ -7,8 +7,7 @@
                      web-server/private/servlet
                      racket/date
                      web-server/private/util
-                     web-server/private/connection-manager
-                     unstable/contract)
+                     web-server/private/connection-manager)
           (for-syntax racket/base))
 
 @title[#:tag "dispatchers"

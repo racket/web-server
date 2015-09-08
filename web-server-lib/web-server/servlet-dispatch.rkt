@@ -7,10 +7,10 @@
          racket/contract
          racket/async-channel
          racket/list
+         (only-in racket/tcp listen-port-number?)
          racket/unit
          racket/serialize
-         net/url
-         unstable/contract)
+         net/url)
 (require web-server/web-server
          web-server/managers/lru
          web-server/managers/manager
@@ -42,7 +42,7 @@
                                     #:connection-close? boolean?
                                     #:banner? boolean?
                                     #:listen-ip (or/c false/c string?)
-                                    #:port tcp-listen-port?
+                                    #:port listen-port-number?
                                     #:max-waiting exact-nonnegative-integer?
                                     #:ssl-cert (or/c false/c path-string?)
                                     #:ssl-key (or/c false/c path-string?))

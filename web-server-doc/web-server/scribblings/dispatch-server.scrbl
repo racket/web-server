@@ -8,7 +8,6 @@
                      web-server/private/connection-manager
                      web-server/web-server
                      net/tcp-sig
-                     unstable/contract
                      racket/async-channel
                      racket/tcp
                      web-server/web-server-sig))
@@ -57,12 +56,12 @@ ports (e.g., to implement SSL) as used by the dispatch server.
 
 @defsignature[dispatch-server-config^ ()]{
 
- @defthing[port tcp-listen-port?]{Specifies the port to serve on.}
+ @defthing[port listen-port-number?]{Specifies the port to serve on.}
  @defthing[listen-ip (or/c string? false/c)]{Passed to @racket[tcp-listen].}
  @defthing[max-waiting exact-nonnegative-integer?]{Passed to @racket[tcp-listen].}
  @defthing[initial-connection-timeout integer?]{Specifies the initial timeout given to a connection.}
  @defproc[(read-request [c connection?]
-                        [p tcp-listen-port?]
+                        [p listen-port-number?]
                         [port-addresses 
                          (input-port? . -> . (values string? string?))])
           (values any/c boolean?)]{

@@ -3,11 +3,10 @@
 (define collection 'multi)
 
 (define deps '("srfi-lite-lib"
-               ("base" #:version "6.2.900.6")
+               ("base" #:version "6.2.900.15")
 	       "net-lib"
                "compatibility-lib"
                "scribble-text-lib"
-               "unstable-contract-lib"
                "parser-tools-lib"))
 (define build-deps '("rackunit-lib"))
 

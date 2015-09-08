@@ -138,7 +138,7 @@ Like always, you don't even need to save the file.
                         [#:quit? quit? boolean? (not command-line?)]
                         [#:banner? banner? boolean? (not command-line?)]
                         [#:listen-ip listen-ip (or/c false/c string?) "127.0.0.1"]
-                        [#:port port tcp-listen-port? 8000]
+                        [#:port port listen-port-number? 8000]
                         [#:max-waiting max-waiting exact-nonnegative-integer? 511]
                         [#:servlet-path servlet-path string?
                                         "/servlets/standalone.rkt"]

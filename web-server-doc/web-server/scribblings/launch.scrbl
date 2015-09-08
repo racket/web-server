@@ -13,7 +13,6 @@
                      net/tcp-sig
                      racket/tcp
                      racket/async-channel
-                     unstable/contract
                      web-server/configuration/configuration-table)
           (prefix-in raw: (for-label net/tcp-unit))
           (prefix-in files: (for-label web-server/dispatchers/dispatch-files)))
@@ -30,7 +29,7 @@ This module provides functions for launching dispatching servers.
                                                     (export dispatch-server-connect^))
                                             raw:dispatch-server-connect@]
                 [#:tcp@ tcp@ (unit/c (import) (export tcp^)) raw:tcp@]
-                [#:port port tcp-listen-port? 80]
+                [#:port port listen-port-number? 80]
                 [#:listen-ip listen-ip (or/c string? false/c) #f]
                 [#:max-waiting max-waiting integer? 511]
                 [#:initial-connection-timeout initial-connection-timeout integer? 60])
@@ -75,7 +74,7 @@ from a given path:
                                                           (export dispatch-server-connect^))
                                                   raw:dispatch-server-connect@]
                       [#:tcp@ tcp@ (unit/c (import) (export tcp^)) raw:tcp@]
-                      [#:ports ports (listof tcp-listen-port?) (list 80)]
+                      [#:ports ports (listof listen-port-number?) (list 80)]
                       [#:listen-ip listen-ip (or/c string? false/c) #f]
                       [#:max-waiting max-waiting integer? 511]
                       [#:initial-connection-timeout initial-connection-timeout integer? 60])
@@ -94,7 +93,7 @@ from a given path:
                                                               (export dispatch-server-connect^))
                                                       raw:dispatch-server-connect@]
                           [#:tcp@ tcp@ (unit/c (import) (export tcp^)) raw:tcp@]
-                          [#:ips+ports ips+ports (listof (cons/c (or/c string? false/c) (listof tcp-listen-port?))) (list (cons #f (list 80)))]
+                          [#:ips+ports ips+ports (listof (cons/c (or/c string? false/c) (listof listen-port-number?))) (list (cons #f (list 80)))]
                           [#:max-waiting max-waiting integer? 511]
                           [#:initial-connection-timeout initial-connection-timeout integer? 60])
          (-> void)]{

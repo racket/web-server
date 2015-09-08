@@ -5,14 +5,13 @@
          racket/promise
          net/url
          net/uri-codec
-         unstable/contract
          web-server/private/util
          web-server/private/connection-manager
          web-server/http/request-structs)
 
 (define read-request/c
   (connection? 
-   tcp-listen-port?
+   listen-port-number?
    (input-port? . -> . (values string? string?))
    . -> .
    (values request? boolean?)))

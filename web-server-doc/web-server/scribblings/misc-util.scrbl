@@ -67,3 +67,7 @@
 @defproc[(write/bytes [v printable/c]) bytes?]{
  Prints @racket[v] into a byte string using @racket[write].
 }
+
+@defthing[path-piece? contract?]{
+Equivalent to @racket[(or/c path-string? (symbols 'up 'same))].
+}

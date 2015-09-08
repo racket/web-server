@@ -439,11 +439,12 @@ initialized with 128 random bytes.
 @; ------------------------------------------------------------
 @section[#:tag "redirect"]{Redirect}
 @(require (for-label web-server/http/redirect
-                     web-server/private/util))
+                     web-server/private/util
+                     (only-in racket/string non-empty-string?)))
 
 @defmodule[web-server/http/redirect]{
 
-@defproc[(redirect-to [uri non-empty-string/c]
+@defproc[(redirect-to [uri non-empty-string?]
                       [perm/temp redirection-status? temporarily]
                       [#:headers headers (listof header?) (list)])
          response?]{
