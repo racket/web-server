@@ -3,7 +3,7 @@
          racket/serialize
          racket/match
          racket/promise
-         net/url
+         net/url-structs
          web-server/private/util)
 
 (define-serializable-struct header (field value) #:transparent)
