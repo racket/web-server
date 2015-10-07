@@ -26,25 +26,24 @@
 ;; Consumes a blog and a request, and produces an HTML page
 ;; of the content of the blog.
 (define (render-blog-page a-blog request)
-  (local [(define (response-generator embed/url)  
-            (response/xexpr
-             `(html (head (title "My Blog"))
-                    (body 
-                     (h1 "My Blog")
-                     ,(render-posts a-blog)
-                     (form ((action 
-                             ,(embed/url insert-post-handler)))
-                           (input ((name "title")))
-                           (input ((name "body")))
-                           (input ((type "submit"))))))))
-          
-          (define (insert-post-handler request)
-            (render-blog-page 
-             (cons (parse-post (request-bindings request))
-                   a-blog)
-             request))]
-    
-    (send/suspend/dispatch response-generator)))
+  (define (response-generator embed/url)  
+    (response/xexpr
+     `(html (head (title "My Blog"))
+            (body 
+             (h1 "My Blog")
+             ,(render-posts a-blog)
+             (form ((action 
+                     ,(embed/url insert-post-handler)))
+                   (input ((name "title")))
+                   (input ((name "body")))
+                   (input ((type "submit"))))))))
+  
+  (define (insert-post-handler request)
+    (render-blog-page 
+     (cons (parse-post (request-bindings request))
+           a-blog)
+     request))
+  (send/suspend/dispatch response-generator))
 
 ;; render-post: post -> xexpr
 ;; Consumes a post, produces an xexpr fragment of the post.

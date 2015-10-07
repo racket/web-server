@@ -36,24 +36,24 @@
 ;; render-blog-page: request -> doesn't return
 ;; Produces an HTML page of the content of the BLOG.
 (define (render-blog-page request)
-  (local [(define (response-generator embed/url)  
-            (response/xexpr
-             `(html (head (title "My Blog"))
-                    (body 
-                     (h1 "My Blog")
-                     ,(render-posts)
-                     (form ((action 
-                             ,(embed/url insert-post-handler)))
-                           (input ((name "title")))
-                           (input ((name "body")))
-                           (input ((type "submit"))))))))
-          
-          (define (insert-post-handler request)
-            (blog-insert-post! 
-             BLOG (parse-post (request-bindings request)))
-            (render-blog-page request))]
-    
-    (send/suspend/dispatch response-generator)))
+  (define (response-generator embed/url)  
+    (response/xexpr
+     `(html (head (title "My Blog"))
+            (body 
+             (h1 "My Blog")
+             ,(render-posts)
+             (form ((action 
+                     ,(embed/url insert-post-handler)))
+                   (input ((name "title")))
+                   (input ((name "body")))
+                   (input ((type "submit"))))))))
+  
+  (define (insert-post-handler request)
+    (blog-insert-post! 
+     BLOG (parse-post (request-bindings request)))
+    (render-blog-page request))
+  
+  (send/suspend/dispatch response-generator))
 
 ;; render-post: post -> xexpr
 ;; Consumes a post, produces an xexpr fragment of the post.

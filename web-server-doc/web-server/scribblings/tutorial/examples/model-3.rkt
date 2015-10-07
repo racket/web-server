@@ -1,6 +1,5 @@
 #lang racket/base
 (require racket/list
-         racket/local
          db)
 
 ;; A blog is a (blog db)
@@ -36,12 +35,12 @@
 ;; blog-posts : blog -> (listof post?)
 ;; Queries for the post ids
 (define (blog-posts a-blog)
-  (local [(define (id->post an-id)
-            (post a-blog an-id))]
-    (map id->post
-         (query-list
-          (blog-db a-blog)
-          "SELECT id FROM posts"))))
+  (define (id->post an-id)
+    (post a-blog an-id))
+  (map id->post
+       (query-list
+        (blog-db a-blog)
+        "SELECT id FROM posts")))
 
 ;; post-title : post -> string?
 ;; Queries for the title

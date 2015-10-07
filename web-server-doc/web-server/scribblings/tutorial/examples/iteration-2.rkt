@@ -14,13 +14,13 @@
 ;; Consumes a request and produces a page that displays all of the
 ;; web content.
 (define (start request)
-  (local [(define a-blog 
-            (cond [(can-parse-post? (request-bindings request))
-                   (cons (parse-post (request-bindings request))
-                         BLOG)]
-                  [else
-                   BLOG]))]
-    (render-blog-page a-blog request)))
+  (define a-blog 
+    (cond [(can-parse-post? (request-bindings request))
+           (cons (parse-post (request-bindings request))
+                 BLOG)]
+          [else
+           BLOG]))
+  (render-blog-page a-blog request))
 
 
 ;; can-parse-post?: bindings -> boolean

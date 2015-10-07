@@ -19,9 +19,9 @@ and how to interact with the user. Our working example will be a simple
 web journal---a ``blog.''
 
 This tutorial is intended for students who have read enough of
-@italic{@link["http://www.htdp.org/"]{How to Design Programs}} to know how to
-use structures, higher-order functions, the @racket[local] syntax, and a little
-bit of mutation.
+@italic{@link["http://www.htdp.org/"]{How to Design Programs}} to know
+how to use structures, higher-order functions, and a little bit of
+mutation.
 
 @section{Getting Started}
 
@@ -385,23 +385,23 @@ web-server/insta
 
 @code:comment{phase-1: request -> response}
 (define (phase-1 request)
-  (local [(define (response-generator embed/url)
-            (response/xexpr
-             `(html 
-               (body (h1 "Phase 1")
-                     (a ((href ,(embed/url phase-2)))
-                        "click me!")))))]
-    (send/suspend/dispatch response-generator)))
+  (define (response-generator embed/url)
+    (response/xexpr
+     `(html 
+       (body (h1 "Phase 1")
+             (a ((href ,(embed/url phase-2)))
+                "click me!")))))
+  (send/suspend/dispatch response-generator))
 
 @code:comment{phase-2: request -> response}
 (define (phase-2 request)
-  (local [(define (response-generator embed/url)
-            (response/xexpr
-             `(html 
-               (body (h1 "Phase 2")
-                     (a ((href ,(embed/url phase-1)))
-                        "click me!")))))]    
-    (send/suspend/dispatch response-generator)))
+  (define (response-generator embed/url)
+    (response/xexpr
+     `(html 
+       (body (h1 "Phase 2")
+             (a ((href ,(embed/url phase-1)))
+                "click me!")))))
+  (send/suspend/dispatch response-generator))
 ]
 
 This is a web application that goes round and round.  When a user
@@ -420,9 +420,10 @@ URL. In the handler @racket[phase-1], the use of @racket[embed/url] associates
 the link with the handler @racket[phase-2], and vice versa.
 
 We can be even more sophisticated about the handlers associated with
-@racket[embed/url].  Because a handler is just a request-consuming function,
-it can be defined within a @racket[local] and so can see
-all the other variables in the scope of its definition.  Here's another loopy example:
+@racket[embed/url].  Because a handler is just a request-consuming
+function, it can be defined locally and so can see all the other
+variables in the scope of its definition.  Here's another loopy
+example:
 
 @racketmod[
 web-server/insta
@@ -434,17 +435,16 @@ web-server/insta
 @code:comment{Displays a number that's hyperlinked: when the link is pressed,}
 @code:comment{returns a new page with the incremented number.}
 (define (show-counter n request)
-  (local [(define (response-generator embed/url)
-            (response/xexpr
-             `(html (head (title "Counting example"))
-                    (body
-                     (a ((href ,(embed/url next-number-handler)))
-                        ,(number->string n))))))
+  (define (response-generator embed/url)
+    (response/xexpr
+     `(html (head (title "Counting example"))
+            (body
+             (a ((href ,(embed/url next-number-handler)))
+                ,(number->string n))))))
 
-          (define (next-number-handler request)
-            (show-counter (+ n 1) request))]
-
-    (send/suspend/dispatch response-generator)))
+  (define (next-number-handler request)
+    (show-counter (+ n 1) request))
+  (send/suspend/dispatch response-generator))
 ]
 
 This example shows that we can accumulate the results of an
@@ -534,9 +534,9 @@ posts.
 
 @bold{Exercise.} Make up a few examples of posts.
 
-@bold{Exercise.} Define a function @racket[post-add-comment!]
+@bold{Exercise.} Define a function @racket[post-insert-comment!]
 
-@defthing[post-add-comment! (post? string? . -> . void)]
+@defthing[post-insert-comment! (post? string? . -> . void)]
 
 whose intended side effect is to add a new comment to the end of the post's
 list of comments.
@@ -849,20 +849,20 @@ Next we create a function that allows our application to initialize the blog:
 @code:comment{initialize-blog! : path? -> blog}
 @code:comment{Reads a blog from a path, if not present, returns default}
 (define (initialize-blog! home)
-  (local [(define (log-missing-exn-handler exn)
-            (blog
-             (path->string home)
-             (list (post "First Post"
-                         "This is my first post"
-                         (list "First comment!"))
-                   (post "Second Post"
-                         "This is another post"
-                         (list)))))
-          (define the-blog
-            (with-handlers ([exn? log-missing-exn-handler])
-              (with-input-from-file home read)))]
-    (set-blog-home! the-blog (path->string home))
-    the-blog))
+  (define (log-missing-exn-handler exn)
+    (blog
+     (path->string home)
+     (list (post "First Post"
+                 "This is my first post"
+                 (list "First comment!"))
+           (post "Second Post"
+                 "This is another post"
+                 (list)))))
+  (define the-blog
+    (with-handlers ([exn? log-missing-exn-handler])
+      (with-input-from-file home read)))
+  (set-blog-home! the-blog (path->string home))
+  the-blog)
 ]
 
 @racket[initialize-blog!] takes a path and tries to @racket[read] from it. If
@@ -880,11 +880,11 @@ Next we need a function to save the model to the disk:
 @code:comment{save-blog! : blog -> void}
 @code:comment{Saves the contents of a blog to its home}
 (define (save-blog! a-blog)
-  (local [(define (write-to-blog)
-            (write a-blog))]
-    (with-output-to-file (blog-home a-blog) 
-      write-to-blog
-      #:exists 'replace)))
+  (define (write-to-blog)
+    (write a-blog))
+  (with-output-to-file (blog-home a-blog) 
+    write-to-blog
+    #:exists 'replace))
 ]
 
 @racket[save-blog!] @racket[write]s the model to its home; by supplying an
@@ -1117,12 +1117,12 @@ The only function that creates posts is @racket[blog-posts]:
 @code:comment{blog-posts : blog -> (listof post?)}
 @code:comment{Queries for the post ids}
 (define (blog-posts a-blog)
-  (local [(define (id->post an-id)
-            (post a-blog an-id))]
-    (map id->post
-         (query-list
-          (blog-db a-blog)
-          "SELECT id FROM posts"))))
+  (define (id->post an-id)
+    (post a-blog an-id))
+  (map id->post
+       (query-list
+        (blog-db a-blog)
+        "SELECT id FROM posts")))
 ]
 
 @racket[query-list] can be used for queries that return a single
@@ -1185,29 +1185,28 @@ element in the rendering code, and the name used for it in the extracting code:
 @code:comment{Send an HTML page of the content of the}
 @code:comment{blog.}
 (define (render-blog-page a-blog request)
-  (local [(define (response-generator embed/url) 
-            (response/xexpr
-             `(html (head (title "My Blog"))
-                    (body 
-                     (h1 "My Blog")
-                     ,(render-posts a-blog embed/url)
-                     (form ((action 
-                             ,(embed/url insert-post-handler)))
-                           @code:comment{"title" is used here}
-                           (input ((name "title")))
-                           (input ((name "body")))
-                           (input ((type "submit"))))))))          
-          
-          (define (insert-post-handler request)
-            (define bindings (request-bindings request))
-            (blog-insert-post!
-             a-blog
-             @code:comment{And "title" is used here.}
-             (extract-binding/single 'title bindings)
-             (extract-binding/single 'body bindings))
-            (render-blog-page a-blog (redirect/get)))]
-
-    (send/suspend/dispatch response-generator)))
+  (define (response-generator embed/url) 
+    (response/xexpr
+     `(html (head (title "My Blog"))
+            (body 
+             (h1 "My Blog")
+             ,(render-posts a-blog embed/url)
+             (form ((action 
+                     ,(embed/url insert-post-handler)))
+                   @code:comment{"title" is used here}
+                   (input ((name "title")))
+                   (input ((name "body")))
+                   (input ((type "submit"))))))))          
+  
+  (define (insert-post-handler request)
+    (define bindings (request-bindings request))
+    (blog-insert-post!
+     a-blog
+     @code:comment{And "title" is used here.}
+     (extract-binding/single 'title bindings)
+     (extract-binding/single 'body bindings))
+    (render-blog-page a-blog (redirect/get)))
+  (send/suspend/dispatch response-generator))
 ]
 
 @(define formlet
@@ -1287,24 +1286,23 @@ Finally, here is how to use @racket[new-post-formlet] in @racket[render-blog-pag
 @code:comment{Sends an HTML page of the content of the}
 @code:comment{blog.}
 (define (render-blog-page a-blog request)
-  (local [(define (response-generator embed/url)
-            (response/xexpr
-             `(html (head (title "My Blog"))
-                    (body 
-                     (h1 "My Blog")
-                     ,(render-posts a-blog embed/url)
-                     (form ([action 
-                             ,(embed/url insert-post-handler)])
-                           ,@(formlet-display new-post-formlet)
-                           (input ([type "submit"])))))))
-          
-          (define (insert-post-handler request)
-            (define-values (title body) 
-              (formlet-process new-post-formlet request))
-            (blog-insert-post! a-blog title body)
-            (render-blog-page a-blog (redirect/get)))]
-    
-    (send/suspend/dispatch response-generator)))
+  (define (response-generator embed/url)
+    (response/xexpr
+     `(html (head (title "My Blog"))
+            (body 
+             (h1 "My Blog")
+             ,(render-posts a-blog embed/url)
+             (form ([action 
+                     ,(embed/url insert-post-handler)])
+                   ,@(formlet-display new-post-formlet)
+                   (input ([type "submit"])))))))
+  
+  (define (insert-post-handler request)
+    (define-values (title body) 
+      (formlet-process new-post-formlet request))
+    (blog-insert-post! a-blog title body)
+    (render-blog-page a-blog (redirect/get)))
+  (send/suspend/dispatch response-generator))
 ]
 
 @bold{Alternative.} The formlet shown above uses the

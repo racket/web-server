@@ -20,24 +20,24 @@
 
 ;; show-roster: request -> doesn't return
 (define (show-roster request)
-  (local [(define (response-generator embed/url)
-            (response/xexpr
-             `(html (head (title "Roster"))
-                    (body (h1 "Roster")
-                          ,(render-as-itemized-list
-                            (roster-names ROSTER))
-                          (form ((action
-                                  ,(embed/url add-name-handler)))
-                                (input ((name "a-name")))
-                                (input ((type "submit"))))))))
-          (define (parse-name bindings)
-            (extract-binding/single 'a-name bindings))
-            
-          (define (add-name-handler request)
-            (roster-add-name!
-             ROSTER (parse-name (request-bindings request)))
-            (show-roster request))]
-    (send/suspend/dispatch response-generator))) 
+  (define (response-generator embed/url)
+    (response/xexpr
+     `(html (head (title "Roster"))
+            (body (h1 "Roster")
+                  ,(render-as-itemized-list
+                    (roster-names ROSTER))
+                  (form ((action
+                          ,(embed/url add-name-handler)))
+                        (input ((name "a-name")))
+                        (input ((type "submit"))))))))
+  (define (parse-name bindings)
+    (extract-binding/single 'a-name bindings))
+  
+  (define (add-name-handler request)
+    (roster-add-name!
+     ROSTER (parse-name (request-bindings request)))
+    (show-roster request))
+  (send/suspend/dispatch response-generator)) 
 
 ;; render-as-itemized-list: (listof xexpr) -> xexpr
 (define (render-as-itemized-list fragments)

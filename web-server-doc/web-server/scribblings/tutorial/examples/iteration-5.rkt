@@ -45,83 +45,80 @@
 ;; Produces an HTML page of the content of the
 ;; BLOG.
 (define (render-blog-page request)
-  (local [(define (response-generator embed/url) 
-            (response/xexpr
-             `(html (head (title "My Blog"))
-                    (body 
-                     (h1 "My Blog")
-                     ,(render-posts embed/url)
-                     (form ((action 
-                             ,(embed/url insert-post-handler)))
-                           (input ((name "title")))
-                           (input ((name "body")))
-                           (input ((type "submit"))))))))
-          
-          ;; parse-post: bindings -> post
-          ;; Extracts a post out of the bindings.
-          (define (parse-post bindings)
-            (post (extract-binding/single 'title bindings)
-                  (extract-binding/single 'body bindings)
-                  (list)))
-          
-          (define (insert-post-handler request)
-            (blog-insert-post!
-             BLOG (parse-post (request-bindings request)))
-            (render-blog-page request))]
-    
-    (send/suspend/dispatch response-generator)))
+  (define (response-generator embed/url) 
+    (response/xexpr
+     `(html (head (title "My Blog"))
+            (body 
+             (h1 "My Blog")
+             ,(render-posts embed/url)
+             (form ((action 
+                     ,(embed/url insert-post-handler)))
+                   (input ((name "title")))
+                   (input ((name "body")))
+                   (input ((type "submit"))))))))
+  
+  ;; parse-post: bindings -> post
+  ;; Extracts a post out of the bindings.
+  (define (parse-post bindings)
+    (post (extract-binding/single 'title bindings)
+          (extract-binding/single 'body bindings)
+          (list)))
+  
+  (define (insert-post-handler request)
+    (blog-insert-post!
+     BLOG (parse-post (request-bindings request)))
+    (render-blog-page request))
+  (send/suspend/dispatch response-generator))
 
 ;; render-post-detail-page: post request -> doesn't return
 ;; Consumes a post and request, and produces a detail page
 ;; of the post. The user will be able to insert new comments.
 (define (render-post-detail-page a-post request)
-  (local [(define (response-generator embed/url)
-            (response/xexpr
-             `(html (head (title "Post Details"))
-                    (body
-                     (h1 "Post Details")
-                     (h2 ,(post-title a-post))
-                     (p ,(post-body a-post))
-                     ,(render-as-itemized-list
-                       (post-comments a-post))
-                     (form ((action 
-                             ,(embed/url insert-comment-handler)))
-                           (input ((name "comment")))
-                           (input ((type "submit"))))))))
-          
-          (define (parse-comment bindings)
-            (extract-binding/single 'comment bindings))
-          
-          (define (insert-comment-handler a-request)
-            (post-insert-comment! 
-             a-post (parse-comment (request-bindings a-request)))
-            (render-post-detail-page a-post a-request))]
-    
-    
-    (send/suspend/dispatch response-generator)))
+  (define (response-generator embed/url)
+    (response/xexpr
+     `(html (head (title "Post Details"))
+            (body
+             (h1 "Post Details")
+             (h2 ,(post-title a-post))
+             (p ,(post-body a-post))
+             ,(render-as-itemized-list
+               (post-comments a-post))
+             (form ((action 
+                     ,(embed/url insert-comment-handler)))
+                   (input ((name "comment")))
+                   (input ((type "submit"))))))))
+  
+  (define (parse-comment bindings)
+    (extract-binding/single 'comment bindings))
+  
+  (define (insert-comment-handler a-request)
+    (post-insert-comment! 
+     a-post (parse-comment (request-bindings a-request)))
+    (render-post-detail-page a-post a-request))
+  (send/suspend/dispatch response-generator))
 
 
 ;; render-post: post (handler -> string) -> xexpr
 ;; Consumes a post, produces an xexpr fragment of the post.
 ;; The fragment contains a link to show a detailed view of the post.
 (define (render-post a-post embed/url)
-  (local [(define (view-post-handler request)
-            (render-post-detail-page a-post request))]
-    `(div ((class "post")) 
-          (a ((href ,(embed/url view-post-handler)))
-             ,(post-title a-post))
-          (p ,(post-body a-post))        
-          (div ,(number->string (length (post-comments a-post)))
-               " comment(s)"))))
+  (define (view-post-handler request)
+    (render-post-detail-page a-post request))
+  `(div ((class "post")) 
+        (a ((href ,(embed/url view-post-handler)))
+           ,(post-title a-post))
+        (p ,(post-body a-post))        
+        (div ,(number->string (length (post-comments a-post)))
+             " comment(s)")))
 
 ;; render-posts: (handler -> string) -> xexpr
 ;; Consumes a embed/url, and produces an xexpr fragment
 ;; of all its posts.
 (define (render-posts embed/url)
-  (local [(define (render-post/embed/url a-post)
-            (render-post a-post embed/url))]
-    `(div ((class "posts"))
-          ,@(map render-post/embed/url (blog-posts BLOG)))))
+  (define (render-post/embed/url a-post)
+    (render-post a-post embed/url))
+  `(div ((class "posts"))
+        ,@(map render-post/embed/url (blog-posts BLOG))))
 
 ;; render-as-itemized-list: (listof xexpr) -> xexpr
 ;; Consumes a list of items, and produces a rendering as

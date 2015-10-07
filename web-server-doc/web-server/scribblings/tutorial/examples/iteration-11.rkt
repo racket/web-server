@@ -25,24 +25,23 @@
 ;; Produces an HTML page of the content of the
 ;; blog.
 (define (render-blog-page a-blog request)
-  (local [(define (response-generator embed/url)  
-            (response/xexpr
-             `(html (head (title "My Blog"))
-                    (body 
-                     (h1 "My Blog")
-                     ,(render-posts a-blog embed/url)
-                     (form ([action 
-                             ,(embed/url insert-post-handler)])
-                           ,@(formlet-display new-post-formlet)
-                           (input ([type "submit"])))))))
-          
-          (define (insert-post-handler request)
-            (define-values (title body)
-              (formlet-process new-post-formlet request))
-            (blog-insert-post! a-blog title body)
-            (render-blog-page a-blog (redirect/get)))]
-    
-    (send/suspend/dispatch response-generator)))
+  (define (response-generator embed/url)  
+    (response/xexpr
+     `(html (head (title "My Blog"))
+            (body 
+             (h1 "My Blog")
+             ,(render-posts a-blog embed/url)
+             (form ([action 
+                     ,(embed/url insert-post-handler)])
+                   ,@(formlet-display new-post-formlet)
+                   (input ([type "submit"])))))))
+  
+  (define (insert-post-handler request)
+    (define-values (title body)
+      (formlet-process new-post-formlet request))
+    (blog-insert-post! a-blog title body)
+    (render-blog-page a-blog (redirect/get)))
+  (send/suspend/dispatch response-generator))
 
 ;; new-comment-formlet : formlet string
 ;; A formlet for requesting a comment
@@ -54,33 +53,32 @@
 ;; The user will be able to either insert new comments
 ;; or go back to render-blog-page.
 (define (render-post-detail-page a-blog a-post request)
-  (local [(define (response-generator embed/url)
-            (response/xexpr
-             `(html (head (title "Post Details"))
-                    (body
-                     (h1 "Post Details")
-                     (h2 ,(post-title a-post))
-                     (p ,(post-body a-post))
-                     ,(render-as-itemized-list
-                       (post-comments a-post))
-                     (form ([action 
-                             ,(embed/url insert-comment-handler)])
-                           ,@(formlet-display new-comment-formlet)
-                           (input ([type "submit"])))
-                     (a ([href ,(embed/url back-handler)])
-                        "Back to the blog")))))
-          
-          (define (insert-comment-handler request)
-            (render-confirm-add-comment-page
-             a-blog 
-             (formlet-process new-comment-formlet request) 
-             a-post
-             request))
-          
-          (define (back-handler request)
-            (render-blog-page a-blog request))]
-    
-    (send/suspend/dispatch response-generator)))
+  (define (response-generator embed/url)
+    (response/xexpr
+     `(html (head (title "Post Details"))
+            (body
+             (h1 "Post Details")
+             (h2 ,(post-title a-post))
+             (p ,(post-body a-post))
+             ,(render-as-itemized-list
+               (post-comments a-post))
+             (form ([action 
+                     ,(embed/url insert-comment-handler)])
+                   ,@(formlet-display new-comment-formlet)
+                   (input ([type "submit"])))
+             (a ([href ,(embed/url back-handler)])
+                "Back to the blog")))))
+  
+  (define (insert-comment-handler request)
+    (render-confirm-add-comment-page
+     a-blog 
+     (formlet-process new-comment-formlet request) 
+     a-post
+     request))
+  
+  (define (back-handler request)
+    (render-blog-page a-blog request))
+  (send/suspend/dispatch response-generator))
 
 ;; render-confirm-add-comment-page :
 ;; blog comment post request -> doesn't return
@@ -90,50 +88,49 @@
 ;; the detail page of the post.
 (define (render-confirm-add-comment-page a-blog a-comment
                                          a-post request)
-  (local [(define (response-generator embed/url)
-            (response/xexpr
-             `(html (head (title "Add a Comment"))
-                    (body
-                     (h1 "Add a Comment")
-                     "The comment: " (div (p ,a-comment))
-                     "will be added to "                    
-                     (div ,(post-title a-post))
-                     
-                     (p (a ([href ,(embed/url yes-handler)])
-                           "Yes, add the comment."))
-                     (p (a ([href ,(embed/url cancel-handler)])
-                           "No, I changed my mind!"))))))
-          
-          (define (yes-handler request)
-            (post-insert-comment! a-blog a-post a-comment)
-            (render-post-detail-page a-blog a-post (redirect/get)))
-          
-          (define (cancel-handler request)
-            (render-post-detail-page a-blog a-post request))]
-    
-    (send/suspend/dispatch response-generator)))
+  (define (response-generator embed/url)
+    (response/xexpr
+     `(html (head (title "Add a Comment"))
+            (body
+             (h1 "Add a Comment")
+             "The comment: " (div (p ,a-comment))
+             "will be added to "                    
+             (div ,(post-title a-post))
+             
+             (p (a ([href ,(embed/url yes-handler)])
+                   "Yes, add the comment."))
+             (p (a ([href ,(embed/url cancel-handler)])
+                   "No, I changed my mind!"))))))
+  
+  (define (yes-handler request)
+    (post-insert-comment! a-blog a-post a-comment)
+    (render-post-detail-page a-blog a-post (redirect/get)))
+  
+  (define (cancel-handler request)
+    (render-post-detail-page a-blog a-post request))
+  (send/suspend/dispatch response-generator))
 
 ;; render-post: post (handler -> string) -> xexpr
 ;; Consumes a post, produces an xexpr fragment of the post.
 ;; The fragment contains a link to show a detailed view of the post.
 (define (render-post a-blog a-post embed/url)
-  (local [(define (view-post-handler request)
-            (render-post-detail-page a-blog a-post request))]
-    `(div ([class "post"]) 
-          (a ([href ,(embed/url view-post-handler)])
-             ,(post-title a-post))
-          (p ,(post-body a-post))        
-          (div ,(number->string (length (post-comments a-post)))
-               " comment(s)"))))
+  (define (view-post-handler request)
+    (render-post-detail-page a-blog a-post request))
+  `(div ([class "post"]) 
+        (a ([href ,(embed/url view-post-handler)])
+           ,(post-title a-post))
+        (p ,(post-body a-post))        
+        (div ,(number->string (length (post-comments a-post)))
+             " comment(s)")))
 
 ;; render-posts: blog (handler -> string) -> xexpr
 ;; Consumes a embed/url, produces an xexpr fragment
 ;; of all its posts.
 (define (render-posts a-blog embed/url)
-  (local [(define (render-post/embed/url a-post)
-            (render-post a-blog a-post embed/url))]
-    `(div ([class "posts"])
-          ,@(map render-post/embed/url (blog-posts a-blog)))))
+  (define (render-post/embed/url a-post)
+    (render-post a-blog a-post embed/url))
+  `(div ([class "posts"])
+        ,@(map render-post/embed/url (blog-posts a-blog))))
 
 ;; render-as-itemized-list: (listof xexpr) -> xexpr
 ;; Consumes a list of items, and produces a rendering as
