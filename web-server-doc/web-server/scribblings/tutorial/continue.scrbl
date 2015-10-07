@@ -10,7 +10,7 @@
 @title{Continue: Web Applications in Racket}
 
 @author[(author+email "Danny Yoo" "dyoo@hashcollision.org")
-        (author+email "Jay McCarthy" "jay@cs.byu.edu")]
+        (author+email "Jay McCarthy" "jay@racket-lang.org")]
 
 How do we make dynamic web applications?
 In this tutorial, we show how to use Racket to achieve this goal.
