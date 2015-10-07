@@ -1393,8 +1393,9 @@ Third, to run your server, you can either press @onscreen{Run} in DrRacket, or t
 
 @commandline{racket -t <file.rkt>}
 
-(using your own file name, of course). Both of these will start a Web server
-for your application. 
+(using your own file name, of course). Both of these will start a Web
+server for your application. Your application will be available at
+@code{http://localhost:8000/servlets/APPLICATION.rkt}.
 
 @centerline{------------}
 
