@@ -95,10 +95,16 @@
                     ip op (current-custodian) #f))
   (with-handlers
       ([(λ (x)
-          ;; This error is "Connection reset by peer" and doesn't
-          ;; really indicate a problem with the server.
-          (and (exn:fail:network:errno? x)
-               (equal? (cons 54 'posix) (exn:fail:network:errno-errno x))))
+          (or
+           ;; This error is "Connection reset by peer" and doesn't
+           ;; really indicate a problem with the server.
+           (and (exn:fail:network:errno? x)
+                (equal? (cons 54 'posix) (exn:fail:network:errno-errno x)))
+           ;; This is error is not useful because it just means the
+           ;; other side closed the connection early during writing,
+           ;; which we can't do anything about.
+           (and (exn:fail? x)
+                (string=? "fprintf: output port is closed" (exn-message x)))))
         (λ (x)
           (kill-connection! conn))])
     ;; HTTP/1.1 allows any number of requests to come from this input
