@@ -1435,7 +1435,7 @@ The Web Server will start on port 443 (which can be overridden with the @exec{-p
 
 As you move forward with your own applications, you may find many other packages
 to be useful. There are interfaces to other databases, many tools for generating
-output in HTML, XML, JavaScript, etc. See @url{http://pkgs.racket-lang.org/} for
+output in HTML, XML, JavaScript, etc. See @url{https://pkgs.racket-lang.org/} for
 a list of registered packages.
 
 There is also an active community of users on the Racket mailing list. We
