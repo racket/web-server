@@ -130,7 +130,7 @@
                      #:kind kind
                      #:attributes [attrs (λ (x) empty)]
                      #:checked? [checked? (λ (x) #f)]
-                     #:display [display (λ (x) x)])
+                     #:wrap [wrap (λ (x y) (list x y))])
   (define value->element (make-hasheq))
   (define i 0)
   (define (remember! e)
@@ -160,15 +160,15 @@
              (for/list ([vn (in-range i)])
                        (define e (hash-ref value->element vn))
                        (define v (number->string vn))
-                       (list
-                        `(input ([name ,name]
-                                 [type ,kind]
-                                 [value ,v]
-                                 ,@(if (checked? e)
-                                       '([checked "true"])
-                                       empty)
-                                 ,@(attrs e)))
-                        (display e))))))))
+					   (wrap 
+						 `(input ([name ,name]
+								  [type ,kind]
+								  [value ,v]
+								  ,@(if (checked? e)
+									  '([checked "true"])
+									  empty)
+								  ,@(attrs e)))
+						 (display e))))))))
 
 (define (radio-group l 
                      #:attributes [attrs (λ (x) empty)]
