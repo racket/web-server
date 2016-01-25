@@ -159,7 +159,7 @@
           (send/finish-or-back
            (response/xexpr
             #:code 500
-            #:message "Internal Server Error"
+            #:message #"Internal Server Error"
             `(html (head (title "Servlet Error"))
                    (body ([bgcolor "white"])
                          (p "The following error occured: "

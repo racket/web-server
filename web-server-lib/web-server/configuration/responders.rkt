@@ -28,7 +28,7 @@
 (define (pretty-exception-response url exn)
   (response/xexpr
    #:code 500
-   #:message "Internal Server Error"
+   #:message #"Internal Server Error"
    `(html
      (head
       (title "Servlet Error")
