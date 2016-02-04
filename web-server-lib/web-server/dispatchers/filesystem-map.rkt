@@ -71,8 +71,12 @@
 (define ((make-url->path base) u)
   (define nbase (path->complete-path base))
   (define path-from-url
-    (for/list ([p/p (in-list (url-path u))])
-      (match (path/param-path p/p)
+    (for*/list ([p/p (in-list (url-path u))]
+                [pp (in-value (path/param-path p/p))]
+                [elem (if (path-string? pp)
+                          (explode-path pp)
+                          (list pp))])
+      (match pp
         ["" 'same]
         [".." 'up]
         [x x])))
