@@ -14,20 +14,21 @@
  [filter-url->path (regexp? url->path/c . -> . url->path/c)])
 
 (define (restrict l)
-  (not
-   (negative?
+  (define count
     (let loop ([end-in-file? #f] [depth 0] [l l])
-      (match l
-        [(list)
-         (if end-in-file?
-           (sub1 depth)
-           depth)]
-        [(list-rest (or ".." 'up) rst)
-         (loop #f (sub1 depth) rst)]
-        [(list-rest (or "" 'same) rst)
-         (loop #f depth rst)]
-        [(list-rest _ rst)
-         (loop #t (add1 depth) rst)])))))
+      (and (not (negative? depth))
+           (match l
+             [(list)
+              (if end-in-file?
+                  (sub1 depth)
+                  depth)]
+             [(list-rest (or ".." 'up) rst)
+              (loop #f (sub1 depth) rst)]
+             [(list-rest (or "" 'same) rst)
+              (loop #f depth rst)]
+             [(list-rest _ rst)
+              (loop #t (add1 depth) rst)]))))
+  (and count (not (negative? count))))
 
 (module+ test
   (require rackunit)
@@ -70,30 +71,40 @@
 
 (define ((make-url->path base) u)
   (define nbase (path->complete-path base))
-  (define path-from-url
-    (for*/list ([p/p (in-list (url-path u))]
-                [pp (in-value (path/param-path p/p))]
-                [elem (if (path-string? pp)
-                          (explode-path pp)
-                          (list pp))])
-      (match elem
-        ["" 'same]
-        [".." 'up]
-        [x x])))
-  (unless (restrict path-from-url)
+  ;; construct a new url with just the path so that we can use `url->path`
+  ;; otherwise we'll get an absolute path
+  (define path-from-url (url->path (make-url #f #f #f #f #f (url-path u) null #f)))
+  (unless (restrict (explode-path path-from-url))
     (error 'url->path "Illegal path: ~e outside base: ~e" 
            path-from-url
            base))
-  (define the-path
-    (path->complete-path
-     (apply build-path* path-from-url)
-     nbase))
+  (define the-path (path->complete-path path-from-url nbase))
   (define w/o-base (path-without-base nbase the-path))
   (values the-path w/o-base))
 
 (module+ test
+  (define-syntax-rule (first-value e)
+    (call-with-values (λ () e) (λ a (car a))))
+  (define-syntax-rule (second-value e)
+    (call-with-values (λ () e) (λ a (cadr a))))
   (check-exn exn:fail? (λ () ((make-url->path "/home/samth/tmp/")
-                              (string->url "..%2f..%2f..%2f..%2f..%2f..%2f..%2f..%2ffoo%2fbar")))))
+                              (string->url "http://localhost/..%2f..%2f..%2f..%2f..%2f..%2f..%2f..%2ffoo%2fbar"))))
+  (check-exn exn:fail? (λ () ((make-url->path "/home/samth/tmp/")
+                              (string->url "http://localhost/../x/y"))))
+  (check-equal? (string->path "/home/samth/tmp/x/y")
+                (first-value
+                 ((make-url->path "/home/samth/tmp/")
+                  (string->url "http://localhost/x/y"))))
+  (check-equal? (simplify-path
+                 (first-value
+                  ((make-url->path "/home/samth/tmp/")
+                   (string->url "http://localhost/x/../y")))
+                 #f)
+                (string->path "/home/samth/tmp/y"))
+  (check-equal? (explode-path "x/y")
+                (second-value
+                 ((make-url->path "/home/samth/tmp/")
+                  (string->url "http://localhost/x/y")))))
 
 (define ((make-url->valid-path url->path) u)
   (let loop ([up (url-path u)])
