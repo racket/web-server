@@ -285,14 +285,15 @@
                    (test-display (radio-group 
                                   (list 1 2 3)
                                   #:display number->string 
+								  #:wrap (λ (input display) (list display input))
                                   #:checked? even?
                                   #:attributes (λ (e) (list (list 'plus-one (number->string (add1 e)))))))
-                   '((input ((name "input_0") (type "radio") (value "0") (plus-one "2")))
-                     "1"
-                     (input ((name "input_0") (type "radio") (value "1") (checked "true") (plus-one "3")))
+                   '("1"
+					 (input ((name "input_0") (type "radio") (value "0") (plus-one "2")))
                      "2"
-                     (input ((name "input_0") (type "radio") (value "2") (plus-one "4")))
-                     "3"))
+                     (input ((name "input_0") (type "radio") (value "1") (checked "true") (plus-one "3")))
+                     "3"
+                     (input ((name "input_0") (type "radio") (value "2") (plus-one "4")))))
 
       ; checkbox-group
       (test-equal? "checkbox-group"
