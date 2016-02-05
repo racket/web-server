@@ -130,6 +130,7 @@
                      #:kind kind
                      #:attributes [attrs (λ (x) empty)]
                      #:checked? [checked? (λ (x) #f)]
+					 #:display [display (λ (x) x)]
                      #:wrap [wrap (λ (x y) (list x y))])
   (define value->element (make-hasheq))
   (define i 0)
