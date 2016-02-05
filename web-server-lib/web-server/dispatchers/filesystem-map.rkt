@@ -76,7 +76,7 @@
                 [elem (if (path-string? pp)
                           (explode-path pp)
                           (list pp))])
-      (match pp
+      (match elem
         ["" 'same]
         [".." 'up]
         [x x])))
@@ -90,6 +90,10 @@
      nbase))
   (define w/o-base (path-without-base nbase the-path))
   (values the-path w/o-base))
+
+(module+ test
+  (check-exn exn:fail? (λ () ((make-url->path "/home/samth/tmp/")
+                              (string->url "..%2f..%2f..%2f..%2f..%2f..%2f..%2f..%2ffoo%2fbar")))))
 
 (define ((make-url->valid-path url->path) u)
   (let loop ([up (url-path u)])
