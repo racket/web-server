@@ -352,14 +352,16 @@ These @tech{formlet}s are the main combinators for form input.
 @defproc[(radio-group [l sequence?]
                       [#:attributes attrs (any/c . -> . (listof (list/c symbol? string?))) (λ (x) empty)]
                       [#:checked? checked? (any/c . -> . boolean?) (λ (x) #f)]
-                      [#:display display (any/c . -> . xexpr/c) (λ (x) x)])
+                      [#:display display (any/c . -> . xexpr/c) (λ (x) x)]
+					  [#:wrap wrap (any/c any/c . -> . xexpr/c) (λ (x y) (list x y))])
         (formlet/c any/c)]{
 
   This @tech{formlet} renders using a sequence of INPUT elements of
 RADIO type where each element gets its attributes from @racket[attrs]
 that share a single NAME. An element is checked if @racket[checked?]
-returns @racket[#t]. Elements are followed by the results of
-@racket[display]. The result of processing this formlet is a single
+returns @racket[#t]. Elements are combined with the results of 
+@racket[display] into an X-expression specified in @racket[wrap]. 
+The result of processing this formlet is a single
 element of the sequence.
 }
 
