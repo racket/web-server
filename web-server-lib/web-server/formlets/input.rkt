@@ -130,7 +130,7 @@
                      #:kind kind
                      #:attributes [attrs (λ (x) empty)]
                      #:checked? [checked? (λ (x) #f)]
-					 #:display [display (λ (x) x)]
+                     #:display [display (λ (x) x)]
                      #:wrap [wrap (λ (x y) (list x y))])
   (define value->element (make-hasheq))
   (define i 0)
@@ -174,12 +174,14 @@
 (define (radio-group l 
                      #:attributes [attrs (λ (x) empty)]
                      #:checked? [checked? (λ (x) #f)]
-                     #:display [display (λ (x) x)])
+                     #:display [display (λ (x) x)]
+                     #:wrap [wrap (λ (x y) (list x y))])
   (input-group l
                #:kind "radio"
                #:attributes attrs
                #:checked? checked?
-               #:display display))
+               #:display display
+               #:wrap wrap))
 
 (define (checkbox-group l 
                      #:attributes [attrs (λ (x) empty)]
@@ -354,7 +356,8 @@
                (#:attributes 
                 (-> any/c (listof (list/c symbol? string?)))
                 #:checked? (any/c . -> . boolean?)
-                #:display (any/c . -> . pretty-xexpr/c))
+                #:display (any/c . -> . pretty-xexpr/c)
+                #:wrap (any/c any/c . -> . pretty-xexpr/c))
                . ->* .
                (formlet/c any/c))]
  [checkbox-group ((sequence?)
