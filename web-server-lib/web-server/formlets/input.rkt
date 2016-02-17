@@ -4,6 +4,7 @@
          web-server/http
          web-server/private/xexpr
          (only-in "lib.rkt"
+                  xexpr-forest/c
                   formlet/c
                   pure
                   cross))
@@ -357,7 +358,7 @@
                 (-> any/c (listof (list/c symbol? string?)))
                 #:checked? (any/c . -> . boolean?)
                 #:display (any/c . -> . pretty-xexpr/c)
-                #:wrap (any/c any/c . -> . (listof pretty-xexpr/c)))
+                #:wrap (any/c any/c . -> . xexpr-forest/c))
                . ->* .
                (formlet/c any/c))]
  [checkbox-group ((sequence?)
