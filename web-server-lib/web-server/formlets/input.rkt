@@ -357,7 +357,7 @@
                 (-> any/c (listof (list/c symbol? string?)))
                 #:checked? (any/c . -> . boolean?)
                 #:display (any/c . -> . pretty-xexpr/c)
-                #:wrap (any/c any/c . -> . pretty-xexpr/c))
+                #:wrap (any/c any/c . -> . (listof pretty-xexpr/c)))
                . ->* .
                (formlet/c any/c))]
  [checkbox-group ((sequence?)
