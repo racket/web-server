@@ -11,9 +11,16 @@
 
 ;; --
 
+(define (byte-upcase b)
+  (if (<= 97 b 122)
+      (- b (- 97 65))
+      b))
 (define (bytes-ci=? b0 b1)
-  (string-ci=? (bytes->string/utf-8 b0)
-               (bytes->string/utf-8 b1)))
+  (and (= (bytes-length b0)
+          (bytes-length b1))
+       (for/and ([b0 (in-bytes b0)]
+                 [b1 (in-bytes b1)])
+         (= (byte-upcase b0) (byte-upcase b1)))))
 ;; Eli: If this ever gets in, it should say that the memory requirements
 ;;   are 4 times the input size, especially since bytes are often used to save
 ;;   space.  Also, fails on (bytes-ci=? #"\277" #"\277"), and a trivial fix
@@ -21,6 +28,10 @@
 
 (provide/contract
  [bytes-ci=? (bytes? bytes? . -> . boolean?)])
+
+(module+ test
+  (require rackunit)
+  (check-true (bytes-ci=? #"FBCR/M\351ditel" #"fbCR/M\351ditel")))
 
 ;; --
 
