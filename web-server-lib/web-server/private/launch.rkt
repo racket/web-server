@@ -65,9 +65,12 @@
 (define (serve)
   (serve/web-config@ 
    configuration@
-   #:dispatch-server-connect@ (if (ssl)
-                                  (make-ssl-connect@ (build-path (current-directory) "server-cert.pem")
-                                                     (build-path (current-directory) "private-key.pem"))
-                                  raw:dispatch-server-connect@)))
+   #:dispatch-server-connect@
+   (cond
+     [(ssl)
+      (make-ssl-connect@ (build-path (current-directory) "server-cert.pem")
+                         (build-path (current-directory) "private-key.pem"))]
+     [else
+      raw:dispatch-server-connect@])))
 
 (provide serve)

@@ -3,7 +3,7 @@
          net/tcp-sig)
 (require web-server/web-server-sig
          web-server/web-config-sig
-         web-server/private/dispatch-server-unit
+         web-server/private/dispatch-server-with-connect-unit
          web-server/private/dispatch-server-sig
          web-server/private/web-server-structs
          web-server/private/mime-types
@@ -105,7 +105,7 @@
 (define-compound-unit/infer web-server-with-connect@
   (import tcp^ dispatch-server-connect^ web-config^)
   (export web-server^)
-  (link web-config@->dispatch-server-config@ dispatch-server@))
+  (link web-config@->dispatch-server-config@ dispatch-server-with-connect@))
 
 (define-compound-unit/infer web-server@
   (import tcp^ web-config^)

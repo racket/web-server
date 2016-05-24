@@ -158,9 +158,11 @@
     (for-each apply shutdowns)))
 
 ; serve/config@ : configuration -> (-> void)
-(define (serve/web-config@ config@ 
-                           #:dispatch-server-connect@ [dispatch-server-connect@ raw:dispatch-server-connect@]
-                           #:tcp@ [tcp@ raw:tcp@])
+(define (serve/web-config@
+         config@ 
+         #:dispatch-server-connect@
+         [dispatch-server-connect@ raw:dispatch-server-connect@]
+         #:tcp@ [tcp@ raw:tcp@])
   (define-unit-binding a-dispatch-server-connect@
     dispatch-server-connect@ (import) (export dispatch-server-connect^))
   (define-unit-binding a-tcp@
