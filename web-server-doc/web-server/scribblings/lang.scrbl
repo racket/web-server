@@ -43,7 +43,7 @@
 }
                
 @defproc[(send/suspend/dispatch [make-response (((request? . -> . any) . -> . string?) . -> . response?)])
-         request?]{
+         any]{
  Like @racket[send/suspend/url/dispatch] but with a string URL representation.
 }
 
