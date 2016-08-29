@@ -1054,8 +1054,12 @@ We can now write the code to initialize a @racket[blog] structure:
   the-blog)
 ]
 
-Given the @racket['create] flag, @racket[sqlite3-connect] creates a database if
-one does not already exist at the @racket[home] path.
+Given the @racket['create] flag, @racket[sqlite3-connect] creates a
+database if one does not already exist at the @racket[home] path. At
+this time, it would be good to change your call to
+@racket[initialize-blog!] to use a different path, because otherwise
+you will be trying to parse the old S-expression datafile as an SQLite
+database, which will fail.
 
 We still need to initialize the database with the table
 definitions and initial data. Previously we used @racket[blog-insert-post!] and
