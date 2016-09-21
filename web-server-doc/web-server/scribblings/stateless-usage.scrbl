@@ -93,7 +93,7 @@ the memory is garbage collected.
 
 This process is derived from the papers
 @emph{@link["http://www.cs.brown.edu/~sk/Publications/Papers/Published/pcmkf-cont-from-gen-stack-insp/"]{Continuations from Generalized Stack Inspection}} by Pettyjohn et al. in 2005, 
-@emph{@link["http://faculty.cs.byu.edu/~jay/static/icfp065-mccarthy.pdf"]{Automatically RESTful Web Applications, Or Marking Modular Serializable Continuations}} by Jay McCarthy in 2009,
+@emph{@link["https://jeapostrophe.github.io/home/static/icfp065-mccarthy.pdf"]{Automatically RESTful Web Applications, Or Marking Modular Serializable Continuations}} by Jay McCarthy in 2009,
 and
-@emph{@link["http://faculty.cs.byu.edu/~jay/static/oopsla026-mccarthy.pdf"]{The Two-State Solution: Native and Serializable Continuations Accord}} by Jay McCarthy in 2010,
+@emph{@link["https://jeapostrophe.github.io/home/static/oopsla026-mccarthy.pdf"]{The Two-State Solution: Native and Serializable Continuations Accord}} by Jay McCarthy in 2010,
 We thank Greg Pettyjohn for his initial implementation of this algorithm.
