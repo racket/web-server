@@ -194,7 +194,7 @@
                    (lambda (pf)
                      (list 'parsefail (exn-message pf)))])
     (match (content-disposition-parser rhs)
-      [(list matched #"")
+      [(list matched (regexp #px#"^[[:space:]]*$" (list _)))
        (match matched
          [(list ty clauses)
           (list ty (for/list ([c (in-list clauses)])
@@ -249,6 +249,12 @@
    ((#"name" #"abcz")
     (#"filename" #"abc\"d"))))
 
+  (check-equal?
+   (parse-content-disposition-header
+    #" attachment; filename=\"\\\\foo.html\"\n")
+   '(#"attachment"
+     ((#"filename" #"\\foo.html"))))
+
 (check-equal? (TOKEN #"form-data  ;")
               (list #"form-data" #"  ;"))
 
@@ -284,10 +290,20 @@
   (check-equal? (QTDSTR #"\"filename=\"")
                 (list '(quoted (#"filename=")) #""))
 
+  
 
 (check-equal?
  (content-disposition-parser
   #"form-data; name=\"filename=\"; zokbar=\"dingo\"; filename=\"wallaby\"")
+ (list `(#"form-data"
+         ((SEMI (#"name" EQ (quoted (#"filename="))))
+          (SEMI (#"zokbar" EQ (quoted (#"dingo"))))
+          (SEMI (#"filename" EQ (quoted (#"wallaby"))))))
+       #""))
+
+  (check-equal?
+ (content-disposition-parser
+  #"  form-data; name=\"filename=\"; zokbar=\"dingo\"; filename=\"wallaby\"")
  (list `(#"form-data"
          ((SEMI (#"name" EQ (quoted (#"filename="))))
           (SEMI (#"zokbar" EQ (quoted (#"dingo"))))
