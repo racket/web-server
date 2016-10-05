@@ -34,8 +34,9 @@
   (let ([name (datum->syntax (and stx-base (disarm stx-base)) (gensym sym-name))])
     (with-syntax ([(#%plain-lambda (formal) ref-to-formal)
                    (if (syntax-transforming?)
-                       (local-expand #`(#%plain-lambda (#,name) #,name) 'expression empty)
-                       #`(#%plain-lambda (#,name) #,name))])
+                     (local-expand
+                      #`(#%plain-lambda (#,name) #,name) 'expression empty)
+                     #`(#%plain-lambda (#,name) #,name))])
       (values #'formal #'ref-to-formal))))
 
 (define (formals-list stx)
