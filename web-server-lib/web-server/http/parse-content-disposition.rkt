@@ -10,7 +10,7 @@
                     (or/c
                      (list/c 'parsefail string?)
                      (list/c bytes?
-                             (listof (list/c bytes? bytes?)))))]))
+                             (listof (list/c bytes? string?)))))]))
 
 (struct parsefail exn ())
 
@@ -152,6 +152,7 @@
 (define SEMI (rx-matcher/const #px#"^;" 'SEMI))
 (define EQ (rx-matcher/const #px#"^=" 'EQ))
 (define DQ (rx-matcher/const #px#"^\"" 'DQ))
+(define SQ (rx-matcher/const #px"^'" 'SQ))
 
 ;; a quoted string. a quote followed by any character from 32-255 not
 ;; including backslash or quote, but optionally a backslash followed
@@ -166,21 +167,29 @@
   (postproc (seq DQ (kstar (orparse CLEANCHARSEQ QDESCAPED)) DQ)
             (λ (v) (list 'quoted (cadr v)))))
 (define TOKEN (rx-matcher/raw #px#"^([-!#-'*-+.0-9A-Z^-z|~]+)"))
-(define VALUE (orparse TOKEN QTDSTR))
+(define VALUE (postproc (orparse TOKEN QTDSTR) (λ (x) (list 'val x))))
+
+(define ISO-8859-1-TOKEN (rx-matcher/const #px"^[iI][sS][oO]-8859-1" 'iso-8559-1))
+(define UTF-8-TOKEN (rx-matcher/const #px"^[uU][tT][fF]-8" 'utf-8))
+(define LANG-TOKEN (rx-matcher/const #px"^[-a-zA-Z0-9]*" 'LANG-TAG))
+(define PCT-ENCODED
+  (postproc (rx-matcher/raw #px"^%[0-9a-fA-F][0-9a-fA-F]")
+            (λ (x) (list 'pct (string->number
+                               (bytes->string/utf-8 (subbytes x 1 3))
+                               16)))))
+(define ATTR-CHARS (rx-matcher/raw #px"^[-A-Za-z0-9!#$&+.^_`|~]+"))
+(define EXT-VALUE-CHARS (kstar (orparse PCT-ENCODED ATTR-CHARS)))
+(define EXT-VALUE
+  (postproc (seq (orparse ISO-8859-1-TOKEN UTF-8-TOKEN)
+                 SQ LANG-TOKEN SQ EXT-VALUE-CHARS)
+            (λ (x) (list 'extval x))))
+
+
 
 ;; give up if we see a token ending with a star; these signal
 ;; RFC5987 ext-values, and we don't handle them correctly.
 (define CLAUSE
-  (postproc
-   (seq/ws TOKEN EQ VALUE)
-   (λ (v)
-     (when (regexp-match #px#"\\*$" (car v))
-       (raise
-        (parsefail
-         (format "token ending with * indicates unsupported ext-value: ~e"
-                 (car v))
-         (current-continuation-marks))))
-     v)))
+  (seq/ws TOKEN EQ (orparse VALUE EXT-VALUE)))
 
 (define content-disposition-parser
   (seq/ws TOKEN (kstar (seq/ws SEMI CLAUSE))))
@@ -200,7 +209,7 @@
           (list ty (for/list ([c (in-list clauses)])
                      (match c
                        [(list 'SEMI (list tok 'EQ val))
-                        (list tok (val-cleanup val))]
+                        (clause-postproc tok val)]
                        [other (error
                                'parse-content-disposition-header
                                "internal error, unexpected parse shape: ~e"
@@ -217,16 +226,62 @@
                "no RFC5987 ext-values, got: ~e")
               rhs))])))
 
+;; clean up a clause by undoing escaping and joining strings
+(define (clause-postproc token val)
+  (define token-ends-with-star?
+    (regexp-match? #px"\\*$" token))
+  (define cleaned-val
+    (match val
+      [(list 'extval v)
+       (cond [token-ends-with-star? (extval-cleanup v)]
+             [else
+              (raise
+               (parsefail
+                "illegal extended value attached to non-asterisk token: ~e"
+                token))])]
+      [(list 'val v) (val-cleanup v)]))
+  (list token cleaned-val))
+
 ;; clean up a quoted string by removing the quotes and undoing escaping
 (define (val-cleanup val)
   (match val
     [(? bytes? b) b]
     [(list 'quoted l)
-     (apply bytes-append (for/list ([chunk (in-list l)])
-                           (match chunk
-                             [(? bytes? b) b]
-                             [(list 'escaped eseq)
-                              (subbytes eseq 1 2)])))]))
+     ;; quoted strings are supposed to be interpreted using
+     ;; iso-8859-1, often known as latin-1.
+     ;; 
+     ;; Here's a frightening passage from RFC2612, concerning the
+     ;; definition of TEXT, the stuff in between the quotes:
+     #|Words
+     of *TEXT MAY contain characters from character sets other than ISO-
+     8859-1 [22] only when encoded according to the rules of RFC 2047
+     [14].|#
+     ;; ... which leaves open the possibility that interpreting these
+     ;; strictly as ISO-8859-1 strings may be incorrect. However, given
+     ;; the existence of ext-values, I think that no provider would
+     ;; use this mechanims. Famous last words. Lemme ask.
+     (bytes->string/latin-1
+      (apply bytes-append
+             (for/list ([chunk (in-list l)])
+               (match chunk
+                 [(? bytes? b) b]
+                 [(list 'escaped eseq)
+                  (subbytes eseq 1 2)]))))]))
+
+;; clean up an extval by unescaping pct-encoded strings
+(define (extval-cleanup extval)
+  (match extval
+    [(list encoding _ _ _ pieces)
+     (define unencoder
+       (match encoding
+         ['utf-8      bytes->string/utf-8]
+         ['iso-8559-1 bytes->string/latin-1]))
+     (define bstrs
+       (for/list ([p (in-list pieces)])
+         (match p
+           [(list 'pct n) (bytes n)]
+           [other other])))
+     (unencoder (apply bytes-append bstrs))]))
 
 (module+ test
   (require rackunit)
@@ -241,19 +296,36 @@
                               (escaped #"\\\"")
                               #"def"))
                     #""))
+
+    ;; move down later
+  (check-equal? (EXT-VALUE #"UTF-8'en-li-SS'abcd")
+                '((extval (utf-8 SQ LANG-TAG SQ (#"abcd"))) #""))
+  (check-equal? (EXT-VALUE #"UTF-8'en-li-SS'abcd%20%5c")
+                '((extval
+                   (utf-8 SQ LANG-TAG SQ (#"abcd" (pct #x20) (pct #x5c))))
+                  #""))
+
+
   
-(check-equal?
- (parse-content-disposition-header
-  #"  form-data  ;name=\"abcz\"; filename=\"abc\\\"d\"")
- '(#"form-data"
-   ((#"name" #"abcz")
-    (#"filename" #"abc\"d"))))
+  (check-equal?
+   (parse-content-disposition-header
+    #"  form-data  ;name=\"abcz\"; filename=\"abc\\\"d\"")
+   '(#"form-data"
+     ((#"name" "abcz")
+      (#"filename" "abc\"d"))))
+
+  ;; try a high latin-1 character:
+  (check-equal?
+   (parse-content-disposition-header
+    #"  form-data;filename=\"ab\330cd\"")
+   '(#"form-data"
+     ((#"filename" "abØcd"))))
 
   (check-equal?
    (parse-content-disposition-header
     #" attachment; filename=\"\\\\foo.html\"\n")
    '(#"attachment"
-     ((#"filename" #"\\foo.html"))))
+     ((#"filename" "\\foo.html"))))
 
 (check-equal? (TOKEN #"form-data  ;")
               (list #"form-data" #"  ;"))
@@ -280,11 +352,11 @@
                #"  form-data  ;name=\"abcz\"; filename=\"abc\\\"d\"\r
  ; zokbar=abc24")
               (list `(#"form-data"
-                      ((SEMI (#"name" EQ (quoted (#"abcz"))))
-                       (SEMI (#"filename" EQ (quoted (#"abc"
-                                                       (escaped #"\\\"")
-                                                       #"d"))))
-                       (SEMI (#"zokbar" EQ #"abc24"))))
+                      ((SEMI (#"name" EQ (val (quoted (#"abcz")))))
+                       (SEMI (#"filename" EQ (val (quoted (#"abc"
+                                                           (escaped #"\\\"")
+                                                           #"d")))))
+                       (SEMI (#"zokbar" EQ (val #"abc24")))))
                     #""))
 
   (check-equal? (QTDSTR #"\"filename=\"")
@@ -296,18 +368,18 @@
  (content-disposition-parser
   #"form-data; name=\"filename=\"; zokbar=\"dingo\"; filename=\"wallaby\"")
  (list `(#"form-data"
-         ((SEMI (#"name" EQ (quoted (#"filename="))))
-          (SEMI (#"zokbar" EQ (quoted (#"dingo"))))
-          (SEMI (#"filename" EQ (quoted (#"wallaby"))))))
+         ((SEMI (#"name" EQ (val (quoted (#"filename=")))))
+          (SEMI (#"zokbar" EQ (val (quoted (#"dingo")))))
+          (SEMI (#"filename" EQ (val (quoted (#"wallaby")))))))
        #""))
 
   (check-equal?
  (content-disposition-parser
   #"  form-data; name=\"filename=\"; zokbar=\"dingo\"; filename=\"wallaby\"")
  (list `(#"form-data"
-         ((SEMI (#"name" EQ (quoted (#"filename="))))
-          (SEMI (#"zokbar" EQ (quoted (#"dingo"))))
-          (SEMI (#"filename" EQ (quoted (#"wallaby"))))))
+         ((SEMI (#"name" EQ (val (quoted (#"filename=")))))
+          (SEMI (#"zokbar" EQ (val (quoted (#"dingo")))))
+          (SEMI (#"filename" EQ (val (quoted (#"wallaby")))))))
        #""))
 
   (check-match
@@ -315,12 +387,14 @@
     #"form-data; name=\"filen\"ame=\"; zokbar=\"dingo\"; filename=\"wallaby\"")
    (list 'parsefail (regexp #px"expected: byte string matching RFC6266")))
 
-  (check-match
+  (check-equal?
    (parse-content-disposition-header
-    #"form-data; name=\"filename=\"; zokbar*=\"dingo\"; filename=\"wallaby\"")
-   (list 'parsefail (regexp #px"token ending with *")))
+    #" attachment; filename=\"foo-ae.html\"; filename*=UTF-8''foo-%c3%a4.html\n")
+   '(#"attachment" (#"filename" "foo-ae.html")
+                  (#"filename*" "foo-ä.html")))
 
   )
+  
 
 ;; this code was used to generate the regexp for tokens. In principle,
 ;; you shouldn't need this code unless you need to re-generate this
@@ -401,4 +475,17 @@
                      ch)]
         [else
          (check-pred (λ (ch) (regexp-match? token-regexp-bstr (string ch)))
-                     ch)])))
+                     ch)]))
+
+
+  #|attr-char     = ALPHA / DIGIT
+                   / "!" / "#" / "$" / "&" / "+" / "-" / "."
+                   / "^" / "_" / "`" / "|" / "~"
+                   ; token except ( "*" / "'" / "%" )
+|#
+
+  )
+
+
+  
+
