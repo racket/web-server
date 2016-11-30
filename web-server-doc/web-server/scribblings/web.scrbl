@@ -30,11 +30,14 @@ functions of interest for the servlet developer.
 
 @defproc[(send/suspend [make-response (string? . -> . can-be-response?)])
          request?]{
- Captures the current continuation, stores it with @racket[exp] as the expiration
- handler, and binds it to a URL. @racket[make-response] is called with this URL and
- is expected to generate a @racket[can-be-response?], which is sent to the client. If the
- continuation URL is invoked, the captured continuation is invoked and the request is
- returned from this call to @racket[send/suspend].
+
+Captures the current continuation, stores it with
+@racket[(current-servlet-continuation-expiration-handler)] as the
+expiration handler, and binds it to a URL. @racket[make-response] is
+called with this URL and is expected to generate a
+@racket[can-be-response?], which is sent to the client. If the
+continuation URL is invoked, the captured continuation is invoked and
+the request is returned from this call to @racket[send/suspend].
  
  Example:
  @racketblock[
