@@ -14,4 +14,4 @@
 
 (define pkg-authors '(jay))
 
-(define version "1.1")
+(define version "1.2")

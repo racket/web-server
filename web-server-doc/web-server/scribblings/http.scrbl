@@ -173,7 +173,7 @@ Here is an example typical of what you will find in many applications:
             [seconds number?]
             [mime (or/c false/c bytes?)]
             [headers (listof header?)]
-            [output (output-port? . -> . void)])]{
+            [output (output-port? . -> . any)])]{
 
 An HTTP response where @racket[output] produces the body by writing to
 the output port. @racket[code] is the response code, @racket[message]
@@ -214,6 +214,10 @@ Examples:
                       #"http://racket-lang.org/download"))
    void)
  ]
+
+@history[#:changed "1.2"
+         @elem{Contract on @racket[output] weaked to allow @racket[any]
+               as the result (instead of demanding @racket[void?]).}]
 }
 
 @defproc[(response/full [code number?] [message bytes?] [seconds number?] [mime (or/c false/c bytes?)]
@@ -236,7 +240,7 @@ Examples:
  ]
 }
                    
-@defproc[(response/output [output (-> output-port? void?)]
+@defproc[(response/output [output (-> output-port? any)]
                           [#:code code number? 200]
                           [#:message message bytes? #"Okay"]
                           [#:seconds seconds number? (current-seconds)]
@@ -245,6 +249,10 @@ Examples:
          response?]{
 Equivalent to
 @racketblock[(response code message seconds mime-type headers output)]
+
+@history[#:changed "1.2"
+         @elem{Contract on @racket[output] weaked to allow @racket[any]
+               as the result (instead of demanding @racket[void?]).}]
 }
 
 @defthing[TEXT/HTML-MIME-TYPE bytes?]{Equivalent to @racket[#"text/html; charset=utf-8"].}

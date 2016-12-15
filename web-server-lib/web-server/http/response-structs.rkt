@@ -36,9 +36,9 @@
           [seconds number?]
           [mime (or/c false/c bytes?)]
           [headers (listof header?)]
-          [output (output-port? . -> . void)])]
+          [output (output-port? . -> . any)])]
  [response/full (-> number? bytes? number? (or/c false/c bytes?) (listof header?) (listof bytes?) response?)]
- [response/output (->* ((-> output-port? void?))
+ [response/output (->* ((-> output-port? any))
                        (#:code number?
                         #:message bytes?
                         #:seconds number?
