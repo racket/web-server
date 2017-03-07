@@ -1,5 +1,7 @@
 #lang scribble/doc
-@(require "web-server.rkt")
+@(require "web-server.rkt"
+          (for-label racket/random
+                     ))
 
 @title[#:tag "http"]{HTTP: Hypertext Transfer Protocol}
 
@@ -321,7 +323,7 @@ is fully controlled by the user, and thus cannot be trusted.
 This module provides functions for creating and verifying
 authenticated cookies that are intrinsically timestamped. It is based
 on the algorithm proposed by the
-@link["http://cookies.lcs.mit.edu/"]{MIT Cookie Eaters}: if you store
+@link["https://pdos.csail.mit.edu/archive/cookies/"]{MIT Cookie Eaters}: if you store
 the data @racket[_data] at thime @racket[_authored-seconds], then the
 user will receive @litchar{digest&authored-seconds&data}, where
 @racket[_digest] is an HMAC-SHA1 digest of @racket[_authored-seconds]
@@ -335,8 +337,8 @@ to generate this is by using random bytes from something like OpenSSL
 or
 @tt{/dev/random}. @link["http://www.madboa.com/geek/openssl/#random-generate"]{This
 FAQ} lists a few options. A convenient purely Racket-based option is
-available (@racket[make-secret-salt/file]), but it will not have as
-good entropy, if you care about that sort of thing.
+available (@racket[make-secret-salt/file]),
+ which is implemented using @racket[crypto-random-bytes].
 
  @defproc[(make-id-cookie
            [name cookie-name?]
