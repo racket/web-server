@@ -3,6 +3,7 @@
          net/cookie
          racket/match
          racket/file
+         racket/random
          racket/contract
          web-server/http
          web-server/stuffers/hmac-sha1
@@ -21,8 +22,7 @@
   (unless (file-exists? secret-salt-path)
     (with-output-to-file secret-salt-path
       (λ ()
-        (for ([i (in-range 128)])
-          (write-byte (random 256))))))
+        (write-bytes (crypto-random-bytes 128)))))
   (file->bytes secret-salt-path))
 
 (define (id-cookie? name c)
