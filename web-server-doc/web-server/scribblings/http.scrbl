@@ -267,8 +267,10 @@ transmission that the server @bold{will not catch}.}
 @; ------------------------------------------------------------
 @section[#:tag "cookie"]{Placing Cookies}
 
-@(require (for-label net/cookie
-                     web-server/servlet
+@(require (for-label (except-in net/cookies/server
+                                make-cookie)
+                     net/cookies/common
+                      web-server/servlet
                      web-server/http/xexpr
                      web-server/http/redirect
                      web-server/http/request-structs
@@ -277,16 +279,25 @@ transmission that the server @bold{will not catch}.}
 
 @defmodule[web-server/http/cookie]{
  This module provides functions to create cookies and responses that set them.
-
- @defproc[(make-cookie [name cookie-name?] [value cookie-value?]
-                       [#:comment comment (or/c false/c string?) #f]
-                       [#:domain domain (or/c false/c valid-domain?) #f]
-                       [#:max-age max-age (or/c false/c exact-nonnegative-integer?) #f]
-                       [#:path path (or/c false/c string?) #f]
-                       [#:expires expires (or/c false/c string?) #f]
-                       [#:secure? secure? (or/c false/c boolean?) #f])
+ 
+ @defproc[(make-cookie [name cookie-name?]
+                       [value cookie-value?]
+                       [#:comment comment any/c #f]
+                       [#:domain domain (or/c domain-value? #f) #f]
+                       [#:max-age max-age (or/c (and/c integer? positive?) #f) #f]
+                       [#:path path (or/c path/extension-value? #f) #f]
+                       [#:expires expires (or/c date? string? #f) #f]
+                       [#:secure? secure? any/c #f]
+                       [#:http-only? http-only? any/c #f]
+                       [#:extension extension (or/c path/extension-value? #f) #f])
           cookie?]{
-  Constructs a cookie with the appropriate fields.
+   Constructs a cookie with the appropriate fields.
+
+   This is a wrapper around @racket[make-cookie] from @racketmodname[net/cookies/server]
+   for backwords compatability. The @racket[comment] argument is ignored.
+   If @racket[expires] is given as a string, it should match
+   @link["https://tools.ietf.org/html/rfc7231#section-7.1.1.2"]{RFC 7231, Section 7.1.1.2},
+   in which case it will be converted to a @racket[date?] value.
  }
 
  @defproc[(cookie->header [c cookie?]) header?]{
@@ -348,50 +359,101 @@ FAQ} lists a few options. A convenient purely Racket-based option is
 available (@racket[make-secret-salt/file]),
  which is implemented using @racket[crypto-random-bytes].
 
- @defproc[(make-id-cookie
-           [name cookie-name?]
-           [secret-salt bytes?]
-           [value cookie-value?]
-           [#:path path (or/c false/c string?) #f])
-          cookie?]{
+ @defproc*[([(make-id-cookie
+              [name (and/c string? cookie-name?)]
+              [value (and/c string? cookie-value?)]
+              [#:key secret-salt bytes?]
+              [#:path path (or/c path/extension-value? #f) #f]
+              [#:expires expires (or/c date? #f) #f]	 	 	 
+              [#:max-age max-age
+               (or/c (and/c integer? positive?) #f) #f]	 	 	 
+              [#:domain domain (or/c domain-value? #f) #f]	 
+              [#:secure? secure? any/c #f]	 	 	 
+              [#:http-only? http-only? any/c #f]	 	 
+              [#:extension extension
+               (or/c path/extension-value? #f) #f])
+             cookie?]
+            [(make-id-cookie
+              [name (and/c string? cookie-name?)]
+              [secret-salt bytes?]
+              [value (and/c string? cookie-value?)]
+              [#:path path (or/c path/extension-value? #f) #f]
+              [#:expires expires (or/c date? #f) #f]	 	 	 
+              [#:max-age max-age
+               (or/c (and/c integer? positive?) #f) #f]	 	 	 
+              [#:domain domain (or/c domain-value? #f) #f]	 
+              [#:secure? secure? any/c #f]	 	 	 
+              [#:http-only? http-only? any/c #t]	 	 
+              [#:extension extension
+               (or/c path/extension-value? #f) #f])
+             cookie?])]{
   Generates an authenticated cookie named @racket[name] containing @racket[value], signed with @racket[secret-salt].
+
+  The calling conventions allow @racket[secret-salt] to be given either as a keyword
+  argument (mirroring the style of @racket[make-cookie]) or a by-position argument
+  (for compatability with older versions of this library).
+
+  The other arguments are passed to @racket[make-cookie]; however, note that the
+  default value for @racket[http-only?] is @racket[#t]. Users will also likely
+  want to set @racket[secure?] to @racket[#t] when using HTTPS.
  }
 
- @defproc[(request-id-cookie
-           [name cookie-name?]
-           [secret-salt bytes?]
-           [request request?]
-           [#:timeout timeout +inf.0])
-          (or/c false/c cookie-value?)]{
-  Extracts the first authenticated cookie named @racket[name] that was previously signed with @racket[secret-salt] before @racket[timeout] from @racket[request]. If no valid cookie is available, returns @racket[#f].
+ @defproc*[([(request-id-cookie [request request?]
+                                [#:name name (and/c string? cookie-name?)]
+                                [#:key secret-salt bytes?]
+                                [#:timeout timeout +inf.0])
+             (or/c #f (and/c string? cookie-value?))]
+            [(request-id-cookie [name (and/c string? cookie-name?)]
+                                [secret-salt bytes?]
+                                [request request?]
+                                [#:timeout timeout number? +inf.0])
+             (or/c #f (and/c string? cookie-value?))])]{
+  Extracts the first authenticated cookie named @racket[name]
+  that was previously signed with @racket[secret-salt]
+  before @racket[timeout] from @racket[request].
+  If no valid cookie is available, returns @racket[#f].
  }
 
- @defproc[(logout-id-cookie
-           [name cookie-name?]
-           [#:path path (or/c false/c string?) #f])
+@defproc[(valid-id-cookie? [cookie any/c]
+                           [#:name name (and/c string? cookie-name?)]
+                           [#:key secret-salt bytes?]
+                           [#:timeout timeout number? +inf.0])
+         (or/c #f (and/c string? cookie-value?))]{
+  Recognizes authenticated cookies named @racket[name] that were
+  previously signed with @racket[secret-salt]
+  before @racket[timeout]. Values satisfying either @racket[cookie?]
+  or @racket[client-cookie?] can be recognized.
+
+  Specifically, @racket[valid-id-cookie?] tests that
+  @racket[(authored . <= . timeout)], where @racket[authored] is the
+  value returned by @racket[(current-seconds)] when the cookie was created.
+ }
+                                                       
+ @defproc[(logout-id-cookie [name cookie-name?]
+                            [#:path path (or/c #f string?) #f]
+                            [#:domain domain (or/c domain-value? #f) #f])
           cookie?]{
-  Generates a cookie named @racket[name] that is not validly authenticated.
+  Generates a cookie named @racket[name] that is not validly authenticated
+  and expires in the past.
 
   This will cause non-malicious browsers to overwrite a previously set
-cookie. If you use authenticated cookies for login information, you
-could send this to cause a "logout". However, malicious browsers do
-not need to respect such an overwrite. Therefore, this is not an
-effective way to implement timeouts or protect users on
-public (i.e. possibly compromised) computers. The only way to securely
-logout on the compromised computer is to have server-side state
-keeping track of which cookies (sessions, etc.) are invalid. Depending
-on your application, it may be better to track live sessions or dead
-sessions, or never set cookies to begin with and just use
-continuations, which you can revoke with @racket[send/finish].
+  cookie. If you use authenticated cookies for login information, you
+  could send this to cause a "logout". However, malicious browsers do
+  not need to respect such an overwrite. Therefore, this is not an
+  effective way to implement timeouts or protect users on
+  public (i.e. possibly compromised) computers. The only way to securely
+  logout on the compromised computer is to have server-side state
+  keeping track of which cookies (sessions, etc.) are invalid. Depending
+  on your application, it may be better to track live sessions or dead
+  sessions, or never set cookies to begin with and just use
+  continuations, which you can revoke with @racket[send/finish].
  }
 
- @defproc[(make-secret-salt/file
-            [secret-salt-path path-string?])
-           bytes?]{
-
+ @defproc[(make-secret-salt/file [secret-salt-path path-string?])
+          bytes?]{
   Extracts the bytes from @racket[secret-salt-path]. If
-@racket[secret-salt-path] does not exist, then it is created and
-initialized with 128 random bytes.
+  @racket[secret-salt-path] does not exist, then it is created and
+  initialized with 128 random bytes.
  }
 }
 
@@ -400,15 +462,14 @@ initialized with 128 random bytes.
 
 @(require (for-label web-server/http/cookie-parse
                      web-server/http/xexpr
-                     net/cookie
                      net/url
                      racket/list))
 @defmodule[web-server/http/cookie-parse]{
  @defstruct[client-cookie
-            ([name string?]
-             [value string?]
-             [domain (or/c false/c valid-domain?)]
-             [path (or/c false/c string?)])]{
+            ([name (and/c string? cookie-name?)]
+             [value (and/c string? cookie-value?)]
+             [domain (or/c #f domain-value?)]
+             [path (or/c #f path/extension-value?)])]{
 
   While server cookies are represented with @racket[cookie?]s, cookies
   that come from the client are represented with a

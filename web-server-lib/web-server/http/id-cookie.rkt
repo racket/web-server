@@ -1,13 +1,79 @@
 #lang racket/base
+
 (require net/base64
-         net/cookie
+         net/cookies/common
+         net/cookies/server
          racket/match
          racket/file
          racket/random
          racket/contract
-         web-server/http
+         (except-in web-server/http
+                    make-cookie)
          web-server/stuffers/hmac-sha1
          web-server/private/util)
+
+(provide
+ (contract-out
+  [make-secret-salt/file
+   (-> path-string?
+       bytes?)]
+  [logout-id-cookie
+   (->* [(and/c string? cookie-name?)]
+                [#:path (or/c path/extension-value? #f)
+                 #:domain (or/c domain-value? #f)]
+                cookie?)]
+  [valid-id-cookie?
+   (-> any/c
+       #:name (and/c string? cookie-name?)
+       #:key bytes?
+       #:timeout number?
+       (or/c #f (and/c string? cookie-value?)))]
+  [request-id-cookie
+   (->i ([name-or-req {kw-name}
+                      (if (unsupplied-arg? kw-name)
+                          (and/c string? cookie-name?)
+                          request?)])
+        ([maybe-key bytes?]
+         [maybe-req request?]
+         #:name [kw-name (and/c string? cookie-name?)]
+         #:key [kw-key bytes?]
+         #:timeout [timeout number?])
+        #:pre/desc {maybe-key maybe-req kw-name kw-key}
+        (let ([maybe-key/un (unsupplied-arg? maybe-key)]
+              [maybe-req/un (unsupplied-arg? maybe-req)]
+              [kw-name/un (unsupplied-arg? kw-name)]
+              [kw-key/un (unsupplied-arg? kw-key)])
+          (or (and (if maybe-key/un maybe-req/un (not maybe-req/un))
+                   (if kw-name/un kw-key/un (not kw-key/un))
+                   (not (and maybe-key/un kw-key/un)))
+              `("expected: either three by-position arguments or one by-position argument and arguments with keywords #:name and #:key"
+                "given: something else")))
+        [_ (or/c #f (and/c string? cookie-value?))])]
+  [make-id-cookie
+   (->i ([name (and/c string? cookie-name?)]
+         [data-or-key {maybe-key}
+                      (if (unsupplied-arg? maybe-key)
+                          bytes?
+                          (and/c string? cookie-value?))])
+        ([maybe-data {maybe-key}
+                     (if (unsupplied-arg? maybe-key)
+                         (and/c string? cookie-value?)
+                         none/c)]
+         #:key [maybe-key bytes?]
+         #:path [path (or/c path/extension-value? #f)]
+         #:expires [expires (or/c date? #f)]	 	 	 
+         #:max-age [max-age
+                    (or/c (and/c integer? positive?) #f)]	 	 	 
+         #:domain [domain (or/c domain-value? #f)]	 
+         #:secure? [secure? any/c]	 	 	 
+         #:http-only? [http-only? any/c]	 	 
+         #:extension [extension
+                      (or/c path/extension-value? #f)])
+        #:pre {maybe-data maybe-key}
+        (not (and (unsupplied-arg? maybe-data)
+                  (unsupplied-arg? maybe-key)))
+        [_ cookie?])]
+  ))
 
 (define (substring* s st en)
   (substring s st (+ (string-length s) en)))
@@ -26,55 +92,88 @@
   (file->bytes secret-salt-path))
 
 (define (id-cookie? name c)
-  (and (client-cookie? c)
-       (string=? (client-cookie-name c) name)))
+  (or (and (client-cookie? c)
+           (string=? (client-cookie-name c) name))
+      (and (cookie? c)
+           (equal? (cookie-name c) name))))
 
-(define (make-id-cookie name key data #:path [path #f])
+(define (make-id-cookie name
+                        data-or-key
+                        [maybe-data #f]
+                        #:key [maybe-key #f]
+                        #:path [path #f]
+                        #:expires [exp-date #f]	 	 	 	 
+                        #:max-age [max-age #f]	 	 	 
+                        #:domain [domain #f]	 	 	 
+                        #:secure? [secure? #f] ;default ok?	 	 
+                        #:http-only? [http-only? #t] ;default ok?	 	 
+                        #:extension [extension #f]
+                        )
+  (define-values {data key}
+    (if maybe-key
+        (values maybe-key data-or-key)
+        (values data-or-key maybe-data)))
   (define authored (current-seconds))
   (define digest
     (mac key (list authored data)))
   (make-cookie name
-               #:path path
                (format "~a&~a&~a"
-                       digest authored data)))
+                       digest authored data)
+               #:path path
+               #:expires exp-date	 	 	 	 
+               #:max-age max-age	 	 	 	 
+               #:domain domain	 	 	 	 
+               #:secure? (not (not secure?))	 	 	 
+               #:http-only? (not (not http-only?))	 	 	 
+               #:extension extension
+               ))
 
-(define (valid-id-cookie? name key timeout c)
+(define (valid-id-cookie? c
+                          #:name name
+                          #:key key
+                          #:timeout timeout)
   (and (id-cookie? name c)
        (with-handlers ([exn:fail? (lambda (x) #f)])
-         (match (client-cookie-value c)
-           [(regexp #rx"^(.+)&(.+)&(.*)$" (list _ digest authored-s data))
-            (define authored (string->number authored-s))
-            (define re-digest (mac key (list authored data)))
-            (and (string=? digest re-digest)
-                 (<= authored timeout)
+         (match (if (client-cookie? c)
+                    (client-cookie-value c)
+                    (cookie-value c))
+           [(regexp #rx"^(.+)&(.+)&(.*)$"
+                    (list _
+                          digest
+                          (app string->number authored)
+                          data))
+            (and (authored . <= . timeout)
+                 (let ([re-digest (mac key (list authored data))])
+                   (string=? digest re-digest))
                  data)]
            [cv
             #f]))))
 
-(define (request-id-cookie
-         name
-         key
-         #:timeout [timeout +inf.0]
-         req)
-  (define cookies (request-cookies req))
-  (for/or ([c (in-list cookies)])
-    (valid-id-cookie? name key timeout c)))
+(define (request-id-cookie name-or-req
+                           [maybe-key #f]
+                           [maybe-req #f]
+                           #:name [kw-name #f]
+                           #:key [kw-key #f]
+                           #:timeout [timeout +inf.0])
+  (let ([name (or kw-name name-or-req)]
+        [key (or kw-key maybe-key)]
+        [req (or maybe-req name-or-req)])
+  (for/or ([c (in-list (request-cookies req))])
+    (valid-id-cookie? c
+                      #:name name
+                      #:key key
+                      #:timeout timeout))))
 
-(define (logout-id-cookie name #:path [path #f])
-  (make-cookie name "invalid format" #:path path #:expires "Thu, 01 Jan 1970 00:00:00 GMT"))
+(define (logout-id-cookie name
+                          #:path [path #f]
+                          #:domain [domain #f])
+  ;net/cookies implements clear-cookie-header by wrapping
+  ;this in cookie->set-cookie-header
+  (make-cookie name ""
+               #:expires
+               (seconds->date 1420070400 ; midnight UTC on 1/1/15
+                              #f)
+               #:path path
+               #:domain domain))
 
-(provide
- (contract-out
-  [make-secret-salt/file
-   (-> path-string?
-       bytes?)]
-  [logout-id-cookie
-   (->* (cookie-name?) (#:path string?) cookie?)]
-  [request-id-cookie
-   (->* (cookie-name? bytes? request?)
-        (#:timeout number?)
-        (or/c false/c cookie-value?))]
-  [make-id-cookie
-   (->* (cookie-name? bytes? cookie-value?)
-        (#:path string?)
-        cookie?)]))
+
