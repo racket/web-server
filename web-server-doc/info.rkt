@@ -3,6 +3,7 @@
 (define collection 'multi)
 
 (define build-deps '("net-doc"
+                     "net-cookies"
                      "rackunit-doc"
                      "compatibility-doc"
                      "db-doc"
