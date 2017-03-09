@@ -7,7 +7,8 @@
                      "eli-tester"
                      "htdp-lib"
                      "rackunit-lib"
-                     "web-server-lib"))
+                     "web-server-lib"
+                     "net-cookies"))
 (define update-implies '("web-server-lib"))
 
 (define pkg-desc "tests for \"web-server\"")
