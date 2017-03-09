@@ -65,27 +65,30 @@
                                                   (app string->number hour)
                                                   (app string->number min)
                                                   (app string->number sec)))
-                                   (seconds->date
-                                    (find-seconds sec min hour day
-                                                  (case month-str
-                                                    [("Jan") 1]
-                                                    [("Feb") 2]
-                                                    [("Mar") 3]
-                                                    [("Apr") 4]
-                                                    [("May") 5]
-                                                    [("Jun") 6]
-                                                    [("Jul") 7]
-                                                    [("Aug") 8]
-                                                    [("Sep") 9]
-                                                    [("Oct") 10]
-                                                    [("Nov") 11]
-                                                    [("Dec") 12])
-                                                  year
-                                                  #f))]
+                                   (with-handlers ([exn:fail? (λ (e) (failure-cont))])
+                                     (seconds->date
+                                      (find-seconds sec min hour day
+                                                    (case month-str
+                                                      [("Jan") 1]
+                                                      [("Feb") 2]
+                                                      [("Mar") 3]
+                                                      [("Apr") 4]
+                                                      [("May") 5]
+                                                      [("Jun") 6]
+                                                      [("Jul") 7]
+                                                      [("Aug") 8]
+                                                      [("Sep") 9]
+                                                      [("Oct") 10]
+                                                      [("Nov") 11]
+                                                      [("Dec") 12])
+                                                    year
+                                                    #f)
+                                      #f))]
                                   [_ (raise-arguments-error
                                       'make-cookie*
                                       "invalid #:expires string"
-                                      'expected "#f, a date?, or a string conforming to RFC 7231 Section 7.1.1.2"
+                                      'expected
+                                      "#f, a date?, or a string conforming to RFC 7231 Section 7.1.1.2"
                                       'given exp-date/raw)])]
                                [else exp-date/raw])))
 

@@ -19,15 +19,15 @@
        bytes?)]
   [logout-id-cookie
    (->* [(and/c string? cookie-name?)]
-                [#:path (or/c path/extension-value? #f)
-                 #:domain (or/c domain-value? #f)]
-                cookie?)]
+        [#:path (or/c path/extension-value? #f)
+         #:domain (or/c domain-value? #f)]
+        cookie?)]
   [valid-id-cookie?
-   (-> any/c
-       #:name (and/c string? cookie-name?)
-       #:key bytes?
-       #:timeout number?
-       (or/c #f (and/c string? cookie-value?)))]
+   (->* [any/c
+         #:name (and/c string? cookie-name?)
+         #:key bytes?]
+        [#:timeout number?]
+        (or/c #f (and/c string? cookie-value?)))]
   [request-id-cookie
    (->i ([name-or-req {kw-name}
                       (if (unsupplied-arg? kw-name)
@@ -111,8 +111,8 @@
                         )
   (define-values {data key}
     (if maybe-key
-        (values maybe-key data-or-key)
-        (values data-or-key maybe-data)))
+        (values data-or-key maybe-key)
+        (values maybe-data data-or-key)))
   (define authored (current-seconds))
   (define digest
     (mac key (list authored data)))
@@ -131,7 +131,7 @@
 (define (valid-id-cookie? c
                           #:name name
                           #:key key
-                          #:timeout timeout)
+                          #:timeout [timeout +inf.0])
   (and (id-cookie? name c)
        (with-handlers ([exn:fail? (lambda (x) #f)])
          (match (if (client-cookie? c)
@@ -158,11 +158,11 @@
   (let ([name (or kw-name name-or-req)]
         [key (or kw-key maybe-key)]
         [req (or maybe-req name-or-req)])
-  (for/or ([c (in-list (request-cookies req))])
-    (valid-id-cookie? c
-                      #:name name
-                      #:key key
-                      #:timeout timeout))))
+    (for/or ([c (in-list (request-cookies req))])
+      (valid-id-cookie? c
+                        #:name name
+                        #:key key
+                        #:timeout timeout))))
 
 (define (logout-id-cookie name
                           #:path [path #f]

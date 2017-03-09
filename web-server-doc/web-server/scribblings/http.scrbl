@@ -294,10 +294,11 @@ transmission that the server @bold{will not catch}.}
    Constructs a cookie with the appropriate fields.
 
    This is a wrapper around @racket[make-cookie] from @racketmodname[net/cookies/server]
-   for backwords compatability. The @racket[comment] argument is ignored.
+   for backwards compatability. The @racket[comment] argument is ignored.
    If @racket[expires] is given as a string, it should match
    @link["https://tools.ietf.org/html/rfc7231#section-7.1.1.2"]{RFC 7231, Section 7.1.1.2},
    in which case it will be converted to a @racket[date?] value.
+   If conversion fails, an @racket[exn:fail:contract?] is raised.
  }
 
  @defproc[(cookie->header [c cookie?]) header?]{
@@ -401,7 +402,7 @@ available (@racket[make-secret-salt/file]),
  @defproc*[([(request-id-cookie [request request?]
                                 [#:name name (and/c string? cookie-name?)]
                                 [#:key secret-salt bytes?]
-                                [#:timeout timeout +inf.0])
+                                [#:timeout timeout number? +inf.0])
              (or/c #f (and/c string? cookie-value?))]
             [(request-id-cookie [name (and/c string? cookie-name?)]
                                 [secret-salt bytes?]
