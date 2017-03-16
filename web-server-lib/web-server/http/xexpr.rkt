@@ -3,7 +3,8 @@
          racket/list
          xml
          web-server/private/xexpr
-         net/cookie
+         (except-in net/cookies/server
+                    make-cookie)
          "request-structs.rkt"
          "cookie.rkt"
          "response-structs.rkt")
