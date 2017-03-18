@@ -11,6 +11,7 @@
                      "compatibility-lib"
                      "db-lib"
 		     "net-lib"
+                     "net-cookies-lib"
                      "rackunit-lib"
                      "sandbox-lib"
                      "scribble-lib"
