@@ -27,7 +27,11 @@
  @racket[url->path] to resolve the URL to a path, then uses
  @racket[path->servlet] to resolve that path to a servlet, caching the
  results in an internal table.
+
+ @history[#:changed "6.9.0.1" "Added optional argument to first return value."]
 }
+
+
 
 @defproc[(make [url->servlet url->servlet/c]
                [#:responders-servlet-loading

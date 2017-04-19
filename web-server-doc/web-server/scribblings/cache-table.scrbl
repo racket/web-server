@@ -27,6 +27,8 @@ functions.
          void?]{
  If @racket[entry-ids] is @racket[#f], clears all entries in @racket[ct].
  Otherwise, clears only the entries with keys in @racket[entry-ids].
+
+ @history[#:changed "6.9.0.1" "Added optional argument."]
 }
 
 @defproc[(cache-table? [v any/c])
