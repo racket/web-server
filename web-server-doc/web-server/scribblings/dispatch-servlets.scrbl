@@ -18,10 +18,13 @@
 @defproc[(make-cached-url->servlet
           [url->path url->path/c]
           [path->serlvet path->servlet/c])
-         (values (-> void)
+         (values (->* () ((or/c false/c (listof url?))) void?)
                  url->servlet/c)]{
- The first return value flushes the cache.  The second is a procedure
- that uses @racket[url->path] to resolve the URL to a path, then uses
+ The first return value flushes the cache. If its option argument is
+ @racket[#f] (the default), all cached servlets are flushed. Otherwise,
+ it flushes only those servlet caches to which @racket[url->path] maps
+ the given URLs. The second return value is a procedure that uses
+ @racket[url->path] to resolve the URL to a path, then uses
  @racket[path->servlet] to resolve that path to a servlet, caching the
  results in an internal table.
 }
