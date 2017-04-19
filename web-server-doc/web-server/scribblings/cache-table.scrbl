@@ -25,8 +25,8 @@ functions.
 @defproc[(cache-table-clear! [ct cache-table?]
                              [entry-ids (or/c false/c (listof symbol?)) #f])
          void?]{
- If @racket[entry-ids] is @racket[#f] (the default), clears all entries in
- @racket[ct]. Otherwise, clears only the entries with keys in @racket[entry-ids].
+ If @racket[entry-ids] is @racket[#f], clears all entries in @racket[ct].
+ Otherwise, clears only the entries with keys in @racket[entry-ids].
 }
 
 @defproc[(cache-table? [v any/c])
