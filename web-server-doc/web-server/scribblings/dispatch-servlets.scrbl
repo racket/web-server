@@ -31,8 +31,6 @@
  @history[#:changed "6.9.0.1" "Added optional argument to first return value."]
 }
 
-
-
 @defproc[(make [url->servlet url->servlet/c]
                [#:responders-servlet-loading
                 responders-servlet-loading
