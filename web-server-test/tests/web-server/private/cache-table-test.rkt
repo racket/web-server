@@ -28,10 +28,33 @@
     (check-true (let ([ct (make-cache-table)])
                   (cache-table-lookup! ct 'foo (lambda () #t))
                   (cache-table-lookup! ct 'foo (lambda () #f)))))
-   
+
    (test-case
     "cache-table-clear! is effective"
     (check-false (let ([ct (make-cache-table)])
                    (cache-table-lookup! ct 'foo (lambda () #t))
                    (cache-table-clear! ct)
-                   (cache-table-lookup! ct 'foo (lambda () #f)))))))
+                   (cache-table-lookup! ct 'foo (lambda () #f)))))
+
+   (test-case
+    "cache-table-clear! is selective (1)"
+    (check-true (let ([ct (make-cache-table)])
+                  (cache-table-lookup! ct 'foo (lambda () #t))
+                  (cache-table-lookup! ct 'bar (lambda () #t))
+                  (cache-table-clear! ct (list 'bar))
+                  (cache-table-lookup! ct 'foo (lambda () #f)))))
+
+   (test-case
+    "cache-table-clear! is selective (2)"
+    (check-false (let ([ct (make-cache-table)])
+                   (cache-table-lookup! ct 'foo (lambda () #t))
+                   (cache-table-lookup! ct 'bar (lambda () #t))
+                   (cache-table-clear! ct (list 'bar))
+                   (cache-table-lookup! ct 'bar (lambda () #f)))))
+
+   (test-case
+    "cache-table-clear! is robust"
+    (check-true (let ([ct (make-cache-table)])
+                  (cache-table-lookup! ct 'foo (lambda () #t))
+                  (cache-table-clear! ct (list 'bar 'baz))
+                  (cache-table-lookup! ct 'foo (lambda () #f)))))))

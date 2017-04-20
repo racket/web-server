@@ -22,9 +22,13 @@ functions.
  called to construct the value and add it to @racket[ct].
 }
 
-@defproc[(cache-table-clear! [ct cache-table?])
+@defproc[(cache-table-clear! [ct cache-table?]
+                             [entry-ids (or/c false/c (listof symbol?)) #f])
          void?]{
- Clears all entries in @racket[ct].
+ If @racket[entry-ids] is @racket[#f], clears all entries in @racket[ct].
+ Otherwise, clears only the entries with keys in @racket[entry-ids].
+
+ @history[#:changed "6.9.0.1" "Added optional argument."]
 }
 
 @defproc[(cache-table? [v any/c])

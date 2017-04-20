@@ -23,16 +23,21 @@
  [make-cached-url->servlet
   (-> url->path/c
       path->servlet/c
-      (values (-> void)
+      (values (() ((or/c false/c (listof url?))) . ->* . void?)
               url->servlet/c))])
 
 (define (make-cached-url->servlet         
          url->path 
          path->servlet)
   (define config:scripts (make-cache-table))
-  (values (lambda ()
+  (values (lambda ([uris #f])
             ;; This is broken - only out of date or specifically mentioned scripts should be flushed.  This destroys persistent state!
-            (cache-table-clear! config:scripts))
+            (cache-table-clear!
+             config:scripts
+             (and uris
+                  (for/list ([uri (in-list uris)])
+                    (let-values ([(servlet-path _) (url->path uri)])
+                      (string->symbol (path->string servlet-path)))))))
           (lambda (uri)
             (define-values (servlet-path _)
               (with-handlers
