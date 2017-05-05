@@ -26,7 +26,8 @@
    (->* [any/c
          #:name (and/c string? cookie-name?)
          #:key bytes?]
-        [#:timeout number?]
+        [#:timeout real?
+         #:shelf-life real?]
         (or/c #f (and/c string? cookie-value?)))]
   [request-id-cookie
    (->i ([name-or-req {kw-name}
@@ -37,7 +38,8 @@
          [maybe-req request?]
          #:name [kw-name (and/c string? cookie-name?)]
          #:key [kw-key bytes?]
-         #:timeout [timeout number?])
+         #:timeout [timeout number?]
+         #:shelf-life [shelf-life real?])
         #:pre/desc {maybe-key maybe-req kw-name kw-key}
         (let ([maybe-key/un (unsupplied-arg? maybe-key)]
               [maybe-req/un (unsupplied-arg? maybe-req)]
@@ -131,18 +133,21 @@
 (define (valid-id-cookie? c
                           #:name name
                           #:key key
-                          #:timeout [timeout +inf.0])
+                          #:timeout [timeout +inf.0]
+                          #:shelf-life [shelf-life +inf.0])
   (and (id-cookie? name c)
        (with-handlers ([exn:fail? (lambda (x) #f)])
          (match (if (client-cookie? c)
                     (client-cookie-value c)
                     (cookie-value c))
-           [(regexp #rx"^(.+)&(.+)&(.*)$"
-                    (list _
-                          digest
-                          (app string->number authored)
-                          data))
-            (and (authored . <= . timeout)
+           [(pregexp #px"^(.+)&(\\d+)&(.*)$"
+                     (list _
+                           digest
+                           (app string->number authored)
+                           data))
+            (and [authored . <= . timeout]
+                 [shelf-life . >= . (- (current-seconds)
+                                       authored)]
                  (let ([re-digest (mac key (list authored data))])
                    (string=? digest re-digest))
                  data)]
@@ -154,7 +159,8 @@
                            [maybe-req #f]
                            #:name [kw-name #f]
                            #:key [kw-key #f]
-                           #:timeout [timeout +inf.0])
+                           #:timeout [timeout +inf.0]
+                           #:shelf-life [shelf-life +inf.0])
   (let ([name (or kw-name name-or-req)]
         [key (or kw-key maybe-key)]
         [req (or maybe-req name-or-req)])
@@ -162,7 +168,8 @@
       (valid-id-cookie? c
                         #:name name
                         #:key key
-                        #:timeout timeout))))
+                        #:timeout timeout
+                        #:shelf-life shelf-life))))
 
 (define (logout-id-cookie name
                           #:path [path #f]
@@ -175,5 +182,3 @@
                               #f)
                #:path path
                #:domain domain))
-
-

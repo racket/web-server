@@ -294,7 +294,7 @@
             (list (header #"Cookie"
                           #"my-id-cookie=YmFLLOIDULjpLQOu1+cvMBM+m&1489023629&my-signed-value"))
             (delay empty) #f "host" 80 "client"))
-         (test-not-false "infinite timeout"
+         (test-not-false "infinite timeout & shelf life"
                          (request-id-cookie req
                                             #:name "my-id-cookie"
                                             #:key test-secret-salt))
@@ -304,19 +304,30 @@
                                         #:key test-secret-salt
                                         #:timeout (current-seconds)))
          (test-not-false "finite timeout / by position"
-                     (request-id-cookie req
-                                        #:name "my-id-cookie"
-                                        #:key test-secret-salt
-                                        #:timeout (current-seconds)))
-         (test-false "reject expired"
                      (request-id-cookie "my-id-cookie"
                                         test-secret-salt
                                         req
+                                        #:timeout (current-seconds)))
+         (test-false "timeout / reject expired"
+                     (request-id-cookie req
+                                        #:name "my-id-cookie"
+                                        #:key test-secret-salt
                                         #:timeout 1089023629))
+         (test-equal? "long finite shelf-life"
+                      (request-id-cookie req
+                                         #:name "my-id-cookie"
+                                         #:key test-secret-salt
+                                         #:shelf-life 500)
+                      "test-value")
+         (test-false "shelf-life / reject expired"
+                     (request-id-cookie req
+                                         #:name "my-id-cookie"
+                                         #:key test-secret-salt
+                                         #:shelf-life -10))
          ))))))
     
 
   (module+ test
     (require rackunit/text-ui)
     (run-tests cookies-tests))
-  
+

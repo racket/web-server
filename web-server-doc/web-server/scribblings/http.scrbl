@@ -344,7 +344,7 @@ This module provides functions for creating and verifying
 authenticated cookies that are intrinsically timestamped. It is based
 on the algorithm proposed by the
 @link["https://pdos.csail.mit.edu/archive/cookies/"]{MIT Cookie Eaters}: if you store
-the data @racket[_data] at thime @racket[_authored-seconds], then the
+the data @racket[_data] at time @racket[_authored-seconds], then the
 user will receive @litchar{digest&authored-seconds&data}, where
 @racket[_digest] is an HMAC-SHA1 digest of @racket[_authored-seconds]
 and @racket[_data], using an arbitrary secret key. When you receive a
@@ -402,32 +402,51 @@ available (@racket[make-secret-salt/file]),
  @defproc*[([(request-id-cookie [request request?]
                                 [#:name name (and/c string? cookie-name?)]
                                 [#:key secret-salt bytes?]
-                                [#:timeout timeout number? +inf.0])
+                                [#:timeout timeout real? +inf.0]
+                                [#:shelf-life shelf-life real? +inf.0])
              (or/c #f (and/c string? cookie-value?))]
             [(request-id-cookie [name (and/c string? cookie-name?)]
                                 [secret-salt bytes?]
                                 [request request?]
-                                [#:timeout timeout number? +inf.0])
+                                [#:timeout timeout number? +inf.0]
+                                [#:shelf-life shelf-life real? +inf.0])
              (or/c #f (and/c string? cookie-value?))])]{
   Extracts the first authenticated cookie named @racket[name]
   that was previously signed with @racket[secret-salt]
-  before @racket[timeout] from @racket[request].
+  from @racket[request], with the allowable age of the cookie
+  is controlled by @racket[shelf-life] and @racket[timeout] as with
+  @racket[valid-id-cookie?].
+  
   If no valid cookie is available, returns @racket[#f].
  }
 
 @defproc[(valid-id-cookie? [cookie any/c]
                            [#:name name (and/c string? cookie-name?)]
                            [#:key secret-salt bytes?]
-                           [#:timeout timeout number? +inf.0])
+                           [#:timeout timeout number? +inf.0]
+                           [#:shelf-life shelf-life real? +inf.0])
          (or/c #f (and/c string? cookie-value?))]{
   Recognizes authenticated cookies named @racket[name] that were
-  previously signed with @racket[secret-salt]
-  before @racket[timeout]. Values satisfying either @racket[cookie?]
+  previously signed with @racket[secret-salt].
+  Values satisfying either @racket[cookie?]
   or @racket[client-cookie?] can be recognized.
 
+  The @racket[shelf-life] specifies the maximum age of the cookie
+  in seconds. Cookies created more than @racket[shelf-life] seconds
+  ago will not be considered valid.
+  The default value, @racket[+inf.0], permits all properly named and
+  signed cookies.
+
+  Counterintuitively,
+  the @racket[timeout] argument requires that the cookie have been
+  created @italic{before} a certain moment in time: in other words,
+  it requires that the cookie be @italic{older} than a certain age.
+  This is not usually what you want to restrict.
   Specifically, @racket[valid-id-cookie?] tests that
   @racket[(authored . <= . timeout)], where @racket[authored] is the
   value returned by @racket[(current-seconds)] when the cookie was created.
+  The default value, @racket[+inf.0], permits all properly named and
+  signed cookies.
  }
                                                        
  @defproc[(logout-id-cookie [name cookie-name?]
