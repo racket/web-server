@@ -313,12 +313,23 @@
                                         #:name "my-id-cookie"
                                         #:key test-secret-salt
                                         #:timeout 1089023629))
+         (test-equal? "long finite shelf-life / fresh cookie"
+                      (valid-id-cookie? (make-id-cookie "fresh-id-cookie"
+                                                  "test-value"
+                                                  #:key #"test-key")
+                                  #:name "fresh-id-cookie"
+                                  #:key #"test-key"
+                                  #:shelf-life 500
+                                  )
+                      "test-value")
          (test-equal? "long finite shelf-life"
                       (request-id-cookie req
                                          #:name "my-id-cookie"
                                          #:key test-secret-salt
-                                         #:shelf-life 500)
-                      "test-value")
+                                         #:shelf-life (+ 10
+                                                         (- (current-seconds)
+                                                            1489023629)))
+                      "my-signed-value")
          (test-false "shelf-life / reject expired"
                      (request-id-cookie req
                                          #:name "my-id-cookie"
