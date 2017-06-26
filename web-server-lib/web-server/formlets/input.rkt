@@ -460,5 +460,5 @@
 
 (provide/contract
  [input-string (formlet/c string?)]
- [input-int (formlet/c integer?)]
+ [input-int (formlet/c number?)]
  [input-symbol (formlet/c symbol?)])

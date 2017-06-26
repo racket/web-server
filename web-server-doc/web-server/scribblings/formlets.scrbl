@@ -496,7 +496,7 @@ a list of elements of the sequence.
   Equivalent to @racket[(to-string (required (text-input)))].
 }
 
-@defthing[input-int (formlet/c integer?)]{
+@defthing[input-int (formlet/c number?)]{
   Equivalent to @racket[(to-number input-string)].
 }
 
