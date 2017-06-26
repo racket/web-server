@@ -66,7 +66,7 @@
 (define (call d req #:raw? raw? #:headers? hs?)
   (htxml (collect d req) raw? hs?))
 (define (htxml bs raw? hs?)
-  (match (regexp-match #"^(.+)\r\n\r\n(.*)$" bs)
+  (match (regexp-match #"^(.+?)\r\n\r\n(.*)$" bs)
     [(list _ h s)
      (define body
        (if raw?
