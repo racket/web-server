@@ -4,7 +4,7 @@
          web-server/http)
 
 (define dispatcher/c
-  (connection? request? . -> . void))
+  (connection? request? . -> . any))
 (define dispatcher-interface-version/c
   (symbols 'v1))
 (define-struct exn:dispatcher ())
@@ -13,5 +13,5 @@
 (provide/contract
  [dispatcher/c contract?]
  [dispatcher-interface-version/c contract?]
- [next-dispatcher (-> void)]
+ [next-dispatcher (-> any)]
  [struct exn:dispatcher ()])
