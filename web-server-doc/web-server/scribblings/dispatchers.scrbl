@@ -30,7 +30,7 @@ documentation.
 This module provides a few functions for dispatchers in general.
 
 @defthing[dispatcher/c contract?]{
- Equivalent to @racket[(connection? request? . -> . void)].
+ Equivalent to @racket[(connection? request? . -> . any)].
 }
 
 @defproc[(dispatcher-interface-version/c (any any/c)) boolean?]{
@@ -42,7 +42,7 @@ This module provides a few functions for dispatchers in general.
  request.
 }
 
-@defproc[(next-dispatcher) void]{
+@defproc[(next-dispatcher) any]{
  Raises a @racket[exn:dispatcher]
 }
 
