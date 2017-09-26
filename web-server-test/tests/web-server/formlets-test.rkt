@@ -4,6 +4,7 @@
          web-server/http
          web-server/formlets
          web-server/formlets/lib)
+
 (provide all-formlets-tests)
 
 (define (run-formlet f i)
@@ -117,7 +118,21 @@
     (test-case "cross* (post-i)"
                (let ([x (random 1000)])
                  (check-equal? (third (run-formlet (cross* (text "One") (text "Two")) x))
-                               x))))
+                               x)))
+    (test-case "formlet/c"
+               (check-not-exn (λ ()
+                                (formlet/c #t))
+                              "simple use")
+               (check-not-exn (λ ()
+                                (formlet/c integer? string?))
+                              "multi-argument use")
+               (check-not-exn (λ ()
+                                (map formlet/c `(example #t #f)))
+                              "higher-order use")
+               (check-not-exn (λ ()
+                                (apply formlet/c (list string? (or/c #t #f))))
+                              "higher-order use with multiple arguments")))
+    
    
    (local [(define (->cons bf)
              (cons (binding-id bf)

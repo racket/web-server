@@ -202,7 +202,7 @@ types. Refer to @secref["input-formlets"] for example low-level formlets using t
  Equivalent to @racket[(listof xexpr/c)]
 }
 
-@defproc[(formlet/c [content any/c] ...) contract?]{
+@defproc[(formlet/c [content contract?] ...) contract?]{
  Equivalent to @racket[(integer? . -> . 
             (values xexpr-forest/c
                     ((listof binding?) . -> . (values (coerce-contract 'formlet/c content) ...))
@@ -211,10 +211,15 @@ types. Refer to @secref["input-formlets"] for example low-level formlets using t
  A @tech{formlet}'s internal representation is a function from an initial input number
  to an @xexpr forest rendering, a processing function, and the next allowable
  input number.
+
+ (Actually, @racket[formlet/c] is a macro which avoids using @racket[dynamic->*]
+ when the number of range contracts for the processing function is known at compile time.)
 }
 
 @defthing[formlet*/c contract?]{
-  Equivalent to @racket[(formlet/c any/c ...)].
+  Similar to the contracts created by @racket[formlet/c], but uses @racket[any]
+  to avoid checking the results (or even specifying the number of results)
+  of the processing function.
 }
 
 @defproc[(pure [value any/c]) (formlet/c any/c)]{
