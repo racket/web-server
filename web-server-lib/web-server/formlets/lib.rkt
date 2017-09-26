@@ -3,7 +3,10 @@
          racket/contract
          racket/function
          web-server/http
-         web-server/private/xexpr)
+         web-server/private/xexpr
+         syntax/location
+         (for-syntax racket/base
+                     syntax/parse))
 
 ; Combinators
 (define (id x) x)
@@ -70,31 +73,63 @@
 (define xexpr-forest/c
   (listof pretty-xexpr/c))
 
-(define-syntax-rule (formlet/c* c)
-  (integer? . -> . 
-            (values xexpr-forest/c
-                    ((listof binding?) . -> . c)
-                    integer?)))
+(define-syntax-rule (formlet/c** processing-proc/c)
+  (-> integer? 
+      (values xexpr-forest/c
+              processing-proc/c
+              integer?)))
+(define listof-binding
+  (listof binding?))
+(define-syntax-rule (formlet/c* range/c)
+  (formlet/c** (-> listof-binding range/c)))
 (define formlet*/c (formlet/c* any))
-(define (formlet/c . c)
-  (formlet/c* (apply values (map (curry coerce-contract 'formlet/c) c))))
+(define dynamic-formlet/c
+  (case-lambda
+    [(single)
+     (formlet/c* (coerce-contract 'formlet/c single))]
+    [contracts     
+     (formlet/c**
+      (dynamic->* #:mandatory-domain-contracts (list listof-binding)
+                  #:range-contracts (map (curry coerce-contract 'formlet/c)
+                                         contracts)))]))
+(define quote-this-module-path
+  (quote-module-path))
+(define-syntax formlet/c
+  (syntax-parser
+    [(_ range ...)
+     #:declare range (expr/c #'contract?
+                             #:name "range contract argument")
+     #'(formlet/c** (-> listof-binding
+                        (values (coerce-contract 'formlet/c range.c) ...)))]
+    [name:id
+     #`(contract
+        (-> contract? (... ...) contract?)
+        dynamic-formlet/c
+        quote-this-module-path
+        (quote-module-path)
+        "formlet/c"
+        #'name)]))
+
+     
+
 
 (define alpha any/c)
 (define beta any/c)
 
-(provide/contract
- [xexpr-forest/c contract?]
- [formlet*/c contract?]
- [formlet/c (() () #:rest (listof any/c) . ->* . contract?)]
- [pure (alpha
-        . -> . (formlet/c alpha))]
- [cross ((formlet/c procedure?) formlet*/c . -> . formlet*/c)]
- [cross* (((formlet/c (unconstrained-domain-> beta)))
-          () #:rest (listof (formlet/c alpha))
-          . ->* . (formlet/c beta))]
- [xml-forest (xexpr-forest/c . -> . (formlet/c procedure?))]
- [xml (pretty-xexpr/c . -> . (formlet/c procedure?))] 
- [text (string? . -> . (formlet/c procedure?))]
- [tag-xexpr (symbol? (listof (list/c symbol? string?)) (formlet/c alpha) . -> . (formlet/c alpha))]
- [formlet-display ((formlet/c alpha) . -> . xexpr-forest/c)]
- [formlet-process (formlet*/c request? . -> . any)])
+(provide
+ formlet/c ;macro
+ (contract-out
+  [xexpr-forest/c contract?]
+  [formlet*/c contract?]
+  [pure (alpha
+         . -> . (formlet/c alpha))]
+  [cross ((formlet/c procedure?) formlet*/c . -> . formlet*/c)]
+  [cross* (((formlet/c (unconstrained-domain-> beta)))
+           () #:rest (listof (formlet/c alpha))
+           . ->* . (formlet/c beta))]
+  [xml-forest (xexpr-forest/c . -> . (formlet/c procedure?))]
+  [xml (pretty-xexpr/c . -> . (formlet/c procedure?))] 
+  [text (string? . -> . (formlet/c procedure?))]
+  [tag-xexpr (symbol? (listof (list/c symbol? string?)) (formlet/c alpha) . -> . (formlet/c alpha))]
+  [formlet-display ((formlet/c alpha) . -> . xexpr-forest/c)]
+  [formlet-process (formlet*/c request? . -> . any)]))
