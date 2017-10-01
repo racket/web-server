@@ -4,8 +4,6 @@
          racket/stxparam
          "lib.rkt"
          "syntax.rkt"
-         (only-in "unsafe/dyn-syntax.rkt"
-                  =>*)
          (for-syntax "lib.rkt"
                      racket/base
                      syntax/parse
@@ -13,7 +11,8 @@
 
 (provide formlet* =>*)
 
-; redefine formlet* using contracted version of lib.rkt
+(define-syntax-parameter =>*
+  (λ (stx) (raise-syntax-error '=>* "Only allowed inside formlet*" stx)))
 
 (define (snoc x l) (append l (list x)))
 

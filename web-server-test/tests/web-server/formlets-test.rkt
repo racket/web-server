@@ -1,9 +1,11 @@
 #lang racket
+
 (require rackunit
          net/url
          web-server/http
          web-server/formlets
-         web-server/formlets/lib)
+         web-server/formlets/lib
+         "formlets/stateless.rkt")
 
 (provide all-formlets-tests)
 
@@ -725,6 +727,7 @@
                                                                              (make-binding:form #"input_4" #"8")))
                                                                      #f "127.0.0.1" 80 "127.0.0.1"))
                                       (values "Jay" 10 6 10 8)))))
-   
+
+   stateless-test-suite
    ))
 
