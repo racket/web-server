@@ -3,15 +3,14 @@
 (require racket/stxparam
          racket/match
          "lib.rkt"
-         (only-in "unsafe/syntax.rkt"
-                  #%#)
          (for-syntax "lib.rkt"
                      racket/base
                      syntax/parse))
 
 (provide formlet #%#)
 
-; redefine formlet using contracted version of lib.rkt
+(define-syntax-parameter #%# 
+  (λ (stx) (raise-syntax-error '#%# "Only allowed inside formlet or formlet*" stx)))
 
 (define-for-syntax (cross-of stx)
   (syntax-parse 

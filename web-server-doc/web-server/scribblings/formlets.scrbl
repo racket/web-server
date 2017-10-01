@@ -1,7 +1,9 @@
 #lang scribble/doc
 @(require "web-server.rkt")
 @(require (for-label web-server/servlet
+                     racket/base
                      racket/list
+                     racket/serialize
                      xml))
 
 @(define xexpr @tech[#:doc '(lib "xml/xml.scrbl")]{X-expression})
@@ -546,3 +548,62 @@ A few utilities are provided for using @tech{formlet}s in Web applications.
 }
 
 }
+
+
+@section{Formlets and Stateless Servlets}
+@defmodule[#:multi (web-server/formlets/stateless
+                    web-server/formlets/unsafe)]
+
+A few additional considerations apply when using formlets with 
+stateless @(hash-lang) @racketmodname[web-server] servlets.
+
+First of all, continuations captured in your servlet cannot
+be serialized if they close over non-serializable data-structures.
+There are some generally-applicable ways to avoid having a data structure
+be part of the closure: for example, if you define all of your formlets
+as module-level variables, they will never be part of closures and will not
+need to be serialized.
+However, sometimes it can be useful to create formlets dynamically.
+To support this, all of the combinators documented above produce
+formlets that are serializable (as long as they contain only serializable values).
+This is not guaranteed to be true of third-party formlets.
+
+@margin-note{One potential pitfall for formlets and serialization is
+@racket[pure]. Note that @racket[(serialize (pure +))] will @bold{fail},
+because @racket[+] is not serializable. To avoid this, you can
+write @racket[(pure (λ args (apply + args)))] (in @(hash-lang) @racketmodname[web-server],
+where anonymous procedures are serializable, or using
+@racketmodname[web-server/lang/serial-lambda]).
+}
+
+Secondly, stateless @(hash-lang) @racketmodname[web-server] servlets are based on
+different web interaction primitives than stateful servlets, so the version of
+@racket[send/formlet] from @racketmodname[web-server/formlets] will not work.
+Instead, the library @racketmodname[web-server/formlets/stateless] provides
+the same API as @racketmodname[web-server/formlets], but with a version of
+@racket[send/formlet] for use in stateless servlets.
+(Using @racketmodname[web-server/formlets/stateless] also provides all of the
+bindings from @racketmodname[web-server/formlets/lib], whereas 
+@racketmodname[web-server/formlets] provides only some of them.)
+Alternatively, you can use the low-level @racket[formlet-process] and
+@racket[formlet-display] procedures directly.
+
+Another issue concerns capturing continuations within the processing
+stage of a formlet. Recall that serializable continuations in 
+@(hash-lang) @racketmodname[web-server] can only be captured from within
+transformed contexts. The contract system is not transformed, so
+the contracts on this library prevent capturing continuations
+during the processing stage of formlets.
+In most cases, the best solution is simply to avoid using
+continuation-capturing operations during a formlet's processing stage.
+Instead, have the processing stage return a value, and interact with
+the user based on that value in code outside of the formlet.
+Alternatively, you can use generally-applicable approaches for capturing
+continuations from untransformed contexts, such as
+@racketmodname[web-server/lang/native].
+However, if neither of those approaches are satisfactory, the
+library @racketmodname[web-server/formlets/unsafe] provides the same API as
+@racketmodname[web-server/formlets/stateless], but @italic{without enforcing
+ contracts.} As the name implies, using @racketmodname[web-server/formlets/unsafe]
+may produce inscrutable error messages and other unpleasant effects of programming
+without contracts: you have been warned.
