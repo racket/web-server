@@ -17,9 +17,9 @@
 (define pretty-xexpr/c
   (make-contract
    #:name 'pretty-xexpr/c
-   #:projection
+   #:late-neg-projection
    (lambda (blame)
-     (lambda (val)
+     (lambda (val neg-party)
        (define marks (current-continuation-marks))
        (with-handlers ([exn:fail:contract?
                         (lambda (exn)
@@ -29,7 +29,7 @@
                             marks
                             `(span ,(drop-after "Context:\n" (exn-message exn)) "\n"
                                    ,(make-cdata #f #f (format-xexpr/errors val))))))])
-         (((contract-projection xexpr/c) blame) val))))))
+         (((contract-late-neg-projection xexpr/c) blame) val neg-party))))))
 
 (define (drop-after delim str)
   (match (regexp-match-positions (regexp-quote delim) str)

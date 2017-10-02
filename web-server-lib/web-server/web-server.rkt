@@ -15,6 +15,7 @@
          web-server/web-server-sig
          web-server/web-server-unit
          (prefix-in http: web-server/http/request))
+(define-syntax-rule (unit/c . _) any/c)
 (provide/contract
  [serve
   (->* (#:dispatch dispatcher/c)

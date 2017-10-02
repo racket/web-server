@@ -5,25 +5,25 @@
 (define-struct stuffer (in out))
 (define (stuffer/c dom rng)
   (define in (dom . -> . rng))
-  (define in-proc (contract-projection in))
+  (define in-proc (contract-late-neg-projection in))
   (define out (rng . -> . dom))  
-  (define out-proc (contract-projection out))
+  (define out-proc (contract-late-neg-projection out))
   (make-contract
    #:name (build-compound-type-name 'stuffer/c in out)
-   #:projection
+   #:late-neg-projection
    (λ (blame)
      (define in-app (in-proc blame))
      (define out-app (out-proc blame))
-     (λ (val)
+     (λ (val neg-party)
        (unless (stuffer? val)
          (raise-blame-error
-          blame
+          blame #:missing-party neg-party
           val
           "expected <stuffer>, given: ~e"
           val))
        (make-stuffer
-        (in-app (stuffer-in val))
-        (out-app (stuffer-out val)))))
+        (in-app (stuffer-in val) neg-party)
+        (out-app (stuffer-out val) neg-party))))
    #:first-order stuffer?))
 
 (define id-stuffer
