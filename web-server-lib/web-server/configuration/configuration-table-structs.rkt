@@ -1,5 +1,5 @@
 #lang racket/base
-(require mzlib/contract
+(require racket/contract
          net/url)
 (require web-server/http/response-structs
          web-server/http/request-structs

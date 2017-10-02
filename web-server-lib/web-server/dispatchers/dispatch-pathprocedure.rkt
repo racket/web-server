@@ -1,5 +1,5 @@
 #lang racket/base
-(require mzlib/contract
+(require racket/contract
          net/url)
 (require web-server/dispatchers/dispatch
          web-server/private/util
