@@ -10,7 +10,10 @@
  [make-anormal-term ((syntax? . -> . syntax?) . -> . (syntax? . -> . syntax?))])
 
 ; A-Normal Form
-(define (id x) x)
+(struct id-context ()
+  #:property prop:procedure
+  (λ (ic x) x))
+(define the-id-context (id-context))
 
 ;; a context is either
 ;;    frame
@@ -23,7 +26,7 @@
 ;; ccompose: (w -> target-expr) (alpha -> target-redex) -> (alpha -> target-expr)
 ;; compose a context with a frame
 (define (ccompose ctxt frame)
-  (if (eq? ctxt id) 
+  (if (id-context? ctxt)
       frame
       (lambda (val)
         (let-values ([(x ref-to-x) (generate-formal 'x)])
@@ -31,7 +34,7 @@
 
 (define (make-anormal-term elim-letrec-term)
   (define (anormal-term stx)
-    (anormal id stx))
+    (anormal the-id-context stx))
 
   (define (detect-set!-ids* bm-map stx-l)
     (for ([x (in-list (syntax->list stx-l))])
@@ -310,9 +313,18 @@
         (anormal ctxt (elim-letrec-term stx))]
        [(#%expression d)
         (anormal
-         (ccompose ctxt
-                   (lambda (d)
-                     (quasisyntax/loc stx (#%expression #,d))))
+         (if #t
+           ctxt
+           ;; d is a variable reference, so it is always obviously an
+           ;; expression; furthermore, we have already done expansion,
+           ;; so we know that d is definedly an expression (we're
+           ;; inside of anormal-term, rather than the various
+           ;; define/module forms), so we can get rid of it. This
+           ;; ensures that the id-context is preserved and thus
+           ;; multi-value returns don't generate a tail-lambda.
+           (ccompose ctxt
+                     (lambda (d)
+                       (quasisyntax/loc stx (#%expression #,d)))))
          #'d)]
        [_
         (raise-syntax-error 'anormal "Dropped through:" stx)])))
