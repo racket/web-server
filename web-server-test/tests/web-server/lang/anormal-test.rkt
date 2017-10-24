@@ -94,15 +94,25 @@
         (syntax->datum s))
       (syntax->list #'(vars ...)))]))
 
+(define (rm-expression stx)
+  (syntax-case stx (#%expression)
+    [(#%expression x) #'x]
+    [_ stx]))
+
 ;; alph=: target-expr target-expr -> boolean
 ;; are two target expressions alpha-equivalent?
-(define (alpha= expr1 expr2)
+(define (alpha= bexpr1 bexpr2)
+  (define expr1 (rm-expression bexpr1))
+  (define expr2 (rm-expression bexpr2))
   (define r (alpha=/env empty-env empty-env expr1 expr2))
   (unless r
-    (error 'alpha= "Not alpha=:\t~S\n\t~S\n" (syntax->datum expr1) (syntax->datum expr2)))
+    (error 'alpha= "Not alpha=:\t~S\n\t~S\n"
+           (syntax->datum expr1)
+           (syntax->datum expr2)))
   r)
 
-(define normalize-term (make-anormal-term (lambda _ (error 'anormal "No elim-letrec given."))))
+(define normalize-term
+  (make-anormal-term (lambda _ (error 'anormal "No elim-letrec given."))))
 
 (define anormal-tests
   (test-suite
@@ -261,8 +271,8 @@
     
     (test-case
      "zero-or-more argument lambda"
-     (check alpha= (normalize-term (expand-syntax (syntax (lambda x x))))
-            (expand-syntax (syntax (lambda x x)))))
+      (check alpha= (normalize-term (expand-syntax (syntax (lambda x x))))
+             (expand-syntax (syntax (lambda x x)))))
     
     (test-case
      "multi-valued let-values"
@@ -329,3 +339,7 @@
                   (lambda () (parameterize ([transformer? #t])
                                (normalize-term (expand-syntax (syntax #'provide/contract-id-set-a-date-day!))))))
     )))
+
+(module+ test
+  (require rackunit/text-ui)
+  (run-tests anormal-tests))
