@@ -18,17 +18,22 @@
 @defproc[(make-cached-url->servlet
           [url->path url->path/c]
           [path->serlvet path->servlet/c])
-         (values (->* () ((or/c false/c (listof url?))) void?)
+         (values (->* () ((or/c false/c (listof url?)) (-> servlet? void?)) void?)
                  url->servlet/c)]{
- The first return value flushes the cache. If its optional argument is
- @racket[#f] (the default), all servlet caches are flushed. Otherwise,
- only those servlet caches to which @racket[url->path] maps the given
- URLs are flushed. The second return value is a procedure that uses
+ The first return value is a procedure that flushes the cache. If its first
+ optional argument is @racket[#f] (the default), all servlet caches are
+ flushed. Otherwise, only those servlet caches to which @racket[url->path]
+ maps the given URLs are flushed. The second optional argument is a procedure
+ which is invoked on each cached value before it is flushed, which can be used
+ to finalize servlet resources. It defaults to @racket[void].
+ 
+ The second return value is a procedure that uses
  @racket[url->path] to resolve the URL to a path, then uses
  @racket[path->servlet] to resolve that path to a servlet, caching the
  results in an internal table.
 
- @history[#:changed "6.9.0.1" "Added optional argument to first return value."]
+ @history[#:changed "6.9.0.1" "Added optional argument to first return value for list of URLs."
+	  #:changed "6.11.0.3" "Added optional argument to first return value for servlet finalizer procedure."]
 }
 
 @defproc[(make [url->servlet url->servlet/c]
