@@ -57,4 +57,31 @@
     (check-true (let ([ct (make-cache-table)])
                   (cache-table-lookup! ct 'foo (lambda () #t))
                   (cache-table-clear! ct (list 'bar 'baz))
-                  (cache-table-lookup! ct 'foo (lambda () #f)))))))
+                  (cache-table-lookup! ct 'foo (lambda () #f)))))
+
+   (test-case "cache-table-clear! finalizer applies to all"
+     (check-true (let ([ct (make-cache-table)]
+                       [ks '(a b c d e)]
+                       [vs '(42 35 10 12 1830)])
+                   (for ([k (in-list ks)] [v (in-list vs)])
+                     (cache-table-lookup! ct k (lambda () v)))
+                   (cache-table-clear! ct #f (λ (v) (set! vs (remv v vs))))
+                   (null? vs))))
+
+   (test-case "cache-table-clear! finalizer applies to all given"
+     (check-true (let ([ct (make-cache-table)]
+                       [ks '(a b c d e)]
+                       [vs '(42 35 10 12 1830)])
+                   (for ([k (in-list ks)] [v (in-list vs)])
+                     (cache-table-lookup! ct k (lambda () v)))
+                   (cache-table-clear! ct '(b d) (λ (v) (set! vs (remv v vs))))
+                   (and (andmap (lambda (v) (not (memv v vs))) '(35 12)) #t))))
+
+   (test-case "cache-table-clear! finalizer applies only to given"
+     (check-true (let ([ct (make-cache-table)]
+                       [ks '(a b c d e)]
+                       [vs '(42 35 10 12 1830)])
+                   (for ([k (in-list ks)] [v (in-list vs)])
+                     (cache-table-lookup! ct k (lambda () v)))
+                   (cache-table-clear! ct '(b d) (λ (v) (set! vs (remv v vs))))
+                   (and (andmap (lambda (v) (memv v vs)) '(42 10 1830)) #t))))))

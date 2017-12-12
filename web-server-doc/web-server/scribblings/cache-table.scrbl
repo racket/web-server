@@ -23,12 +23,15 @@ functions.
 }
 
 @defproc[(cache-table-clear! [ct cache-table?]
-                             [entry-ids (or/c false/c (listof symbol?)) #f])
+                             [entry-ids (or/c false/c (listof symbol?)) #f]
+			     [finalize (-> any/c void?) void])
          void?]{
  If @racket[entry-ids] is @racket[#f], clears all entries in @racket[ct].
  Otherwise, clears only the entries with keys in @racket[entry-ids].
+ The procedure @racket[finalize] is invoked on each entry before it is cleared.
 
- @history[#:changed "6.9.0.1" "Added optional argument."]
+ @history[#:changed "6.9.0.1" "Added optional argument for list of entry keys."
+          #:changed "6.11.0.3" "Added optional argument for finalizer procedure."]
 }
 
 @defproc[(cache-table? [v any/c])
