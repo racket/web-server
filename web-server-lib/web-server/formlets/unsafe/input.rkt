@@ -310,7 +310,7 @@
                             ,(display e))))))))
 
 (define (serial-car pr)
-  (car pr))
+  (if (pair? pr) (car pr) #f))
 
 (define (select-input l 
                       #:attributes [attrs null]

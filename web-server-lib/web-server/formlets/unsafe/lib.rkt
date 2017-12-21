@@ -77,10 +77,3 @@
 (define (formlet-process f r)
   (let-values ([(x p i) (f 0)])
     (p (request-bindings/raw r))))
-
-
-
-    
-
-
-
