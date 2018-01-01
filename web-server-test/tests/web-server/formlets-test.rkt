@@ -520,11 +520,10 @@
                                  (list (make-binding:form #"input_0" #"0")
                                        (make-binding:form #"input_0" #"2")))
                    "1")
-      (test-exn "select-input"
-                exn?
-                (lambda ()
-                  (test-process (select-input (list "1" "2" "3"))
-                                empty)))
+      (test-equal? "select-input"
+                   (test-process (select-input (list "1" "2" "3"))
+                                 empty)
+                   #f)
       (test-equal? "select-input"
                    (test-display (select-input (list "1" "2" "3")))
                    '((select
@@ -731,3 +730,6 @@
    stateless-test-suite
    ))
 
+(module+ test
+  (require rackunit/text-ui)
+  (run-tests all-formlets-tests))
