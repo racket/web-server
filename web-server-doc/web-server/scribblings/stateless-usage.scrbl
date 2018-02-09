@@ -12,7 +12,7 @@ automatically:
 @itemize[
  @item{All uses of @racket[letrec] are removed and replaced with
        equivalent uses of @racket[let] and imperative features.}
- @item{The program is converted into @link["http://en.wikipedia.org/wiki/Administrative_normal_form"]{ANF} (Administrative Normal Form),
+ @item{The program is converted into @link["http://en.wikipedia.org/wiki/A-normal_form"]{ANF} (A-Normal Form),
        making all continuations explicit.}
  @item{All continuations and continuations marks are recorded in the
        continuation marks of the expression
