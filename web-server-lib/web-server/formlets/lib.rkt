@@ -84,7 +84,7 @@
         (-> contract? (... ...) contract?)
         dynamic-formlet/c
         quote-this-module-path
-        (quote-module-path)
+        (path->collects-relative (quote-module-path))
         "formlet/c"
         #'name)]))
 
