@@ -20,7 +20,7 @@
  [interface-version dispatcher-interface-version/c]
  [make (->* ()
             (#:format format-req/c
-             #:log-path path-string?)
+             #:log-path (or/c path-string? output-port?))
             dispatcher/c)])
 
 (define interface-version 'v1)
@@ -71,7 +71,7 @@
             (uri ,(url->string (request-uri req)))
             (time ,(current-seconds)))))
 
-(define (make-log-message log-path format-req)
+(define (make-log-message log-path-or-port format-req)
   (define log-ch (make-async-channel))
   (define log-thread
     (thread/suspend-to-kill
@@ -89,14 +89,16 @@
                                               (close-output-port log-p))
                                             #f)])
                  (define the-log-p
-                   (if (not (and log-p (file-exists? log-path)))
-                       (begin
-                         (unless (eq? log-p #f)
-                           (close-output-port log-p))
-                         (let ([new-log-p (open-output-file log-path #:exists 'append)])
-                           (file-stream-buffer-mode new-log-p 'line)
-                           new-log-p))
-                       log-p))
+                   (if (path-string? log-path-or-port)
+                       (if (not (and log-p (file-exists? log-path-or-port)))
+                           (begin
+                             (unless (eq? log-p #f)
+                               (close-output-port log-p))
+                             (let ([new-log-p (open-output-file log-path-or-port #:exists 'append)])
+                               (file-stream-buffer-mode new-log-p 'line)
+                               new-log-p))
+                           log-p)
+                       log-path-or-port))
                  (display (format-req req) the-log-p)
                  the-log-p))])))))))
   (lambda args
