@@ -66,7 +66,7 @@
                   #:mime-types-path path-string?
                   #:servlet-path string?
                   #:servlet-regexp regexp?
-                  #:log-file (or/c false/c path-string?)
+                  #:log-file (or/c false/c path-string? output-port?)
                   #:log-format (or/c log:log-format/c log:format-req/c))
                  . ->* .
                  void)])
