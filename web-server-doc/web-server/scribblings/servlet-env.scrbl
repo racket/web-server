@@ -176,7 +176,7 @@ Like always, you don't even need to save the file.
                         [#:ssl-cert ssl-cert (or/c false/c path-string?) (and ssl? (build-path server-root-path "server-cert.pem"))]
                         [#:ssl-key ssl-key (or/c false/c path-string?) (and ssl? (build-path server-root-path "private-key.pem"))]
 
-                        [#:log-file log-file (or/c false/c path-string?) #f]
+                        [#:log-file log-file (or/c false/c path-string? output-port?) #f]
                         [#:log-format log-format (or/c log-format/c format-req/c) 'apache-default])
                        void]{
  This sets up and starts a fairly default server instance.

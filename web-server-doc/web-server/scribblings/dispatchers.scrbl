@@ -239,7 +239,7 @@ a URL that refreshes the password file, servlet cache, etc.}
 }
 
 @defproc[(make [#:format format format-req/c paren-format]
-               [#:log-path log-path path-string? "log"])
+               [#:log-path log-path (or/c path-string? output-port?) "log"])
          dispatcher/c]{
  Logs requests to @racket[log-path] by using @racket[format] to format the requests.
  Then invokes @racket[next-dispatcher].
