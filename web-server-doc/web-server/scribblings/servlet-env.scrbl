@@ -235,6 +235,8 @@ order they appear in the list.
 
  If @racket[log-file] is given, then it used to log requests using @racket[log-format] as the format. Allowable formats
  are those allowed by @racket[log-format->format]. If @racket[log-format] is a function, it is used directly to render the log entry.
+ If @racket[log-file] is a filepath, the given file is opened and written in a different thread. If @racket[log-file] is an @racket[output-port?], 
+ logs are written directly to the port.
  
  If @racket[connection-close?] is @racket[#t], then every connection is closed after one
  request. Otherwise, the client decides based on what HTTP version it uses.
