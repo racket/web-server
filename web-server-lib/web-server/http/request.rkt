@@ -169,10 +169,18 @@
          => (match-lambda
               [(list _ method url major minor)
                (values method
-                       (string->url (bytes->string/utf-8 url))
+                       (let* ([us (bytes->string/utf-8 url)]
+                              [u1 (string->url us)])
+                         (cond
+                           [(and (url-host u1) (not (url-scheme u1)))
+                            (string->url (format "//~a" us))]
+                           [else
+                            u1]))
                        (string->number (bytes->string/utf-8 major))
                        (string->number (bytes->string/utf-8 minor)))])]
         [else (network-error 'read-request "malformed request ~a" line)])))
+(module+ internal-test
+  (provide read-request-line))
 
 ;; **************************************************
 ;; read-headers  
