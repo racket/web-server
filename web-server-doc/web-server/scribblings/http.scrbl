@@ -196,6 +196,12 @@ The server will always replace your @litchar{Connection} header if it
 needs to ensure the connection will be closed. (Typically with an
 HTTP/1.0 client.)
 
+The server will always puts headers it generates before those in the
+@racket[response] structure and guarantees that the headers supplied
+appear in the output in the order given. (This is relevant if multiple
+occurrences of the same header have a different interpretation by the
+client, such as with @litchar{Set-Cookie}.)
+
 Examples:
  @racketblock[
   (response
