@@ -123,6 +123,7 @@
       (fprintf to-client "~a\r\n" (number->string bytes-read-or-eof 16))
       (write-bytes buffer to-client 0 bytes-read-or-eof)
       (fprintf to-client "\r\n")
+      (flush-output to-client)
       (loop)))
   (thread-wait to-chunker-t)
   (fprintf to-client "0\r\n")
