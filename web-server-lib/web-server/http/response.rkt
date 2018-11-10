@@ -125,7 +125,7 @@
   ;; gracefully back out when that happens.
   (with-handlers ([exn:fail? (lambda (e)
                                (kill-thread to-chunker-t))])
-    (define buffer (make-bytes 1024))
+    (define buffer (make-bytes 16384))
     (let loop ()
       (define bytes-read-or-eof
         (read-bytes-avail! buffer from-servlet))
