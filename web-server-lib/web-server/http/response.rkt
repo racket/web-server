@@ -109,10 +109,13 @@
   (flush-output o-port))
 
 (define (output-response-body/chunked conn bresp)
+  ;; Flush the headers immediately since the response handler can wait
+  ;; indefinitely before writing anything out to the output port.
+  (flush-output (connection-o-port conn))
   (define-values (from-servlet to-chunker) (make-pipe))
   (define to-client (connection-o-port conn))
-  (define to-chunker-t    
-    (thread (λ () 
+  (define to-chunker-t
+    (thread (λ ()
               ((response-output bresp) to-chunker)
               (close-output-port to-chunker))))
   (define buffer (make-bytes 1024))
