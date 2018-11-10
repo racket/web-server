@@ -112,26 +112,33 @@
   ;; Flush the headers immediately since the response handler can wait
   ;; indefinitely before writing anything out to the output port.
   (flush-output (connection-o-port conn))
+
   (define-values (from-servlet to-chunker) (make-pipe))
   (define to-client (connection-o-port conn))
   (define to-chunker-t
     (thread (λ ()
               ((response-output bresp) to-chunker)
               (close-output-port to-chunker))))
-  (define buffer (make-bytes 1024))
-  (let loop ()
-    (define bytes-read-or-eof
-      (read-bytes-avail! buffer from-servlet))
-    (unless (eof-object? bytes-read-or-eof)
-      (fprintf to-client "~a\r\n" (number->string bytes-read-or-eof 16))
-      (write-bytes buffer to-client 0 bytes-read-or-eof)
-      (fprintf to-client "\r\n")
-      (flush-output to-client)
-      (loop)))
-  (thread-wait to-chunker-t)
-  (fprintf to-client "0\r\n")
-  (fprintf to-client "\r\n")
-  (flush-output to-client))
+
+  ;; The client might go away while the response is being generated,
+  ;; in which case the output port will be closed so we have to
+  ;; gracefully back out when that happens.
+  (with-handlers ([exn:fail? (lambda (e)
+                               (kill-thread to-chunker-t))])
+    (define buffer (make-bytes 1024))
+    (let loop ()
+      (define bytes-read-or-eof
+        (read-bytes-avail! buffer from-servlet))
+      (unless (eof-object? bytes-read-or-eof)
+        (fprintf to-client "~a\r\n" (number->string bytes-read-or-eof 16))
+        (write-bytes buffer to-client 0 bytes-read-or-eof)
+        (fprintf to-client "\r\n")
+        (flush-output to-client)
+        (loop)))
+    (thread-wait to-chunker-t)
+    (fprintf to-client "0\r\n")
+    (fprintf to-client "\r\n")
+    (flush-output to-client)))
 
 (module+ test
   (require rackunit)
