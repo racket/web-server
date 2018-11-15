@@ -50,33 +50,28 @@
           (make-output-port 'out out chomp! close)))
 
 (define (call-with-test-client+server resp f)
-  (define-values [in out] (make-buffered-pipe))
-  (define chunks (make-channel))
-  (define client
-    (thread
-     (lambda ()
-       (define chunk (make-bytes 4096))
-       (let loop ()
-         (define n-read-or-eof (read-bytes-avail! chunk in))
-         (unless (or (eof-object? n-read-or-eof) (port-closed? in))
-           (channel-put chunks (subbytes chunk 0 n-read-or-eof))
-           (loop))))))
+  (parameterize ([current-custodian (make-custodian)])
+    (define-values [in out] (make-buffered-pipe))
+    (define chunks (make-channel))
+    (define client
+      (thread
+       (lambda ()
+         (define chunk (make-bytes 4096))
+         (let loop ()
+           (define n-read-or-eof (read-bytes-avail! chunk in))
+           (unless (or (eof-object? n-read-or-eof) (port-closed? in))
+             (channel-put chunks (subbytes chunk 0 n-read-or-eof))
+             (loop))))))
 
-  (define server
-    (thread
-     (lambda ()
-       (define-values [conn-i conn-o] (make-pipe))
-       (define connection
-         (new-connection (start-connection-manager) 120 conn-i out (current-custodian) #f))
-       (output-response connection resp))))
+    (define server
+      (thread
+       (lambda ()
+         (define-values [conn-i conn-o] (make-pipe))
+         (define connection
+           (new-connection (start-connection-manager) 120 conn-i out (current-custodian) #f))
+         (output-response connection resp))))
 
-  (dynamic-wind
-    void
-    (lambda ()
-      (f in out chunks))
-    (lambda ()
-      (kill-thread client)
-      (kill-thread server))))
+    (f in out chunks)))
 
 
 (define response-tests
