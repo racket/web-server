@@ -163,11 +163,11 @@ title line of different calls to @racket[fast-template]:
 }
 ]
 
-@section{Gotchas}
+@section{Gotchas: @"@" Syntax: @"@" character, identifiers, and spaces}
 
 To obtain an @litchar["@"] character in template output, you must
 escape the it, because it is the escape character of the
-@at-reader-ref syntax.  For example, to obtain:
+@|at-reader-ref|.  For example, to obtain:
 @verbatim[#:indent 2]|{
   <head><title>Fastest @s in the West!</title></head>
 }|
@@ -184,15 +184,25 @@ The @at-reader-ref will read Racket identifiers, so it does not terminate identi
   <head><title>Fastest @thing in the @place!</title></head>
 }|
 will complain that the identifier @racket[place!</title></head>] is
-undefined. You can subvert this by explicitly delimiting the
-identifier:
+undefined. You might be tempted to subvert this by adding a space
+after the identifier:
+@verbatim[#:indent 2]|{
+  <head><title>Fastest @thing in the @place !</title></head>
+}|
+This will remove the error, but the generated HTML will not look like
+what you want. Sometimes this is not relevant, but sometimes it
+is. The safest thing to do is explicitly delimit the identifier with @"|"s:
 @verbatim[#:indent 2]|{
   <head><title>Fastest @thing in the @|place|!</title></head>
 }|
 
-Another gotcha is that since the template is compiled into a Racket
-program, only its results will be printed. For example, suppose we
-have the template:
+If you intend to use templates a lot, you should familiarize yourself
+with the details of the @|at-reader-ref|.
+
+@section{Gotchas: Iteration}
+
+Since the template is compiled into a Racket program, only its results
+will be printed. For example, suppose we have the template:
 @verbatim[#:indent 2]|{
  <table>
   @for[([c clients])]{
@@ -340,21 +350,20 @@ When writing templates, always remember to escape user-supplied input.
 The quickest way to generate an HTTP response from a template is using
 a @racket[response?] struct:
 @racketblock[
- (response/full
-  200 #"Okay"
-  (current-seconds) TEXT/HTML-MIME-TYPE
-  empty
-  (list (string->bytes/utf-8 (include-template "static.html"))))
+ (response/output
+  (λ (op) (display (include-template "static.html") op)))
 ]
 
 Finally, if you want to include the contents of a template inside a larger @xexpr :
 @racketblock[
  `(html ,(include-template "static.html"))
 ]
-will result in the literal string being included (and entity-escaped). If you actually want
-the template to be unescaped, then create a @racket[cdata] structure:
+will result in the literal string being included (and
+entity-escaped). If you actually want the template to be unescaped,
+then use @racket[include-template/xml] to assert that the content is
+valid XML.
 @racketblock[
- `(html ,(make-cdata #f #f (include-template "static.html")))
+ `(html ,(include-template/xml "static.html"))
 ]
 
 @section{API Details}
@@ -368,7 +377,11 @@ the template to be unescaped, then create a @racket[cdata] structure:
   (include-template "static.html")
   (include-template #:command-char #\$ "dollar-static.html")
  ]
-}
+ }
+
+@defform*[((include-template/xml path-spec)
+           (include-template/xml #:command-char command-char path-spec))]{
+ Like @racket[include/template], but expands to a @racket[cdata] structure.}
 
 @defform[(in x xs e ...)]{
  Expands into

@@ -17,10 +17,10 @@
                                       empty)
                                  p)))))]))
 
-(define-syntax include-template/xexpr
+(define-syntax include-template/xml
   (syntax-rules ()
     [(_ . p)
-     (string->xexpr (include-template . p))]))
+     (cdata #f #f (include-template . p))]))
 
 (define-syntax in
   (syntax-rules ()
@@ -29,4 +29,5 @@
        (begin/text e ...))]))
 
 (provide include-template
+         include-template/xml
          in)
