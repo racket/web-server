@@ -67,24 +67,24 @@ running.
 @section{Basic Blog}
 @declare-exporting[#:use-sources (web-server/scribblings/tutorial/examples/iteration-1)]
 
-We begin by defining the necessary data structures. A post is:
+We begin by defining the necessary data structures.
 
-@racketblock[(struct post (title body))]
-
-@(defstruct* post ([title string?] [body string?]))
+@defstruct*[post ([title string?] [body string?])]{
+  A blog post has a title and a body.
+}
 
 @bold{Exercise.} Make a few examples of posts.
 
-Next we define a blog to be simply a list of posts:
+@defthing[blog (listof post?)]{
+  A blog is simply a list of posts.
 
-@(defthing blog (listof post?))
+  Here, then, is a very simple example of a blog:
 
-Here, then, is a very simple example of a blog:
-
-@racketblock[
-(define BLOG (list (post "First Post!"
-                         "Hey, this is my first post!")))
-]
+  @racketblock[
+  (define BLOG (list (post "First Post!"
+                           "Hey, this is my first post!")))
+  ]
+}
 
 Now let's get our web application to show it.
 
@@ -190,10 +190,8 @@ have to do is place a comma in front that subexpression. For example:
 @; Suggestion: insert here a reference to the Guide's discussion of
 @; quasiquotation, akin to the reference to HtDP a couple of paragraphs
 @; above. -AWest, 18-Dec-2011
-@bold{Exercise.} Write a function that consumes a @racket[post] and produces
+@bold{Exercise.} Write a function @racket[render-post] that consumes a @racket[post] and produces
 an @xexpr representing that content.
-
-@defthing[render-post (post? . -> . xexpr/c)]
 
 As an example, we want:
 
@@ -251,8 +249,6 @@ representing an unordered, itemized HTML list:
 @bold{Exercise.} Write a function @racket[render-posts] that consumes a @racket[(listof post?)]
 and produces an @|xexpr| for that content.
 
-@defthing[render-posts ((listof post?) . -> . xexpr/c)]
-
 As examples,
 
 @racketblock[
@@ -307,20 +303,14 @@ really supposed to be ignored so much!
 When a user fills out a web form and submits it, the user's browser constructs
 a new @racket[request] that contains the form's 
 values, which we can extract on our end, using the function
-@racket[request-bindings]:
-
-@defthing[request-bindings (request? . -> . bindings?)]
+@racket[request-bindings].
 
 To extract a single web form value from a set of bindings, Racket provides
 the function @racket[extract-binding/single], which also takes the name
-of the corresponding field of the web form:
-
-@defthing[extract-binding/single (symbol? bindings? . -> . string?)]
+of the corresponding field of the web form.
 
 To verify that a set of bindings contains a particular field, use
-@racket[exists-binding?]:
-
-@defthing[exists-binding? (symbol? bindings? . -> . boolean?)]
+@racket[exists-binding?].
 
 With these functions, we can design functions that consume @racket[request]s
 and respond to them usefully.
@@ -330,15 +320,11 @@ of bindings.
 It should produce @racket[#t] if there exist bindings both for the symbols
 @racket['title] and @racket['body], and @racket[#f] otherwise.
 
-@defthing[can-parse-post? (bindings? . -> . boolean?)]
-
 @bold{Exercise.} Write a function @racket[parse-post] that consumes a set of
 bindings.
 Assuming that the bindings structure has values for the symbols @racket['title]
-and @racket['body], @racket[parse-post] should produce a post containing those
+and @racket['body], @racket[parse-post] should produce a @racket[post] containing those
 values.
-
-@defthing[parse-post (bindings? . -> . post?)]
 
 Now that we have these helper functions, we can extend our web
 application to handle form input.  We'll add a small form at the
@@ -489,21 +475,18 @@ must change our definition of the blog structure to the following:
 
 @racketblock[(struct blog (posts) #:mutable)]
 
-@defstruct*[blog ([posts (listof post?)])]
-
 A mutable structure provides functions that change its fields; in this case, we
 are provided the structure mutator @racket[set-blog-posts!],
-which allows us to change the posts of a blog:
-
-@defthing[set-blog-posts! (blog? (listof post?) . -> . void)]
-
-
+which allows us to change the posts of a blog.
 
 @bold{Exercise.} Write a function @racket[blog-insert-post!]
-
-@defthing[blog-insert-post! (blog? post? . -> . void)]
-
 whose intended side effect is to extend a blog's posts.
+
+@racketblock[
+  (define BLOG (blog (list)))
+  (blog-insert-post! BLOG (post "About Tuesdays" "Tuesdays are really hopeless"))
+  (not (null? (blog-posts BLOG)))
+]
 
 @centerline{------------}
 
@@ -523,10 +506,12 @@ the same blog!
 @section{Extending the Model}
 @declare-exporting[#:use-sources (web-server/scribblings/tutorial/examples/iteration-5)]
 
-Next, let's extend the application so that a post can include a list
-of comments. The data definition becomes:
+Next, let's extend the application so that a post can include
+comments.
 
-@defstruct*[post ([title string?] [body string?] [comments (listof string?)]) #:mutable]
+@defstruct*[post ([title string?] [body string?] [comments (listof string?)]) #:mutable]{
+  Data definition for a post that contains a list of comments.
+}
 
 @bold{Exercise.} Write the updated data structure definition for posts.  Make
 sure to make the structure mutable, since we intend to add comments to
@@ -535,11 +520,10 @@ posts.
 @bold{Exercise.} Make up a few examples of posts.
 
 @bold{Exercise.} Define a function @racket[post-insert-comment!]
-
-@defthing[post-insert-comment! (post? string? . -> . void)]
-
 whose intended side effect is to add a new comment to the end of the post's
-list of comments.
+list of comments. For example @racket[(post-insert-comment! p str)] should
+update the list of comments in the post @racket[p] to contain the comment
+@racket[str].
 
 @bold{Exercise.} Adjust @racket[render-post] so that the produced fragment will include the
 comments in an itemized list.
@@ -648,10 +632,7 @@ is not necessary for content that doesn't change.
 Examples of such static resources include images, documents, and .css files.
 To serve them alongside our web applications, we inform the web server of a
 directory that we have created specially for static files. The function
-@racket[static-files-path],
-
-@defthing[static-files-path (path-string? -> void)]
-
+@racket[static-files-path]
 tells the web server to look in the given path whenever it receives a URL
 that looks like a request for a static resource.
 
@@ -715,10 +696,7 @@ problem is that some requests make the application mutate data structures.
 A common technique that web developers use to dodge the double-submission
 problem is to redirect state-mutating requests to a different URL, one that is
 safe to reload.  This trick is implemented in Racket by the function
-@racket[redirect/get]:
-
-@defthing[redirect/get (-> request?)]
-
+@racket[redirect/get].
 Its immediate side effect is to force the user's browser to follow a
 redirection to a safe URL, and it gives us back that fresh new request.
 
@@ -832,14 +810,14 @@ as @racket[#:prefab].
 @bold{Exercise.} Write the new structure definition for posts.
 
 At this point, we @emph{can} read and write the blog to disk. So let's do it.
-First, we'll add to the model a path pointing to where the blog resides on
-disk:
+First, we'll update the @racket[blog] data definition.
 
-@defstruct*[blog ([home string?] [posts (listof post?)]) #:mutable #:prefab]
+@defstruct*[blog ([home string?] [posts (listof post?)]) #:mutable #:prefab]{
+  The string @racket[home] is a path pointing to where the blog resides on disk.
+}
 
-Notice that we will need to convert the path into a string. Why didn't we just
-make the blog structure contain paths? Answer: They can't be used with
-@racket[read] and @racket[write].
+Question: Why didn't we just make the blog structure contain a Racket @racket[path]?
+Answer: Paths can't be used with @racket[read] and @racket[write].
 
 @bold{Exercise.} Write the new structure definition for blogs.
 
@@ -909,8 +887,11 @@ change the application appropriately. While we're at it, let's change
 structure, rather the structure itself. This improves the model's interface, by
 making it more abstract:
 
+@deftogether[(
 @defthing[blog-insert-post! (blog? string? string? . -> . void)]
-@defthing[post-insert-comment! (blog? post? string? . -> . void)]
+@defthing[post-insert-comment! (blog? post? string? . -> . void)])]{
+  New signatures for the persistent model.
+}
 
 @bold{Exercise.} Write the new definitions of @racket[blog-insert-post!] and @racket[post-insert-comment!].
 Remember to call @racket[save-blog!].
@@ -1024,7 +1005,7 @@ relational style.
 A @racket[blog] structure is now simply a container for the database
 handle:
 
-@defstruct*[blog ([db connection?])]
+@racketblock[(struct blog ([db connection?]))]
 
 @bold{Exercise.} Write the @racket[blog] structure definition. It
 does not need to be mutable or serializable.
@@ -1102,16 +1083,18 @@ ensures that the arguments are treated strictly as data.
 @centerline{------------}
 
 In @racket[post-insert-comment!] we use @racket[post-id] but we
-have not yet defined the new @racket[post] structure.  Since the post table
-schema uses an integer as identifier, it would seem sufficient
-to do the same for the @racket[post] structure.
-However, a structure so defined would not indicate which blog, and consequently
-which database, a post belongs to. We would thus be unable to extract
-the title or body values.
+need to define a new @racket[post] structure. Here is the updated data
+definition.
 
-The solution, of course, is to associate the blog with each post:
+@defstruct*[post ([blog blog?] [id integer?])]{
+  Since the post table schema uses an integer as identifier, it would seem
+  sufficient to do the same for the @racket[post] structure.
+  However, a structure so defined would not indicate which blog, and consequently
+  which database, a post belongs to. We would thus be unable to extract
+  the title or body values.
 
-@defstruct*[post ([blog blog?] [id integer?])]
+  The solution, of course, is to associate the blog with each post.
+}
 
 @bold{Exercise.} Write the structure definition for posts.
 
