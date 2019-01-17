@@ -73,9 +73,13 @@ We begin by defining the necessary data structures. A post is:
 
 @(defstruct* post ([title string?] [body string?]))
 
+@linebreak[]
+
 @bold{Exercise.} Make a few examples of posts.
 
 Next we define a blog to be simply a list of posts:
+
+@linebreak[]
 
 @(defthing blog (listof post?))
 
@@ -195,6 +199,8 @@ an @xexpr representing that content.
 
 @defthing[render-post (post? . -> . xexpr/c)]
 
+@linebreak[]
+
 As an example, we want:
 
 @racketblock[
@@ -252,6 +258,8 @@ representing an unordered, itemized HTML list:
 and produces an @|xexpr| for that content.
 
 @defthing[render-posts ((listof post?) . -> . xexpr/c)]
+
+@linebreak[]
 
 As examples,
 
@@ -311,16 +319,22 @@ values, which we can extract on our end, using the function
 
 @defthing[request-bindings (request? . -> . bindings?)]
 
+@linebreak[]
+
 To extract a single web form value from a set of bindings, Racket provides
 the function @racket[extract-binding/single], which also takes the name
 of the corresponding field of the web form:
 
 @defthing[extract-binding/single (symbol? bindings? . -> . string?)]
 
+@linebreak[]
+
 To verify that a set of bindings contains a particular field, use
 @racket[exists-binding?]:
 
 @defthing[exists-binding? (symbol? bindings? . -> . boolean?)]
+
+@linebreak[]
 
 With these functions, we can design functions that consume @racket[request]s
 and respond to them usefully.
@@ -332,6 +346,8 @@ It should produce @racket[#t] if there exist bindings both for the symbols
 
 @defthing[can-parse-post? (bindings? . -> . boolean?)]
 
+@linebreak[]
+
 @bold{Exercise.} Write a function @racket[parse-post] that consumes a set of
 bindings.
 Assuming that the bindings structure has values for the symbols @racket['title]
@@ -339,6 +355,8 @@ and @racket['body], @racket[parse-post] should produce a post containing those
 values.
 
 @defthing[parse-post (bindings? . -> . post?)]
+
+@linebreak[]
 
 Now that we have these helper functions, we can extend our web
 application to handle form input.  We'll add a small form at the
@@ -497,7 +515,7 @@ which allows us to change the posts of a blog:
 
 @defthing[set-blog-posts! (blog? (listof post?) . -> . void)]
 
-
+@linebreak[]
 
 @bold{Exercise.} Write a function @racket[blog-insert-post!]
 
@@ -719,6 +737,8 @@ safe to reload.  This trick is implemented in Racket by the function
 
 @defthing[redirect/get (-> request?)]
 
+@linebreak[]
+
 Its immediate side effect is to force the user's browser to follow a
 redirection to a safe URL, and it gives us back that fresh new request.
 
@@ -912,6 +932,8 @@ making it more abstract:
 @defthing[blog-insert-post! (blog? string? string? . -> . void)]
 @defthing[post-insert-comment! (blog? post? string? . -> . void)]
 
+@linebreak[]
+
 @bold{Exercise.} Write the new definitions of @racket[blog-insert-post!] and @racket[post-insert-comment!].
 Remember to call @racket[save-blog!].
 
@@ -1026,6 +1048,8 @@ handle:
 
 @defstruct*[blog ([db connection?])]
 
+@linebreak[]
+
 @bold{Exercise.} Write the @racket[blog] structure definition. It
 does not need to be mutable or serializable.
 
@@ -1112,6 +1136,8 @@ the title or body values.
 The solution, of course, is to associate the blog with each post:
 
 @defstruct*[post ([blog blog?] [id integer?])]
+
+@linebreak[]
 
 @bold{Exercise.} Write the structure definition for posts.
 
