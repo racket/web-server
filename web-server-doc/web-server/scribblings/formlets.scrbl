@@ -14,8 +14,8 @@
 
 The @web-server provides a kind of Web form abstraction called a @tech{formlet}.
 
-@margin-note{@tech{Formlet}s originate in the work of the @link["http://groups.inf.ed.ac.uk/links/"]{Links} research group in
-their paper @link["http://groups.inf.ed.ac.uk/links/formlets/"]{The Essence of Form Abstraction}.}
+@margin-note{@tech{Formlet}s originate in the work of the @link["http://links-lang.org"]{Links} research group in
+their paper @link["http://links-lang.org/papers/formlets-essence.pdf"]{The Essence of Form Abstraction}.}
 
 @section{Basic Formlet Usage}
 
