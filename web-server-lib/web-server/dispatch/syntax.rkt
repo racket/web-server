@@ -10,6 +10,9 @@
                      syntax/parse
                      web-server/dispatch/pattern))
 
+(module+ test
+  (require rackunit))
+
 (define (default-else req)
   (next-dispatcher))
 
@@ -24,6 +27,22 @@
                (map (lambda (s) (make-path/param s empty))
                     strlist))
              empty #f)))
+
+(module+ test
+  (check-equal? (string-list->url (list))
+                "/")
+  (check-equal? (string-list->url (list "foo"))
+                "/foo")
+  (check-equal? (string-list->url (list ""))
+                "/")
+  (check-equal? (string-list->url (list "" ""))
+                "//")
+  (check-equal? (string-list->url (list "" "gonzo"))
+                "//gonzo")
+  (check-equal? (string-list->url (list "gonzo" ""))
+                "/gonzo/")
+  (check-equal? (string-list->url (list "baked" "beans"))
+                "/baked/beans"))
 
 (define-syntax (dispatch-case stx)
   (syntax-parse
