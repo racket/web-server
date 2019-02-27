@@ -44,7 +44,7 @@
    [send/suspend/url ((url? . -> . can-be-response?) . -> . request?)]
    [send/suspend/url/dispatch ((((request? . -> . any/c) . -> . url?) . -> . can-be-response?)
                                . -> . any/c)]
-   [redirect/get (-> request?)])
+   [redirect/get (->* () (#:headers (listof header?)) request?)])
 
 ;; initial-servlet : (request -> response) -> (request -> can-be-response?)
 (define (initialize-servlet start)
@@ -122,5 +122,7 @@
        (read (open-input-bytes kont)))]
      [_ #f]))) 
 
-(define (redirect/get)
-  (send/suspend/url (lambda (k-url) (redirect-to (url->string k-url) temporarily))))
+(define (redirect/get #:headers [hs null])
+  (send/suspend/url
+   (lambda (k-url)
+     (redirect-to (url->string k-url) see-other #:headers hs))))

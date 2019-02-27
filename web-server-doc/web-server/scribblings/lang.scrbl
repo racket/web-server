@@ -47,9 +47,7 @@
  Like @racket[send/suspend/url/dispatch] but with a string URL representation.
 }
 
-@deftogether[(
-@defproc[(redirect/get) request?]
-)]{
 
+@defproc[(redirect/get [#:headers hs (listof header?) empty]) request?]{
 See @racketmodname[web-server/servlet/web].}
 }

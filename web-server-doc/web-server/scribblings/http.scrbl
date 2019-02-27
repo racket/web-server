@@ -541,28 +541,94 @@ available (@racket[make-secret-salt/file]),
 
 @defmodule[web-server/http/redirect]{
 
-@defproc[(redirect-to [uri non-empty-string?]
-                      [perm/temp redirection-status? temporarily]
-                      [#:headers headers (listof header?) (list)])
-         response?]{
- Generates an HTTP response that redirects the browser to @racket[uri],
- while including the @racket[headers] in the response.
+@deftogether[                                   
+ (@defproc[(redirect-to [uri non-empty-string?]
+                        [status redirection-status? temporarily]
+                        [#:headers headers (listof header?) '()])
+           response?]
+   @defproc[(redirection-status? [v any/c]) boolean?]
+   @defthing[temporarily redirection-status?]
+   @defthing[temporarily/same-method redirection-status?]
+   @defthing[see-other redirection-status?]
+   @defthing[permanently redirection-status?])]{
+  The function @racket[redirect-to] 
+  generates an HTTP response that redirects the browser to @racket[uri],
+  while including the @racket[headers] in the response.
+  The @racket[status] argument is a @deftech{redirection status}
+  value, which determines the specific type of HTTP redirect to be used.
 
- Example:
- @racket[(redirect-to "http://www.add-three-numbers.com" permanently)]
-}
+  The default @tech{redirection status}, @racket[temporarily],
+  is preserved for backwards compatibility:
+  new code should usually use either @racket[temporarily/same-method]
+  or @racket[see-other], instead.
+  The @racket[temporarily] @tech{redirection status} corresponds to
+  @hyperlink["https://tools.ietf.org/html/rfc7231#section-6.4.3"]{
+   @litchar{302 Found}}.
+  Unfortunately, browsers have not implemented this status consistently
+  for methods other than @litchar{GET} and (in practice, with all but some
+  very old browsers) @litchar{POST}.
 
-@defproc[(redirection-status? [v any/c])
-         boolean?]{
- Determines if @racket[v] is one of the following values.
-}
+  The @racket[temporarily/same-method] @tech{redirection status}
+  uses @hyperlink["https://tools.ietf.org/html/rfc7231#section-6.4.7"]{
+   @litchar{307 Temporary Redirect}}.
+  This redirects the browser to @racket[uri] using the same HTTP method
+  as the original request.
 
-@defthing[permanently redirection-status?]{A @racket[redirection-status?] for permanent redirections.}
+  The @racket[see-other] @tech{redirection status} corresponds to
+  @hyperlink["https://tools.ietf.org/html/rfc7231#section-6.4.4"]{
+   @litchar{303 See Other}}.
+  It is most often used to implement the @deftech{Post-Redirect-Get}
+  pattern: as a response to a request using @litchar{POST} or
+  another HTTP method with side-effects, it causes the browser to
+  perform a @litchar{GET} or @litchar{HEAD} request for @racket[uri],
+  which gives a response to the original @litchar{POST} request.
+  This prevents the @onscreen{Back} and @onscreen{Refresh} buttons
+  from duplicating effects, such as making a purchase or
+  adding items to a database.
+  The web server provides @racket[redirect/get] for added convienience
+  with @tech{Post-Redirect-Get}.
 
-@defthing[temporarily redirection-status?]{A @racket[redirection-status?] for temporary redirections.}
-
-@defthing[see-other redirection-status?]{A @racket[redirection-status?] for "see-other" redirections.}
-
+  The @racket[permanently] @tech{redirection status} uses the HTTP status
+  @hyperlink["https://tools.ietf.org/html/rfc7231#section-6.4.2"]{
+   @litchar{301 Moved Permanently}}.
+  It is like @racket[temporarily], except that, as the name suggests,
+  it signifies that the move is permanent and that search engines,
+  for example, should use @racket[uri] instead of the URI of the
+  orriginal request.
+  Unfortunately, @racket[permanently] is also like @racket[temporarily]
+  in that browsers have implemented it inconsistently for
+  methods other than @litchar{GET} and @litchar{HEAD}:
+  in particular, @hyperlink["https://tools.ietf.org/html/rfc7231#section-6.4.2"]{
+   RFC 7231} permits that, ``for historical reasons, a user agent @bold{may}
+  change the request method from @litchar{POST} to @litchar{GET} for the subsequent request.
+  When it is important to ensure that the request to @racket[uri] use the same method,
+  there are some possible alternatives:
+  @itemlist[
+ @item{RFC 7231 suggests using @litchar{307 Temporary Redirect},
+    i.e. @racket[temporarily/same-method].
+    This has the disadvantage that search engines and others won't
+    update references to the old URI.}
+ @item{@hyperlink["https://tools.ietf.org/html/rfc7538"]{RFC 7538}
+    specifies a new HTTP status, @litchar{308 Permanent Redirect},
+    which fobids changing the request method, analagously to
+    @litchar{307 Temporary Redirect}.
+    However, the RFC also highlights some important
+    @hyperlink["https://tools.ietf.org/html/rfc7538#section-4"]{
+     deployment considerations} for this status.
+    In particular, older browsers---including, as of this writing,
+    some that remain in
+    @hyperlink["https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/308#Browser_compatibility"]{
+     relatively common use}---do not understand this status and will
+    fall back to the semantics of
+    @hyperlink["https://tools.ietf.org/html/rfc7231#section-6.4.1"]{
+     @litchar{300 Multiple Choices}}, which is often undesirable.}
+ @item{The application can note the method of the original request
+    and use @racket[permanently] for @litchar{GET} and @litchar{HEAD} requests
+    or one of the other alternatives for other methods.}]
+  
+  Example:
+  @racket[(redirect-to "http://www.add-three-numbers.com" permanently)]
+ }
 }
 
 @; ------------------------------------------------------------

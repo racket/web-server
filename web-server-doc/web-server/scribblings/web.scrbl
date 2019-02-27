@@ -152,15 +152,19 @@ the request is returned from this call to @racket[send/suspend].
 
 @defproc[(redirect/get [#:headers hs (listof header?) empty])
          request?]{
- Calls @racket[send/suspend] with @racket[redirect-to], passing @racket[hs] as the headers.
+  Calls @racket[send/suspend] with @racket[redirect-to],
+  passing @racket[hs] as the headers and
+  @racket[see-other] as the @tech{redirection status}.
        
- This implements the Post-Redirect-Get pattern. 
- Use this to prevent the @onscreen["Refresh"] button from duplicating effects, such as adding items to a database. 
+  This implements the @tech{Post-Redirect-Get} pattern. 
+  Use this to prevent the @onscreen["Refresh"] button from duplicating effects,
+  such as adding items to a database.
 }
 
 @defproc[(redirect/get/forget [#:headers hs (listof header?) empty])
          request?]{
- Calls @racket[send/forward] with @racket[redirect-to], passing @racket[hs] as the headers.
+  Like @racket[redirect/get], but using @racket[send/forward]
+  instead of @racket[send/suspend].
 }
                   
 @defthing[current-servlet-continuation-expiration-handler 
