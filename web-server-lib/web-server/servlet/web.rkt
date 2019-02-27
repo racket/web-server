@@ -1,6 +1,5 @@
 #lang racket/base
 (require racket/contract
-         racket/list
          net/url)
 (require web-server/managers/manager
          web-server/private/util
@@ -145,8 +144,8 @@
 ;; ************************************************************
 ;; HIGHER-LEVEL EXPORTS
 
-(define ((make-redirect/get send/suspend) #:headers [hs empty])
-  (send/suspend (lambda (k-url) (redirect-to k-url temporarily #:headers hs))))
+(define ((make-redirect/get send/suspend) #:headers [hs null])
+  (send/suspend (lambda (k-url) (redirect-to k-url see-other #:headers hs))))
 
 ; redirect/get : -> request
 (define redirect/get (make-redirect/get send/suspend))
