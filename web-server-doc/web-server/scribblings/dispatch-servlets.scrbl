@@ -25,7 +25,10 @@
  flushed. Otherwise, only those servlet caches to which @racket[url->path]
  maps the given URLs are flushed. The second optional argument is a procedure
  which is invoked on each cached value before it is flushed, which can be used
- to finalize servlet resources. It defaults to @racket[void].
+ to finalize servlet resources. Beware that the default value @racket[void]
+ performs no finalization. In particular, it does not shut down the servlet's
+ custodian, instead allowing the servlet's custodian-managed resources (such
+ as threads) to persist.
  
  The second return value is a procedure that uses
  @racket[url->path] to resolve the URL to a path, then uses
