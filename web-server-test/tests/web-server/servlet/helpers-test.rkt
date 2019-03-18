@@ -32,7 +32,7 @@
                  302)
     (test-equal? "Message (temp)" 
                  (response-message (redirect-to "http://test.com/foo"))
-                 #"Moved Temporarily")
+                 #"Found")
     (test-equal? "Code" 
                  (response-code (redirect-to "http://test.com/foo" permanently))
                  301)
