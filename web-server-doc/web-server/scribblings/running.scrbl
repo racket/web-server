@@ -63,12 +63,12 @@ One command-line utility is provided with the @|web-server|:
 
 @commandline{plt-web-server [-f <file-name> -p <port> -a <ip-address> --ssl]}
 
-The optional file-name argument specifies the path to a
+The optional @tt{file-name} argument specifies the path to a
 @racket[configuration-table] S-expression (see @racket[configuration-table->sexpr] for the syntax documentation.)
 If this is not provided, the
 default configuration shipped with the server is used. The optional
-port and ip-address arguments override the corresponding portions of
-the @racket[configuration-table]. If the SSL option is provided, then 
+@tt{port} and @tt{ip-address} arguments override the corresponding portions of
+the @racket[configuration-table]. If the SSL option is provided, then
 the server uses HTTPS with @filepath{server-cert.pem} and @filepath{private-key.pem}
 in the current directory, with 443 as the default port. (See the @racketmodname[openssl] 
 module for details on the SSL implementation.)
