@@ -41,7 +41,7 @@ The following API is provided to customize the server instance:
 }
 
 @defproc[(static-files-path [path path-string?]) void]{
- This instructs the Web server to serve static files, such as stylesheet and images, from @racket[path].
+ This instructs the Web server to serve static files, such as stylesheets and images, from @racket[path].
 }
 
 If you want more control over specific parameters, keep reading about @racketmodname[web-server/servlet-env].
