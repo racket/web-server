@@ -68,7 +68,7 @@ The optional @tt{file-name} argument specifies the path to a
 If this is not provided, the
 default configuration shipped with the server is used. The optional
 @tt{port} and @tt{ip-address} arguments override the corresponding portions of
-the @racket[configuration-table]. If the SSL option is provided, then
+the @racket[configuration-table]. If the @tt{ssl} option is provided, then
 the server uses HTTPS with @filepath{server-cert.pem} and @filepath{private-key.pem}
 in the current directory, with 443 as the default port. (See the @racketmodname[openssl] 
 module for details on the SSL implementation.)
