@@ -169,13 +169,16 @@ Here is an example typical of what you will find in many applications:
 
 @defmodule[web-server/http/response-structs]{
 
-@defstruct*[response
-           ([code number?]
-            [message bytes?]
-            [seconds number?]
-            [mime (or/c false/c bytes?)]
-            [headers (listof header?)]
-            [output (output-port? . -> . any)])]{
+@deftogether[
+ (@defstruct*[response
+              ([code response-code/c]
+               [message bytes?]
+               [seconds real?]
+               [mime (or/c #f bytes?)]
+               [headers (listof header?)]
+               [output (output-port? . -> . any)])]
+   @defthing[response-code/c flat-contract?
+             #:value (integer-in 100 999)])]{
 
 An HTTP response where @racket[output] produces the body by writing to
 the output port. @racket[code] is the response code, @racket[message]
@@ -223,12 +226,18 @@ Examples:
    void)
  ]
 
-@history[#:changed "1.2"
+@history[#:changed "1.3"
+         @elem{Added @racket[response-code/c] and made the
+            contracts on @racket[code] and @racket[seconds]
+            stronger (rather than accepting @racket[number?].}
+         #:changed "1.2"
          @elem{Contract on @racket[output] weaked to allow @racket[any]
                as the result (instead of demanding @racket[void?]).}]
 }
 
-@defproc[(response/full [code number?] [message bytes?] [seconds number?] [mime (or/c false/c bytes?)]
+@defproc[(response/full [code response-code/c] [message bytes?]
+                        [seconds real?]
+                        [mime (or/c #f bytes?)]
                         [headers (listof header?)] [body (listof bytes?)])
          response?]{
  A constructor for responses where @racket[body] is the response body.
@@ -246,6 +255,10 @@ Examples:
          #"\">here</a> instead."
          #"</p></body></html>"))
  ]
+
+ @history[#:changed "1.3"
+          @elem{Updated contracts on @racket[code] and @racket[seconds]
+             as with @racket[response].}]
 }
                    
 @defproc[(response/output [output (-> output-port? any)]
@@ -258,7 +271,10 @@ Examples:
 Equivalent to
 @racketblock[(response code message seconds mime-type headers output)]
 
-@history[#:changed "1.2"
+@history[#:changed "1.3"
+         @elem{Updated contracts on @racket[code] and @racket[seconds]
+            as with @racket[response].}
+         #:changed "1.2"
          @elem{Contract on @racket[output] weaked to allow @racket[any]
                as the result (instead of demanding @racket[void?]).}]
 }
@@ -766,10 +782,10 @@ web-server/insta
 @declare-exporting[web-server/http/xexpr web-server]
 
 @defproc[(response/xexpr [xexpr xexpr/c]
-                         [#:code code number? 200]
+                         [#:code code response-code/c 200]
                          [#:message message bytes? #"Okay"]
-                         [#:seconds seconds number? (current-seconds)]
-                         [#:mime-type mime-type (or/c false/c bytes?) TEXT/HTML-MIME-TYPE]
+                         [#:seconds seconds real? (current-seconds)]
+                         [#:mime-type mime-type (or/c #f bytes?) TEXT/HTML-MIME-TYPE]
                          [#:headers headers (listof header?) empty]
                          [#:cookies cookies (listof cookie?) empty]
                          [#:preamble preamble bytes? #""])
@@ -783,4 +799,8 @@ web-server/insta
  ]
 
  This is a viable function to pass to @racket[set-any->response!].
- }
+
+@history[#:changed "1.3"
+          @elem{Updated contracts on @racket[code] and @racket[seconds]
+             as with @racket[response].}]
+}
