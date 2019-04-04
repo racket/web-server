@@ -216,12 +216,18 @@ types. Refer to @secref["input-formlets"] for example low-level formlets using t
 
  (Actually, @racket[formlet/c] is a macro which avoids using @racket[dynamic->*]
  when the number of range contracts for the processing function is known at compile time.)
+
+ @history[#:changed "1.3"
+          "Fixed support for multiple return values."]
 }
 
 @defthing[formlet*/c contract?]{
   Similar to the contracts created by @racket[formlet/c], but uses @racket[any]
   to avoid checking the results (or even specifying the number of results)
   of the processing function.
+
+  @history[#:changed "1.3"
+          "Fixed support for multiple return values."]
 }
 
 @defproc[(pure [value any/c]) (formlet/c any/c)]{
@@ -505,6 +511,11 @@ a list of elements of the sequence.
 
 @defthing[input-int (formlet/c number?)]{
   Equivalent to @racket[(to-number input-string)].
+  Note that, despite the name, the result
+  @bold{is not guaranteed to be an integer.}
+  
+  @history[#:changed "1.3"
+           "Weakened result contract to allow any number."]
 }
 
 @defthing[input-symbol (formlet/c symbol?)]{
@@ -607,3 +618,10 @@ library @racketmodname[web-server/formlets/unsafe] provides the same API as
  contracts.} As the name implies, using @racketmodname[web-server/formlets/unsafe]
 may produce inscrutable error messages and other unpleasant effects of programming
 without contracts: you have been warned.
+
+@history[#:changed "1.3"
+         @elem{Added @racketmodname[web-server/formlets/stateless] and
+          @racketmodname[web-server/formlets/unsafe] and
+          changed combinators from @racketmodname[web-server/formlets]
+          to produce serializable formlets.}]   
+          

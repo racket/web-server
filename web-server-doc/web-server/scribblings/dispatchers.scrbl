@@ -31,6 +31,9 @@ This module provides a few functions for dispatchers in general.
 
 @defthing[dispatcher/c contract?]{
  Equivalent to @racket[(connection? request? . -> . any)].
+
+  @history[#:changed "1.3"
+           @elem{Weakened the range contract to allow @racket[any]}]
 }
 
 @defproc[(dispatcher-interface-version/c (any any/c)) boolean?]{
@@ -244,6 +247,9 @@ a URL that refreshes the password file, servlet cache, etc.}
  Logs requests to @racket[log-path], which can be either a filepath or an @racket[output-port?],
  using @racket[format] to format the requests.
  Then invokes @racket[next-dispatcher].
+
+ @history[#:changed "1.3"
+          @elem{Allow @racket[log-path] to be an @racket[output-port?]}]
 }}
 
 @; ------------------------------------------------------------

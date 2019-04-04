@@ -35,8 +35,8 @@
  @racket[path->servlet] to resolve that path to a servlet, caching the
  results in an internal table.
 
- @history[#:changed "6.9.0.1" "Added optional argument to first return value for list of URLs."
-	  #:changed "6.11.0.3" "Added optional argument to first return value for servlet finalizer procedure."]
+ @history[#:changed "1.3" "Added optional argument to first return value for list of URLs."
+	  #:changed "1.3" "Added optional argument to first return value for servlet finalizer procedure."]
 }
 
 @defproc[(make [url->servlet url->servlet/c]

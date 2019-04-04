@@ -163,7 +163,9 @@ title line of different calls to @racket[fast-template]:
 }
 ]
 
-@section{Gotchas: @"@" Syntax: @"@" character, identifiers, and spaces}
+@section{Gotchas:}
+@subsection[#:tag "Gotchas____Syntax____character__identifiers__and_spaces"]{
+ @"@" Syntax: @"@" character, identifiers, and spaces}
 
 To obtain an @litchar["@"] character in template output, you must
 escape the it, because it is the escape character of the
@@ -199,7 +201,7 @@ is. The safest thing to do is explicitly delimit the identifier with @"|"s:
 If you intend to use templates a lot, you should familiarize yourself
 with the details of the @|at-reader-ref|.
 
-@section{Gotchas: Iteration}
+@subsection[#:tag "Gotchas__Iteration"]{Iteration}
 
 Since the template is compiled into a Racket program, only its results
 will be printed. For example, suppose we have the template:
@@ -267,7 +269,7 @@ issue for you called @racket[in]:
 }|
 Notice how it also avoids the absurd amount of punctuation on line two.
 
-@section{Escaping}
+@subsection{Escaping}
 
 @margin-note{Thanks to Michael W. for this section.}
 
@@ -381,7 +383,10 @@ valid XML.
 
 @defform*[((include-template/xml path-spec)
            (include-template/xml #:command-char command-char path-spec))]{
- Like @racket[include/template], but expands to a @racket[cdata] structure.}
+ Like @racket[include/template], but expands to a @racket[cdata] structure.
+
+@history[#:added "1.3"]
+}
 
 @defform[(in x xs e ...)]{
  Expands into

@@ -292,16 +292,20 @@ transmission that the server @bold{will not catch}.}
 @(require (for-label (except-in net/cookies/server
                                 make-cookie)
                      net/cookies/common
-                      web-server/servlet
+                     web-server/servlet
                      web-server/http/xexpr
                      web-server/http/redirect
                      web-server/http/request-structs
                      web-server/http/response-structs
                      web-server/http/cookie))
 
+@(define rfc6265
+   (hyperlink "https://tools.ietf.org/html/rfc6265.html"
+              "RFC 6265"))
+
 @defmodule[web-server/http/cookie]{
  This module provides functions to create cookies and responses that set them.
- 
+
  @defproc[(make-cookie [name cookie-name?]
                        [value cookie-value?]
                        [#:comment comment any/c #f]
@@ -321,6 +325,18 @@ transmission that the server @bold{will not catch}.}
    @link["https://tools.ietf.org/html/rfc7231#section-7.1.1.2"]{RFC 7231, Section 7.1.1.2},
    in which case it will be converted to a @racket[date?] value.
    If conversion fails, an @racket[exn:fail:contract?] is raised.
+
+   @history[
+ #:changed "1.3"
+ @elem{Added support for @rfc6265 via @racketmodname[net/cookies/server].
+    Enforce stronger contracts on string-valued arguments.
+    Allow @racket[expires] to be a @racket[date?]
+    and allow @racket[secure] to be @racket[any/c]
+    (rather than @racket[boolean?]).
+    Forbid @racket[0] for @racket[max-age].
+    Support @racket[http-only?] and @racket[extension] arguments.
+    Ignore @racket[comment].
+    }]
  }
 
  @defproc[(cookie->header [c cookie?]) header?]{
@@ -374,13 +390,12 @@ cookie, it will reverify this digest and check that the cookie's
 @racket[_authored-seconds] is not after a timeout period, and only
 then return the cookie data to the program.
 
-The interface represents the secret key as a byte string. The best way
-to generate this is by using random bytes from something like OpenSSL
-or
-@tt{/dev/random}. @link["http://www.madboa.com/geek/openssl/#random-generate"]{This
-FAQ} lists a few options. A convenient purely Racket-based option is
-available (@racket[make-secret-salt/file]),
- which is implemented using @racket[crypto-random-bytes].
+The interface represents the secret key as a byte string.
+@bold{For security, this should be created using cryptographic-quality randomness.}
+A convenient purely Racket-based option is @racket[make-secret-salt/file],
+which is implemented using @racket[crypto-random-bytes].
+You can also generate random bytes using something like OpenSSL or @tt{/dev/random}:
+ @link["https://www.madboa.com/geek/openssl/#random-data"]{this FAQ} lists a few options. 
 
  @defproc*[([(make-id-cookie
               [name (and/c string? cookie-name?)]
@@ -419,6 +434,17 @@ available (@racket[make-secret-salt/file]),
   The other arguments are passed to @racket[make-cookie]; however, note that the
   default value for @racket[http-only?] is @racket[#t]. Users will also likely
   want to set @racket[secure?] to @racket[#t] when using HTTPS.
+
+  @history[
+ #:changed "1.3"
+ @elem{Added support for @rfc6265 as with @racket[make-cookie],
+    including adding the optional arguments
+    @racket[expires], @racket[max-age], @racket[domain],
+    @racket[secure], @racket[extension],
+    and @racket[http-only?] (which is @racket[#true] by default).
+    Allowed @racket[secret-salt] to be given with the keyword
+    @racket[#:key] instead of by position.
+    }]
  }
 
  @defproc*[([(request-id-cookie [request request?]
@@ -440,6 +466,12 @@ available (@racket[make-secret-salt/file]),
   @racket[valid-id-cookie?].
   
   If no valid cookie is available, returns @racket[#f].
+
+  @history[#:changed "1.3"
+           @elem{Added @racket[shelf-life] argument and
+              support for giving @racket[name] and @racket[secret-salt]
+              by keyword instead of by position.
+              Added support for @rfc6265 as with @racket[make-cookie].}]
  }
 
 @defproc[(valid-id-cookie? [cookie any/c]
@@ -469,6 +501,8 @@ available (@racket[make-secret-salt/file]),
   value returned by @racket[(current-seconds)] when the cookie was created.
   The default value, @racket[+inf.0], permits all properly named and
   signed cookies.
+
+  @history[#:added "1.3"]
  }
                                                        
  @defproc[(logout-id-cookie [name cookie-name?]
@@ -480,7 +514,7 @@ available (@racket[make-secret-salt/file]),
 
   This will cause non-malicious browsers to overwrite a previously set
   cookie. If you use authenticated cookies for login information, you
-  could send this to cause a "logout". However, malicious browsers do
+  could send this to cause a ``logout.'' However, malicious browsers do
   not need to respect such an overwrite. Therefore, this is not an
   effective way to implement timeouts or protect users on
   public (i.e. possibly compromised) computers. The only way to securely
@@ -488,14 +522,23 @@ available (@racket[make-secret-salt/file]),
   keeping track of which cookies (sessions, etc.) are invalid. Depending
   on your application, it may be better to track live sessions or dead
   sessions, or never set cookies to begin with and just use
-  continuations, which you can revoke with @racket[send/finish].
+  (stateful) continuations, which you can revoke with @racket[send/finish].
+
+  @history[#:changed "1.3"
+           @elem{Added support for @rfc6265 as with @racket[make-cookie],
+              including adding the @racket[domain] argument.}]
  }
 
  @defproc[(make-secret-salt/file [secret-salt-path path-string?])
           bytes?]{
   Extracts the bytes from @racket[secret-salt-path]. If
   @racket[secret-salt-path] does not exist, then it is created and
-  initialized with 128 random bytes.
+  initialized with 128 cryptographic-quality random bytes
+  from @racket[crypto-random-bytes].
+
+  @history[#:changed "1.3"
+           @elem{Changed to use cryptographic-quality randomness
+              to initialize @racket[secret-salt-path].}]
  }
 }
 
@@ -521,6 +564,10 @@ available (@racket[make-secret-salt/file]),
  @defproc[(request-cookies [req request?])
           (listof client-cookie?)]{
   Extracts the cookies from @racket[req]'s headers.
+
+  @history[#:changed "1.3"
+           @elem{Added support for @rfc6265 via
+              @racketmodname[net/cookies/client].}]
  }
 
  Examples:
@@ -645,6 +692,9 @@ available (@racket[make-secret-salt/file]),
   Example:
   @racket[(redirect-to "http://www.add-three-numbers.com" permanently)]
  }
+
+ @history[#:changed "1.3"
+          @elem{Added @racket[temporarily/same-method].}]
 }
 
 @; ------------------------------------------------------------

@@ -159,12 +159,19 @@ the request is returned from this call to @racket[send/suspend].
   This implements the @tech{Post-Redirect-Get} pattern. 
   Use this to prevent the @onscreen["Refresh"] button from duplicating effects,
   such as adding items to a database.
+
+  @history[#:changed "1.3"
+           @elem{Use @racket[see-other] instead of @racket[temporarily].}]
 }
 
 @defproc[(redirect/get/forget [#:headers hs (listof header?) empty])
          request?]{
   Like @racket[redirect/get], but using @racket[send/forward]
   instead of @racket[send/suspend].
+
+  @history[#:changed "1.3"
+           @elem{Use @racket[see-other] instead of @racket[temporarily],
+              as with @racket[redirect/get].}]
 }
                   
 @defthing[current-servlet-continuation-expiration-handler 
