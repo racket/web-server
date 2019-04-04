@@ -30,8 +30,10 @@ functions.
  Otherwise, clears only the entries with keys in @racket[entry-ids].
  The procedure @racket[finalize] is invoked on each entry before it is cleared.
 
- @history[#:changed "6.9.0.1" "Added optional argument for list of entry keys."
-          #:changed "6.11.0.3" "Added optional argument for finalizer procedure."]
+ @history[#:changed "1.3"
+          "Added optional argument for list of entry keys."
+          #:changed "1.3"
+          "Added optional argument for finalizer procedure."]
 }
 
 @defproc[(cache-table? [v any/c])
