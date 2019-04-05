@@ -228,7 +228,7 @@ Examples:
                as the result (instead of demanding @racket[void?]).}]
 }
 
-@defproc[(response/full [code number?] [message bytes?] [seconds number?] [mime (or/c false/c bytes?)]
+@defproc[(response/full [code number?] [message (or/c false/c bytes?] [seconds number?] [mime (or/c false/c bytes?)]
                         [headers (listof header?)] [body (listof bytes?)])
          response?]{
  A constructor for responses where @racket[body] is the response body.
@@ -246,21 +246,72 @@ Examples:
          #"\">here</a> instead."
          #"</p></body></html>"))
  ]
+
+ If @racket[message] is not supplied or is @racket[#f], a status message will be inferred based on @racket[code]. Status messages will be inferred based on RFCs 7231 (``Hypertext Transfer Protocol (HTTP/1.1): Semantics and Content'') and 7235 (``Hypertext Transfer Protocol (HTTP/1.1): Authentication''). These are the following:
+
+  @tabular[#:sep @hspace[1]
+   (list (list @bold{Code} @bold{Message})
+   (list 100 "Continue")
+   (list 101 "Switching Protocols")
+
+   (list 200 "OK")
+   (list 201 "Created")
+   (list 202 "Accepted")
+   (list 203 "Non-Authoritative Information")
+   (list 204 "No Content")
+   (list 205 "Reset Content")
+
+   (list 300 "Multiple Choices")
+   (list 301 "Moved Permanently")
+   (list 302 "Found")
+   (list 303 "See Other")
+   (list 305 "Use Proxy")
+   (list 307 "Temporary Redirect")
+
+   (list 400 "Bad Request")
+   (list 401 "Unauthorized")
+   (list 402 "Payment Required")
+   (list 403 "Forbidden")
+   (list 404 "Not Found")
+   (list 405 "Method Not Allowed")
+   (list 406 "Not Acceptable")
+   (list 407 "Proxy Authentication Required")
+   (list 408 "Request Timeout")
+   (list 409 "Conflict")
+   (list 410 "Gone")
+   (list 411 "Length Required")
+   (list 413 "Payload Too Large")
+   (list 414 "URI Too Long")
+   (list 415 "Unsupported Media Type")
+   (list 417 "Expectation Failed")
+   (list 426 "Upgrade Required")
+
+   (list 500 "Internal Server Error")
+   (list 501 "Not Implemented")
+   (list 502 "Bad Gateway")
+   (list 503 "Service Unavailable")
+   (list 504 "Gateway Timeout")
+   (list 505 "HTTP Version Not Supported"))]
+
+@history[#:changed "1.3"
+         @elem{Contract on @racket[message] relaxed to allow both @racket[#f] and a @racket[bytes?], with a default of @racket[#f]. Previously, @racket[bytes?] was required, and had a deault of @racket[#"Okay"].}]
 }
-                   
+
 @defproc[(response/output [output (-> output-port? any)]
                           [#:code code number? 200]
-                          [#:message message bytes? #"Okay"]
+                          [#:message message (or/c false/c bytes?) #f]
                           [#:seconds seconds number? (current-seconds)]
                           [#:mime-type mime-type (or/c bytes? #f) TEXT/HTML-MIME-TYPE]
                           [#:headers headers (listof header?) '()])
          response?]{
 Equivalent to
-@racketblock[(response code message seconds mime-type headers output)]
+@racketblock[(response code message seconds mime-type headers output)], with the understanding that if @racket[message] is missing, it will be inferred from @racket[code] using the association between status codes and messages found in RFCs 7231 and 7235. See the documentation for @racketlink[response/full] for the table of built-in status codes.
 
 @history[#:changed "1.2"
-         @elem{Contract on @racket[output] weaked to allow @racket[any]
+         @elem{Contract on @racket[output] weakened to allow @racket[any]
                as the result (instead of demanding @racket[void?]).}]
+@history[#:changed "1.3"
+         @elem{Contract on @racket[message] relaxed to allow both @racket[#f] and a @racket[bytes?], with a default of @racket[#f]. Previously, @racket[bytes?] was required, and had a deault of @racket[#"Okay"].}]
 }
 
 @defthing[TEXT/HTML-MIME-TYPE bytes?]{Equivalent to @racket[#"text/html; charset=utf-8"].}
@@ -767,7 +818,7 @@ web-server/insta
 
 @defproc[(response/xexpr [xexpr xexpr/c]
                          [#:code code number? 200]
-                         [#:message message bytes? #"Okay"]
+                         [#:message message (or/c false/c bytes?) #f]
                          [#:seconds seconds number? (current-seconds)]
                          [#:mime-type mime-type (or/c false/c bytes?) TEXT/HTML-MIME-TYPE]
                          [#:headers headers (listof header?) empty]
@@ -783,4 +834,9 @@ web-server/insta
  ]
 
  This is a viable function to pass to @racket[set-any->response!].
+
+ See the documentation for @racketlink[response/full] to see how @racket[#f] is handled for @racket[message].
+
+@history[#:changed "1.3"
+         @elem{Contract on @racket[message] relaxed to allow both @racket[#f] and @racket[bytes?], with a default of @racket[#f]. Previously, @racket[bytes?] was required, and had a deault of @racket[#"Okay"].}]
  }
