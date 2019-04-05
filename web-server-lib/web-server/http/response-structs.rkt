@@ -73,19 +73,23 @@
       (check-equal? (response-code resp) 123)
       (check-equal? (response-message resp) #"OK"))))
 
+(define/final-prop response-code/c
+  (integer-in 100 999))
+
+(provide response-code/c)
 (provide/contract
  [struct response
-         ([code number?]
+         ([code response-code/c]
           [message bytes?]
-          [seconds number?]
-          [mime (or/c false/c bytes?)]
+          [seconds real?]
+          [mime (or/c #f bytes?)]
           [headers (listof header?)]
           [output (output-port? . -> . any)])]
- [response/full (-> number? (or/c false/c bytes?) number? (or/c false/c bytes?) (listof header?) (listof bytes?) response?)]
+ [response/full (-> response-code/c (or/c #f bytes?) real? (or/c #f bytes?) (listof header?) (listof bytes?) response?)]
  [response/output (->* ((-> output-port? any))
-                       (#:code number?
-                        #:message (or/c false/c bytes?)
-                        #:seconds number?
+                       (#:code response-code/c
+                        #:message bytes?
+                        #:seconds real?
                         #:mime-type (or/c bytes? #f)
                         #:headers (listof header?))
                        response?)]

@@ -240,4 +240,7 @@ order they appear in the list.
  
  If @racket[connection-close?] is @racket[#t], then every connection is closed after one
  request. Otherwise, the client decides based on what HTTP version it uses.
+
+ @history[#:changed "1.3"
+          @elem{Added support for providing @racket[log-file] as an output port.}]
 }
