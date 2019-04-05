@@ -235,7 +235,7 @@ Examples:
                as the result (instead of demanding @racket[void?]).}]
 }
 
-@defproc[(response/full [code response-code/c] [message bytes?]
+@defproc[(response/full [code response-code/c] [message (or/c #f bytes?)]
                         [seconds real?]
                         [mime (or/c #f bytes?)]
                         [headers (listof header?)] [body (listof bytes?)])
@@ -256,22 +256,72 @@ Examples:
          #"</p></body></html>"))
  ]
 
+ If @racket[message] is not supplied or is @racket[#f], a status message will be inferred based on @racket[code]. Status messages will be inferred based on RFCs 7231 (``Hypertext Transfer Protocol (HTTP/1.1): Semantics and Content'') and 7235 (``Hypertext Transfer Protocol (HTTP/1.1): Authentication''). These are the following:
+
+  @tabular[#:sep @hspace[1]
+   (list (list @bold{Code} @bold{Message})
+   (list 100 "Continue")
+   (list 101 "Switching Protocols")
+
+   (list 200 "OK")
+   (list 201 "Created")
+   (list 202 "Accepted")
+   (list 203 "Non-Authoritative Information")
+   (list 204 "No Content")
+   (list 205 "Reset Content")
+
+   (list 300 "Multiple Choices")
+   (list 301 "Moved Permanently")
+   (list 302 "Found")
+   (list 303 "See Other")
+   (list 305 "Use Proxy")
+   (list 307 "Temporary Redirect")
+
+   (list 400 "Bad Request")
+   (list 401 "Unauthorized")
+   (list 402 "Payment Required")
+   (list 403 "Forbidden")
+   (list 404 "Not Found")
+   (list 405 "Method Not Allowed")
+   (list 406 "Not Acceptable")
+   (list 407 "Proxy Authentication Required")
+   (list 408 "Request Timeout")
+   (list 409 "Conflict")
+   (list 410 "Gone")
+   (list 411 "Length Required")
+   (list 413 "Payload Too Large")
+   (list 414 "URI Too Long")
+   (list 415 "Unsupported Media Type")
+   (list 417 "Expectation Failed")
+   (list 426 "Upgrade Required")
+
+   (list 500 "Internal Server Error")
+   (list 501 "Not Implemented")
+   (list 502 "Bad Gateway")
+   (list 503 "Service Unavailable")
+   (list 504 "Gateway Timeout")
+   (list 505 "HTTP Version Not Supported"))]
+
  @history[#:changed "1.3"
           @elem{Updated contracts on @racket[code] and @racket[seconds]
              as with @racket[response].}]
+ @history[#:changed "1.4"
+         @elem{Contract on @racket[message] relaxed to allow both @racket[#f] and a @racket[bytes?], with a default of @racket[#f]. Previously, @racket[bytes?] was required, and had a deault of @racket[#"Okay"].}]
 }
-                   
+
 @defproc[(response/output [output (-> output-port? any)]
                           [#:code code number? 200]
-                          [#:message message bytes? #"Okay"]
+                          [#:message message (or/c false/c bytes?) #f]
                           [#:seconds seconds number? (current-seconds)]
                           [#:mime-type mime-type (or/c bytes? #f) TEXT/HTML-MIME-TYPE]
                           [#:headers headers (listof header?) '()])
          response?]{
 Equivalent to
-@racketblock[(response code message seconds mime-type headers output)]
+@racketblock[(response code message seconds mime-type headers output)], with the understanding that if @racket[message] is missing, it will be inferred from @racket[code] using the association between status codes and messages found in RFCs 7231 and 7235. See the documentation for @racketlink[response/full] for the table of built-in status codes.
 
-@history[#:changed "1.3"
+@history[#:changed "1.4"
+         @elem{Contract on @racket[message] relaxed to allow both @racket[#f] and a @racket[bytes?], with a default of @racket[#f]. Previously, @racket[bytes?] was required, and had a deault of @racket[#"Okay"].}
+         #:changed "1.3"
          @elem{Updated contracts on @racket[code] and @racket[seconds]
             as with @racket[response].}
          #:changed "1.2"
@@ -395,19 +445,19 @@ The interface represents the secret key as a byte string.
 A convenient purely Racket-based option is @racket[make-secret-salt/file],
 which is implemented using @racket[crypto-random-bytes].
 You can also generate random bytes using something like OpenSSL or @tt{/dev/random}:
- @link["https://www.madboa.com/geek/openssl/#random-data"]{this FAQ} lists a few options. 
+ @link["https://www.madboa.com/geek/openssl/#random-data"]{this FAQ} lists a few options.
 
  @defproc*[([(make-id-cookie
               [name (and/c string? cookie-name?)]
               [value (and/c string? cookie-value?)]
               [#:key secret-salt bytes?]
               [#:path path (or/c path/extension-value? #f) #f]
-              [#:expires expires (or/c date? #f) #f]	 	 	 
+              [#:expires expires (or/c date? #f) #f]
               [#:max-age max-age
-               (or/c (and/c integer? positive?) #f) #f]	 	 	 
-              [#:domain domain (or/c domain-value? #f) #f]	 
-              [#:secure? secure? any/c #f]	 	 	 
-              [#:http-only? http-only? any/c #f]	 	 
+               (or/c (and/c integer? positive?) #f) #f]
+              [#:domain domain (or/c domain-value? #f) #f]
+              [#:secure? secure? any/c #f]
+              [#:http-only? http-only? any/c #f]
               [#:extension extension
                (or/c path/extension-value? #f) #f])
              cookie?]
@@ -416,12 +466,12 @@ You can also generate random bytes using something like OpenSSL or @tt{/dev/rand
               [secret-salt bytes?]
               [value (and/c string? cookie-value?)]
               [#:path path (or/c path/extension-value? #f) #f]
-              [#:expires expires (or/c date? #f) #f]	 	 	 
+              [#:expires expires (or/c date? #f) #f]
               [#:max-age max-age
-               (or/c (and/c integer? positive?) #f) #f]	 	 	 
-              [#:domain domain (or/c domain-value? #f) #f]	 
-              [#:secure? secure? any/c #f]	 	 	 
-              [#:http-only? http-only? any/c #t]	 	 
+               (or/c (and/c integer? positive?) #f) #f]
+              [#:domain domain (or/c domain-value? #f) #f]
+              [#:secure? secure? any/c #f]
+              [#:http-only? http-only? any/c #t]
               [#:extension extension
                (or/c path/extension-value? #f) #f])
              cookie?])]{
@@ -464,7 +514,7 @@ You can also generate random bytes using something like OpenSSL or @tt{/dev/rand
   from @racket[request], with the allowable age of the cookie
   is controlled by @racket[shelf-life] and @racket[timeout] as with
   @racket[valid-id-cookie?].
-  
+
   If no valid cookie is available, returns @racket[#f].
 
   @history[#:changed "1.3"
@@ -504,7 +554,7 @@ You can also generate random bytes using something like OpenSSL or @tt{/dev/rand
 
   @history[#:added "1.3"]
  }
-                                                       
+
  @defproc[(logout-id-cookie [name cookie-name?]
                             [#:path path (or/c #f string?) #f]
                             [#:domain domain (or/c domain-value? #f) #f])
@@ -604,7 +654,7 @@ You can also generate random bytes using something like OpenSSL or @tt{/dev/rand
 
 @defmodule[web-server/http/redirect]{
 
-@deftogether[                                   
+@deftogether[
  (@defproc[(redirect-to [uri non-empty-string?]
                         [status redirection-status? temporarily]
                         [#:headers headers (listof header?) '()])
@@ -614,7 +664,7 @@ You can also generate random bytes using something like OpenSSL or @tt{/dev/rand
    @defthing[temporarily/same-method redirection-status?]
    @defthing[see-other redirection-status?]
    @defthing[permanently redirection-status?])]{
-  The function @racket[redirect-to] 
+  The function @racket[redirect-to]
   generates an HTTP response that redirects the browser to @racket[uri],
   while including the @racket[headers] in the response.
   The @racket[status] argument is a @deftech{redirection status}
@@ -688,7 +738,7 @@ You can also generate random bytes using something like OpenSSL or @tt{/dev/rand
  @item{The application can note the method of the original request
     and use @racket[permanently] for @litchar{GET} and @litchar{HEAD} requests
     or one of the other alternatives for other methods.}]
-  
+
   Example:
   @racket[(redirect-to "http://www.add-three-numbers.com" permanently)]
  }
@@ -833,7 +883,7 @@ web-server/insta
 
 @defproc[(response/xexpr [xexpr xexpr/c]
                          [#:code code response-code/c 200]
-                         [#:message message bytes? #"Okay"]
+                         [#:message message (or/c #f bytes?) #f]
                          [#:seconds seconds real? (current-seconds)]
                          [#:mime-type mime-type (or/c #f bytes?) TEXT/HTML-MIME-TYPE]
                          [#:headers headers (listof header?) empty]
@@ -850,7 +900,11 @@ web-server/insta
 
  This is a viable function to pass to @racket[set-any->response!].
 
-@history[#:changed "1.3"
+ See the documentation for @racketlink[response/full] to see how @racket[#f] is handled for @racket[message].
+
+@history[#:changed "1.4"
+         @elem{Contract on @racket[message] relaxed to allow both @racket[#f] and @racket[bytes?], with a default of @racket[#f]. Previously, @racket[bytes?] was required, and had a deault of @racket[#"Okay"].}
+         #:changed "1.3"
           @elem{Updated contracts on @racket[code] and @racket[seconds]
              as with @racket[response].}]
 }
