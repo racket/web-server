@@ -89,7 +89,7 @@ src='...' />}, on every tag, while HTML occasionally requires an end
 tag,
 e.g. @link["http://www.w3.org/TR/html401/interact/forms.html#h-17.7"]{TEXTAREA}.
 Similarly, XML allows an end tag, e.g. @litchar{<img
-src='...'></img>}, on every tag, while HTML occasionally forbides an
+src='...'></img>}, on every tag, while HTML occasionally forbids an
 end tag,
 e.g. @link["http://www.w3.org/TR/html401/struct/objects.html#h-13.2"]{IMG}.
 (Of course, browsers do not necessarily implement their HTML parsing
