@@ -231,7 +231,7 @@ Examples:
             contracts on @racket[code] and @racket[seconds]
             stronger (rather than accepting @racket[number?].}
          #:changed "1.2"
-         @elem{Contract on @racket[output] weaked to allow @racket[any]
+         @elem{Contract on @racket[output] weakened to allow @racket[any]
                as the result (instead of demanding @racket[void?]).}]
 }
 
@@ -306,7 +306,7 @@ Examples:
           @elem{Updated contracts on @racket[code] and @racket[seconds]
              as with @racket[response].}]
  @history[#:changed "1.4"
-         @elem{Contract on @racket[message] relaxed to allow both @racket[#f] and a @racket[bytes?], with a default of @racket[#f]. Previously, @racket[bytes?] was required, and had a deault of @racket[#"Okay"].}]
+         @elem{Contract on @racket[message] relaxed to allow both @racket[#f] and a @racket[bytes?], with a default of @racket[#f]. Previously, @racket[bytes?] was required, and had a default of @racket[#"Okay"].}]
 }
 
 @defproc[(response/output [output (-> output-port? any)]
@@ -320,12 +320,12 @@ Equivalent to
 @racketblock[(response code message seconds mime-type headers output)], with the understanding that if @racket[message] is missing, it will be inferred from @racket[code] using the association between status codes and messages found in RFCs 7231 and 7235. See the documentation for @racketlink[response/full] for the table of built-in status codes.
 
 @history[#:changed "1.4"
-         @elem{Contract on @racket[message] relaxed to allow both @racket[#f] and a @racket[bytes?], with a default of @racket[#f]. Previously, @racket[bytes?] was required, and had a deault of @racket[#"Okay"].}
+         @elem{Contract on @racket[message] relaxed to allow both @racket[#f] and a @racket[bytes?], with a default of @racket[#f]. Previously, @racket[bytes?] was required, and had a default of @racket[#"Okay"].}
          #:changed "1.3"
          @elem{Updated contracts on @racket[code] and @racket[seconds]
             as with @racket[response].}
          #:changed "1.2"
-         @elem{Contract on @racket[output] weaked to allow @racket[any]
+         @elem{Contract on @racket[output] weakened to allow @racket[any]
                as the result (instead of demanding @racket[void?]).}]
 }
 
@@ -370,7 +370,7 @@ transmission that the server @bold{will not catch}.}
    Constructs a cookie with the appropriate fields.
 
    This is a wrapper around @racket[make-cookie] from @racketmodname[net/cookies/server]
-   for backwards compatability. The @racket[comment] argument is ignored.
+   for backwards compatibility. The @racket[comment] argument is ignored.
    If @racket[expires] is given as a string, it should match
    @link["https://tools.ietf.org/html/rfc7231#section-7.1.1.2"]{RFC 7231, Section 7.1.1.2},
    in which case it will be converted to a @racket[date?] value.
@@ -479,7 +479,7 @@ You can also generate random bytes using something like OpenSSL or @tt{/dev/rand
 
   The calling conventions allow @racket[secret-salt] to be given either as a keyword
   argument (mirroring the style of @racket[make-cookie]) or a by-position argument
-  (for compatability with older versions of this library).
+  (for compatibility with older versions of this library).
 
   The other arguments are passed to @racket[make-cookie]; however, note that the
   default value for @racket[http-only?] is @racket[#t]. Users will also likely
@@ -698,7 +698,7 @@ You can also generate random bytes using something like OpenSSL or @tt{/dev/rand
   This prevents the @onscreen{Back} and @onscreen{Refresh} buttons
   from duplicating effects, such as making a purchase or
   adding items to a database.
-  The web server provides @racket[redirect/get] for added convienience
+  The web server provides @racket[redirect/get] for added convenience
   with @tech{Post-Redirect-Get}.
 
   The @racket[permanently] @tech{redirection status} uses the HTTP status
@@ -707,7 +707,7 @@ You can also generate random bytes using something like OpenSSL or @tt{/dev/rand
   It is like @racket[temporarily], except that, as the name suggests,
   it signifies that the move is permanent and that search engines,
   for example, should use @racket[uri] instead of the URI of the
-  orriginal request.
+  original request.
   Unfortunately, @racket[permanently] is also like @racket[temporarily]
   in that browsers have implemented it inconsistently for
   methods other than @litchar{GET} and @litchar{HEAD}:
@@ -723,7 +723,7 @@ You can also generate random bytes using something like OpenSSL or @tt{/dev/rand
     update references to the old URI.}
  @item{@hyperlink["https://tools.ietf.org/html/rfc7538"]{RFC 7538}
     specifies a new HTTP status, @litchar{308 Permanent Redirect},
-    which fobids changing the request method, analagously to
+    which forbids changing the request method, analogously to
     @litchar{307 Temporary Redirect}.
     However, the RFC also highlights some important
     @hyperlink["https://tools.ietf.org/html/rfc7538#section-4"]{
@@ -903,7 +903,7 @@ web-server/insta
  See the documentation for @racketlink[response/full] to see how @racket[#f] is handled for @racket[message].
 
 @history[#:changed "1.4"
-         @elem{Contract on @racket[message] relaxed to allow both @racket[#f] and @racket[bytes?], with a default of @racket[#f]. Previously, @racket[bytes?] was required, and had a deault of @racket[#"Okay"].}
+         @elem{Contract on @racket[message] relaxed to allow both @racket[#f] and @racket[bytes?], with a default of @racket[#f]. Previously, @racket[bytes?] was required, and had a default of @racket[#"Okay"].}
          #:changed "1.3"
           @elem{Updated contracts on @racket[code] and @racket[seconds]
              as with @racket[response].}]
