@@ -229,7 +229,7 @@ Examples:
 @history[#:changed "1.3"
          @elem{Added @racket[response-code/c] and made the
             contracts on @racket[code] and @racket[seconds]
-            stronger (rather than accepting @racket[number?].}
+            stronger (rather than accepting @racket[number?]).}
          #:changed "1.2"
          @elem{Contract on @racket[output] weakened to allow @racket[any]
                as the result (instead of demanding @racket[void?]).}]
@@ -260,47 +260,47 @@ Examples:
 
   @tabular[#:sep @hspace[1]
    (list (list @bold{Code} @bold{Message})
-   (list 100 "Continue")
-   (list 101 "Switching Protocols")
+   (list "100" "Continue")
+   (list "101" "Switching Protocols")
 
-   (list 200 "OK")
-   (list 201 "Created")
-   (list 202 "Accepted")
-   (list 203 "Non-Authoritative Information")
-   (list 204 "No Content")
-   (list 205 "Reset Content")
+   (list "200" "OK")
+   (list "201" "Created")
+   (list "202" "Accepted")
+   (list "203" "Non-Authoritative Information")
+   (list "204" "No Content")
+   (list "205" "Reset Content")
 
-   (list 300 "Multiple Choices")
-   (list 301 "Moved Permanently")
-   (list 302 "Found")
-   (list 303 "See Other")
-   (list 305 "Use Proxy")
-   (list 307 "Temporary Redirect")
+   (list "300" "Multiple Choices")
+   (list "301" "Moved Permanently")
+   (list "302" "Found")
+   (list "303" "See Other")
+   (list "305" "Use Proxy")
+   (list "307" "Temporary Redirect")
 
-   (list 400 "Bad Request")
-   (list 401 "Unauthorized")
-   (list 402 "Payment Required")
-   (list 403 "Forbidden")
-   (list 404 "Not Found")
-   (list 405 "Method Not Allowed")
-   (list 406 "Not Acceptable")
-   (list 407 "Proxy Authentication Required")
-   (list 408 "Request Timeout")
-   (list 409 "Conflict")
-   (list 410 "Gone")
-   (list 411 "Length Required")
-   (list 413 "Payload Too Large")
-   (list 414 "URI Too Long")
-   (list 415 "Unsupported Media Type")
-   (list 417 "Expectation Failed")
-   (list 426 "Upgrade Required")
+   (list "400" "Bad Request")
+   (list "401" "Unauthorized")
+   (list "402" "Payment Required")
+   (list "403" "Forbidden")
+   (list "404" "Not Found")
+   (list "405" "Method Not Allowed")
+   (list "406" "Not Acceptable")
+   (list "407" "Proxy Authentication Required")
+   (list "408" "Request Timeout")
+   (list "409" "Conflict")
+   (list "410" "Gone")
+   (list "411" "Length Required")
+   (list "413" "Payload Too Large")
+   (list "414" "URI Too Long")
+   (list "415" "Unsupported Media Type")
+   (list "417" "Expectation Failed")
+   (list "426" "Upgrade Required")
 
-   (list 500 "Internal Server Error")
-   (list 501 "Not Implemented")
-   (list 502 "Bad Gateway")
-   (list 503 "Service Unavailable")
-   (list 504 "Gateway Timeout")
-   (list 505 "HTTP Version Not Supported"))]
+   (list "500" "Internal Server Error")
+   (list "501" "Not Implemented")
+   (list "502" "Bad Gateway")
+   (list "503" "Service Unavailable")
+   (list "504" "Gateway Timeout")
+   (list "505" "HTTP Version Not Supported"))]
 
  @history[#:changed "1.3"
           @elem{Updated contracts on @racket[code] and @racket[seconds]
@@ -317,7 +317,7 @@ Examples:
                           [#:headers headers (listof header?) '()])
          response?]{
 Equivalent to
-@racketblock[(response code message seconds mime-type headers output)], with the understanding that if @racket[message] is missing, it will be inferred from @racket[code] using the association between status codes and messages found in RFCs 7231 and 7235. See the documentation for @racketlink[response/full] for the table of built-in status codes.
+@racketblock[(response code message seconds mime-type headers output)], with the understanding that if @racket[message] is missing, it will be inferred from @racket[code] using the association between status codes and messages found in RFCs 7231 and 7235. See the documentation for @racket[response/full] for the table of built-in status codes.
 
 @history[#:changed "1.4"
          @elem{Contract on @racket[message] relaxed to allow both @racket[#f] and a @racket[bytes?], with a default of @racket[#f]. Previously, @racket[bytes?] was required, and had a default of @racket[#"Okay"].}
@@ -900,7 +900,7 @@ web-server/insta
 
  This is a viable function to pass to @racket[set-any->response!].
 
- See the documentation for @racketlink[response/full] to see how @racket[#f] is handled for @racket[message].
+ See the documentation for @racket[response/full] to see how @racket[#f] is handled for @racket[message].
 
 @history[#:changed "1.4"
          @elem{Contract on @racket[message] relaxed to allow both @racket[#f] and @racket[bytes?], with a default of @racket[#f]. Previously, @racket[bytes?] was required, and had a default of @racket[#"Okay"].}
