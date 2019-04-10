@@ -163,7 +163,7 @@ title line of different calls to @racket[fast-template]:
 }
 ]
 
-@section{Gotchas:}
+@section{Gotchas}
 @subsection[#:tag "Gotchas____Syntax____character__identifiers__and_spaces"]{
  @"@" Syntax: @"@" character, identifiers, and spaces}
 
