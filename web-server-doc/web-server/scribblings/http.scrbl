@@ -617,7 +617,7 @@ You can also generate random bytes using something like OpenSSL or @tt{/dev/rand
 
   @history[#:changed "1.3"
            @elem{Added support for @rfc6265 via
-              @racketmodname[net/cookies/client].}]
+              @racketmodname[net/cookies/common].}]
  }
 
  Examples:
