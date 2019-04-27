@@ -21,23 +21,23 @@
  (write-response (response/xexpr '(a ([href "#"]) "link")))
  =>
  (bytes-sort
-  #"HTTP/1.1 200 Okay\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<a href=\"#\">link</a>")
+  #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<a href=\"#\">link</a>")
 
  (write-response (response/xexpr '(html)))
  =>
  (bytes-sort
-  #"HTTP/1.1 200 Okay\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<html></html>")
+  #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<html></html>")
 
  (write-response (response/xexpr '(img)))
  =>
  (bytes-sort
-  #"HTTP/1.1 200 Okay\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<img/>")
+  #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<img/>")
  
  (write-response (response/xexpr '(a ([href "#"]) "link")
                                  #:code 404))
  =>
  (bytes-sort
-  #"HTTP/1.1 404 Okay\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<a href=\"#\">link</a>")
+  #"HTTP/1.1 404 Not Found\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<a href=\"#\">link</a>")
  
  (write-response (response/xexpr '(a ([href "#"]) "link")
                                  #:message #"Bad request"))
@@ -55,28 +55,28 @@
                   #f))
  =>
  (bytes-sort
-  #"HTTP/1.1 200 Okay\r\nDate: REDACTED GMT\r\nLast-Modified: Wed, 31 Dec 1969 23:00:00 GMT\r\nServer: Racket\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\n\r\n<a href=\"#\">link</a>")
+  #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: Wed, 31 Dec 1969 23:00:00 GMT\r\nServer: Racket\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\n\r\n<a href=\"#\">link</a>")
  
  (write-response (response/xexpr '(a ([href "#"]) "link")
                                       #:mime-type #"application/xml"))
  =>
  (bytes-sort
-  #"HTTP/1.1 200 Okay\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nContent-Type: application/xml\r\n\r\n<a href=\"#\">link</a>")
+  #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nContent-Type: application/xml\r\n\r\n<a href=\"#\">link</a>")
  
  (write-response (response/xexpr '(a ([href "#"]) "link")
                                       #:headers (list (header #"head" #"value"))))
  =>
  (bytes-sort
-  #"HTTP/1.1 200 Okay\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nContent-Type: text/html; charset=utf-8\r\nhead: value\r\n\r\n<a href=\"#\">link</a>")
+  #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nContent-Type: text/html; charset=utf-8\r\nhead: value\r\n\r\n<a href=\"#\">link</a>")
  
  (write-response (response/xexpr '(a ([href "#"]) "link")
                                       #:cookies (list (make-cookie "head" "value"))))
  =>
  (bytes-sort
-  #"HTTP/1.1 200 Okay\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nContent-Type: text/html; charset=utf-8\r\nSet-Cookie: head=value\r\n\r\n<a href=\"#\">link</a>")
+  #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nContent-Type: text/html; charset=utf-8\r\nSet-Cookie: head=value\r\n\r\n<a href=\"#\">link</a>")
  
  (write-response (response/xexpr '(a ([href "#"]) "link")
                                       #:preamble #"<<!something XMLy>>"))
  =>
  (bytes-sort
-  #"HTTP/1.1 200 Okay\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<<!something XMLy>><a href=\"#\">link</a>"))
+  #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<<!something XMLy>><a href=\"#\">link</a>"))

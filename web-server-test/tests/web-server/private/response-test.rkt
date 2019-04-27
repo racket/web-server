@@ -112,7 +112,7 @@
      (test-equi? "any"
                   (output output-response
                           (response/xexpr `(html (head (title "Hey!")) (body "Content"))))
-                  #"HTTP/1.1 200 Okay\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<html><head><title>Hey!</title></head><body>Content</body></html>"))
+                  #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<html><head><title>Hey!</title></head><body>Content</body></html>"))
     ))
 
 (define output-response/method-tests
@@ -176,7 +176,7 @@
                   (output output-response/method
                           (response/xexpr `(html (head (title "Hey!")) (body "Content")))
                           #"HEAD")
-                  #"HTTP/1.1 200 Okay\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nContent-Type: text/html; charset=utf-8\r\n\r\n"))))
+                  #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nContent-Type: text/html; charset=utf-8\r\n\r\n"))))
 
 (define response-tests
   (test-suite

@@ -34,5 +34,5 @@
   (define-values (status headers body)
     (http-sendrecv "localhost" "/" #:port the-port #:ssl? #t))
   
-  (check-equal? status #"HTTP/1.1 200 Okay") 
+  (check-equal? status #"HTTP/1.1 200 OK") 
   (check-equal? (port->bytes body) #"<html><body><h1>Hello</h1></body></html>"))
