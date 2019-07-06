@@ -10,7 +10,7 @@
 
 @defmodule[web-server/page]
 
-The @web-server provides a simple utility library for building Web applications that consistent mostly of @racket[send/suspend/dispatch]-created pages and request handling.
+The @web-server provides a simple utility library for building Web applications that consist mostly of @racket[send/suspend/dispatch]-created pages and request handling.
 
 Most Web applications rely heavily on @racket[send/suspend/dispatch] and typically use the pattern:
 @racketblock[
