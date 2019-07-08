@@ -14,6 +14,23 @@ constructor (see @secref["web-server-unit"]) to turn the paths given in
 the @racket[configuration-table] into responders for the associated
 circumstance.
 
+@;
+@;                         ;;            ;;
+@;                                       ;;
+@;   ;; ;  ;;   ; ;; ;;;   ;; ; ;;;   ;;;;;  ;;   ;; ;
+@;   ;;;  ;  ;  ;; ;;  ;   ;; ;;  ;  ;   ;; ;  ;  ;;;
+@;   ;;   ;  ;  ;; ;;  ;;  ;; ;;  ;; ;   ;; ;  ;  ;;
+@;   ;;  ;;;;;; ;; ;;  ;;  ;; ;;  ;;;;   ;;;;;;;; ;;
+@;   ;;   ;     ;; ;;  ;;  ;; ;;  ;; ;   ;; ;     ;;
+@;   ;;   ;     ;; ;;  ;;  ;; ;;  ;; ;   ;; ;     ;;
+@;   ;;    ;;;  ;; ;;  ;;  ;; ;;  ;;  ;;; ;  ;;;  ;;
+@;
+@;
+@;  Please update typed/web-server/configuration/responders
+@;  when you update web-server/configuration/responders.
+@;  See https://github.com/racket/typed-racket.
+@;
+
 @defproc[(file-response [http-code natural-number/c]
                         [short-version string?]
                         [text-file string?]

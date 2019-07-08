@@ -9,6 +9,22 @@
 
 The @web-server implements many HTTP libraries that are provided by this module.
 
+@;
+@;                         ;;            ;;
+@;                                       ;;
+@;   ;; ;  ;;   ; ;; ;;;   ;; ; ;;;   ;;;;;  ;;   ;; ;
+@;   ;;;  ;  ;  ;; ;;  ;   ;; ;;  ;  ;   ;; ;  ;  ;;;
+@;   ;;   ;  ;  ;; ;;  ;;  ;; ;;  ;; ;   ;; ;  ;  ;;
+@;   ;;  ;;;;;; ;; ;;  ;;  ;; ;;  ;;;;   ;;;;;;;; ;;
+@;   ;;   ;     ;; ;;  ;;  ;; ;;  ;; ;   ;; ;     ;;
+@;   ;;   ;     ;; ;;  ;;  ;; ;;  ;; ;   ;; ;     ;;
+@;   ;;    ;;;  ;; ;;  ;;  ;; ;;  ;;  ;;; ;  ;;;  ;;
+@;
+@;
+@;  Please update typed/web-server/http when you update
+@;  web-server/http. See https://github.com/racket/typed-racket.
+@;
+
 @; ------------------------------------------------------------
 @section[#:tag "request-structs"]{Requests}
 @(require (for-label web-server/http/request-structs
