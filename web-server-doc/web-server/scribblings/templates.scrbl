@@ -168,7 +168,7 @@ title line of different calls to @racket[fast-template]:
  @"@" Syntax: @"@" character, identifiers, and spaces}
 
 To obtain an @litchar["@"] character in template output, you must
-escape the it, because it is the escape character of the
+escape it since @litchar["@"] is the escape character of the
 @|at-reader-ref|.  For example, to obtain:
 @verbatim[#:indent 2]|{
   <head><title>Fastest @s in the West!</title></head>
