@@ -95,4 +95,5 @@
                         #:mime-type (or/c bytes? #f)
                         #:headers (listof header?))
                        response?)]
- [TEXT/HTML-MIME-TYPE bytes?])
+ [TEXT/HTML-MIME-TYPE bytes?]
+ [APPLICATION/JSON-MIME-TYPE bytes?])
