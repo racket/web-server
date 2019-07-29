@@ -347,6 +347,8 @@ Equivalent to
 
 @defthing[TEXT/HTML-MIME-TYPE bytes?]{Equivalent to @racket[#"text/html; charset=utf-8"].}
 
+@defthing[APPLICATION/JSON-MIME-TYPE bytes?]{Equivalent to @racket[#"application/json; charset=utf-8"].}
+
 @warning{If you include a Content-Length header in a response that is inaccurate, there @bold{will be an error} in
 transmission that the server @bold{will not catch}.}
 
