@@ -9,6 +9,8 @@
 
 (define TEXT/HTML-MIME-TYPE #"text/html; charset=utf-8")
 
+(define APPLICATION/JSON-MIME-TYPE #"application/json; charset=utf-8")
+
 (struct response (code message seconds mime headers output))
 
 (define (response/full code message seconds mime headers body)
