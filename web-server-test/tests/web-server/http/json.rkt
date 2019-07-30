@@ -42,7 +42,7 @@
                                      #:message #"Strange request"))
  =>
  (bytes-sort
-  #"HTTP/1.1 200 Strange request\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nContent-Type: text/html; charset=utf-8\r\n\r\nfalse")
+  #"HTTP/1.1 200 Strange request\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nContent-Type: application/json; charset=utf-8\r\n\r\nfalse")
 
  (map
   (λ (b) (regexp-replace
@@ -54,7 +54,7 @@
                   #f))
  =>
  (bytes-sort
-  #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: Wed, 31 Dec 1969 23:00:00 GMT\r\nServer: Racket\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\n\r\n[\"whoop\",{\"there\":[\"it\",\"is\"]")
+  #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: Thu, 01 Jan 1970 00:00:00 GMT\r\nServer: Racket\r\nContent-Type: application/json; charset=utf-8\r\nConnection: close\r\n\r\n[\"whoop\",{\"there\":[\"it\",\"is\"]}]")
 
  ; The default MIME type ("application/json; charset=utf-8")
  ; can be overridden:
@@ -69,4 +69,4 @@
                                      #:headers (list (header #"head" #"bang"))))
  =>
  (bytes-sort
-  #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nContent-Type: text/html; charset=utf-8\r\nhead: bang\r\n\r\ntrue"))
+  #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nContent-Type: application/json; charset=utf-8\r\nhead: bang\r\n\r\ntrue"))
