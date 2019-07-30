@@ -5,6 +5,7 @@
          web-server/private/connection-manager
          web-server/http/response
          web-server/http
+         json
          "../util.rkt"
          (file "util.rkt"))
 
@@ -14,26 +15,26 @@
  (write-response tm (response/jsexpr '("booga")))
  =>
  (bytes-sort
-  #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nContent-Type: application/json; charset=utf-8\r\n\r\n[\"booga\"")
+  #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nContent-Type: application/json; charset=utf-8\r\n\r\n[\"booga\"]")
 
  ; Showing off all default headers and other values (200, "OK"):
  (write-response tm (response/jsexpr (hasheq 'jay "zee")))
  =>
  (bytes-sort
-  #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nContent-Type: text/html; charset=utf-8\r\n\r\n{\"jay\":\"zee\"}")
+  #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nContent-Type: application/json; charset=utf-8\r\n\r\n{\"jay\":\"zee\"}")
 
  ; We respect the json-null parameter:
  (write-response tm (parameterize ([json-null 'jibby-jab])
                       (response/jsexpr 'jibby-jab)))
  =>
  (bytes-sort
-  #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nContent-Type: text/html; charset=utf-8\r\n\r\nnull")
+  #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nContent-Type: application/json; charset=utf-8\r\n\r\nnull")
 
  (write-response tm (response/jsexpr "jazzy jazz"
                                      #:code 404))
  =>
  (bytes-sort
-  #"HTTP/1.1 404 Not Found\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nContent-Type: text/html; charset=utf-8\r\n\r\n\"jazzy jazz\"")
+  #"HTTP/1.1 404 Not Found\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nContent-Type: application/json; charset=utf-8\r\n\r\n\"jazzy jazz\"")
 
  ; The message is normally inferred from the status code,
  ; but you can use whatever you want:
