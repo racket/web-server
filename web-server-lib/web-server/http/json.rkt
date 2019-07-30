@@ -21,12 +21,13 @@
          #:mime-type [mime-type APPLICATION/JSON-MIME-TYPE]
          #:cookies [cooks empty]
          #:headers [hdrs empty])
+  (define js-null (json-null))
   (response
    code (infer-response-message code message) seconds mime-type
    ; rfc2109 also recommends some cache-control stuff here for cookies
    (append hdrs (map cookie->header cooks))
    (λ (out)
-     (write-json jsexpr out))))
+     (write-json jsexpr out #:null js-null))))
 
 (provide/contract
  [response/jsexpr
