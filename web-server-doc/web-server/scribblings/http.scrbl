@@ -958,5 +958,5 @@ which is for JSON what @racket[response/xexpr] is for XML.
  See the documentation for @racket[response/full] to see how @racket[message], if @racket[#f], is turned into a @racket[bytes?].
 
 @history[#:changed "1.5"
-         @elem{Added @racket[response/jsexpr].}
+         @elem{Added @racket[response/jsexpr].}]
 }
