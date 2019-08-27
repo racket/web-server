@@ -96,10 +96,23 @@
   (with-handlers
       ([(λ (x)
           (or
-           ;; This error is "Connection reset by peer" and doesn't
-           ;; really indicate a problem with the server.
            (and (exn:fail:network:errno? x)
-                (equal? (cons 54 'posix) (exn:fail:network:errno-errno x)))
+                (or
+                 ;; This error is "Connection reset by peer" and doesn't
+                 ;; really indicate a problem with the server. It
+                 ;; occurs when our end doesn't "realize" that the
+                 ;; connection was interrupted (for whatever reason)
+                 ;; and it attempts to send a packet to the other end,
+                 ;; to which the other end replies with an RST packet
+                 ;; because it wasn't expecting anything from our end.
+                 (equal? (cons 54 'posix) (exn:fail:network:errno-errno x))
+
+                 ;; This error is "Broken pipe" and it occurs when our
+                 ;; end attempts to write to the other end over a closed
+                 ;; socket. It can happen when a browser suddenly closes
+                 ;; the socket while we're sending it data (eg. because
+                 ;; the user closed a tab).
+                 (equal? (cons 32 'posix) (exn:fail:network:errno-errno x))))
            ;; This is error is not useful because it just means the
            ;; other side closed the connection early during writing,
            ;; which we can't do anything about.
