@@ -67,8 +67,9 @@
          [manager
           (make-threshold-LRU-manager
            (lambda (request)
-             `(html (head (title "Page Has Expired."))
-                    (body (p "Sorry, this page has expired. Please go back."))))
+             (response/xexpr
+              `(html (head (title "Page Has Expired."))
+                     (body (p "Sorry, this page has expired. Please go back.")))))
            (* 64 1024 1024))])
   (define servlet-box (box #f))
   (define namespace-now (current-namespace))
