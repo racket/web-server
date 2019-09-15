@@ -493,8 +493,8 @@ You can also generate random bytes using something like OpenSSL or @tt{/dev/rand
  @link["https://www.madboa.com/geek/openssl/#random-data"]{this FAQ} lists a few options.
 
  @defproc*[([(make-id-cookie
-              [name (and/c string? cookie-name?)]
-              [value (and/c string? cookie-value?)]
+              [name cookie-name?]
+              [value cookie-value?]
               [#:key secret-salt bytes?]
               [#:path path (or/c path/extension-value? #f) #f]
               [#:expires expires (or/c date? #f) #f]
@@ -507,9 +507,9 @@ You can also generate random bytes using something like OpenSSL or @tt{/dev/rand
                (or/c path/extension-value? #f) #f])
              cookie?]
             [(make-id-cookie
-              [name (and/c string? cookie-name?)]
+              [name cookie-name?]
               [secret-salt bytes?]
-              [value (and/c string? cookie-value?)]
+              [value cookie-value?]
               [#:path path (or/c path/extension-value? #f) #f]
               [#:expires expires (or/c date? #f) #f]
               [#:max-age max-age
@@ -520,7 +520,8 @@ You can also generate random bytes using something like OpenSSL or @tt{/dev/rand
               [#:extension extension
                (or/c path/extension-value? #f) #f])
              cookie?])]{
-  Generates an authenticated cookie named @racket[name] containing @racket[value], signed with @racket[secret-salt].
+  Generates an authenticated cookie named @racket[name] containing @racket[value],
+  signed with @racket[secret-salt].
 
   The calling conventions allow @racket[secret-salt] to be given either as a keyword
   argument (mirroring the style of @racket[make-cookie]) or a by-position argument
@@ -538,20 +539,27 @@ You can also generate random bytes using something like OpenSSL or @tt{/dev/rand
     @racket[secure], @racket[extension],
     and @racket[http-only?] (which is @racket[#true] by default).
     Allowed @racket[secret-salt] to be given with the keyword
-    @racket[#:key] instead of by position.
+    @racket[#:key] instead of by position.}
+ #:changed "1.6"
+ @elem{Changed to accept any @racket[cookie-name?] or @racket[cookie-value?]
+    (rather than only strings) for the @racket[name] and @racket[value] arguments,
+    respectively, for consistency with @racket[make-cookie].
+    Fixed a bug that had incorrectly truncated cookie signatures:
+    note that previous versions of this library will not recognize cookies
+    created by the fixed @racket[make-id-cookie] as validly signed, and vice versa.
     }]
  }
 
  @defproc*[([(request-id-cookie [request request?]
-                                [#:name name (and/c string? cookie-name?)]
+                                [#:name name cookie-name?]
                                 [#:key secret-salt bytes?]
                                 [#:timeout timeout real? +inf.0]
                                 [#:shelf-life shelf-life real? +inf.0])
              (or/c #f (and/c string? cookie-value?))]
-            [(request-id-cookie [name (and/c string? cookie-name?)]
+            [(request-id-cookie [name cookie-name?]
                                 [secret-salt bytes?]
                                 [request request?]
-                                [#:timeout timeout number? +inf.0]
+                                [#:timeout timeout real? +inf.0]
                                 [#:shelf-life shelf-life real? +inf.0])
              (or/c #f (and/c string? cookie-value?))])]{
   Extracts the first authenticated cookie named @racket[name]
@@ -566,13 +574,21 @@ You can also generate random bytes using something like OpenSSL or @tt{/dev/rand
            @elem{Added @racket[shelf-life] argument and
               support for giving @racket[name] and @racket[secret-salt]
               by keyword instead of by position.
-              Added support for @rfc6265 as with @racket[make-cookie].}]
+              Added support for @rfc6265 as with @racket[make-cookie].}
+            #:changed "1.6"
+           @elem{Changed @racket[name] argument to accept any @racket[cookie-name?]
+              as with @racket[make-id-cookie].
+              Corrected the documented contract for the @racket[timeout] argument.
+              Fixed a bug that had incorrectly truncated cookie signatures:
+              note that the fixed @racket[request-id-cookie] will reject cookies
+              created by previous versions of this library, and vice versa.
+              }]
  }
 
 @defproc[(valid-id-cookie? [cookie any/c]
-                           [#:name name (and/c string? cookie-name?)]
+                           [#:name name cookie-name?]
                            [#:key secret-salt bytes?]
-                           [#:timeout timeout number? +inf.0]
+                           [#:timeout timeout real? +inf.0]
                            [#:shelf-life shelf-life real? +inf.0])
          (or/c #f (and/c string? cookie-value?))]{
   Recognizes authenticated cookies named @racket[name] that were
@@ -597,7 +613,15 @@ You can also generate random bytes using something like OpenSSL or @tt{/dev/rand
   The default value, @racket[+inf.0], permits all properly named and
   signed cookies.
 
-  @history[#:added "1.3"]
+  @history[#:added "1.3"
+           #:changed "1.6"
+           @elem{Changed @racket[name] argument to accept any @racket[cookie-name?]
+              as with @racket[make-id-cookie].
+              Corrected the documented contract for the @racket[timeout] argument.
+              Fixed a bug that had incorrectly truncated cookie signatures:
+              note that the fixed @racket[valid-id-cookie?] will reject cookies
+              created by previous versions of this library, and vice versa.
+              }]
  }
 
  @defproc[(logout-id-cookie [name cookie-name?]
@@ -621,7 +645,10 @@ You can also generate random bytes using something like OpenSSL or @tt{/dev/rand
 
   @history[#:changed "1.3"
            @elem{Added support for @rfc6265 as with @racket[make-cookie],
-              including adding the @racket[domain] argument.}]
+              including adding the @racket[domain] argument.}
+           #:changed "1.6"
+           @elem{Fixed to accept any @racket[cookie-name?] for the @racket[name]
+              argument, as was previously documented.}]
  }
 
  @defproc[(make-secret-salt/file [secret-salt-path path-string?])

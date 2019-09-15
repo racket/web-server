@@ -3,7 +3,7 @@
          racket/promise
          racket/list
          racket/match
-         racket/runtime-path
+         racket/file
          (for-syntax racket/base)
          net/url
          net/cookies/common
@@ -24,9 +24,6 @@
 
 (define (set-header->read-header h)
   (make-header #"Cookie" (header-value h)))
-
-(define-runtime-path tmp-secret-salt-path
-  "tmp-secret-salt-path")
 
 (define-check (check-equal?/list-no-order actual expected)
   (or (and (list? actual)
@@ -214,10 +211,10 @@
 
     (test-suite
      "make-secret-salt/file"
-     (let ([delete-salt-file
-            (λ ()
-              (when (file-exists? tmp-secret-salt-path)
-                (delete-file tmp-secret-salt-path)))])
+     (let ([tmp-secret-salt-path (make-temporary-file)])
+       (define (delete-salt-file)
+         (when (file-exists? tmp-secret-salt-path)
+                (delete-file tmp-secret-salt-path)))
        (dynamic-wind delete-salt-file
                      (λ ()
                        (test-equal? "should only initialize once"
@@ -238,35 +235,47 @@
        "make-id-cookie and valid-id-cookie?"
        (test-false "reject forged"
                    (valid-id-cookie? (client-cookie "my-id-cookie"
-                                                    "my-id-cookie=YmFLLOIDULjpLQOu1+cvMBM+m&1489023629&forged-value"
+                                                    "my-id-cookie=YmFLLOIDULjpLQOu1+cvMBM+m4o&1489023629&forged-value"
+                                                    #f #f)
+                                     #:name "my-id-cookie"
+                                     #:key test-secret-salt))
+       (test-false "reject truncated signature"
+                   ;; before web-server-lib v1.6, generated signatures were incorectly truncated
+                   (valid-id-cookie? (client-cookie "my-id-cookie"
+                                                    "my-id-cookie=YmFLLOIDULjpLQOu1+cvMBM+m&1489023629&my-signed-value"
                                                     #f #f)
                                      #:name "my-id-cookie"
                                      #:key test-secret-salt))
        (let ([dt (date* 26 42 0 9 3 2017 4 67 #f 0 0 "UTC")])
+         ;; Rather than repeating each test for every possible combination of:
+         ;;   - Name argument to make-id-cookie as string or bytes
+         ;;   - Value argument to make-id-cookie as string or bytes
+         ;;   - Name argument to valid-id-cookie as string or bytes
+         ;; we mix use of strings vs. bytes to get reasonable coverage overall.
          (define kw-c
            (make-id-cookie "my-id-cookie"
-                           "my-signed-value"
+                           #"my-signed-value"
                            #:key test-secret-salt
                            #:domain "example.com"
                            #:max-age 42
                            #:path "/some-path"
                            #:expires dt
-                           #:secure? 'yes
-                           #:http-only? 'yes
+                           #:secure? 'yes ;; non-boolean values should be accepted
+                           #:http-only? #t
                            #:extension "ext"))
          (define by-pos-c
-           (make-id-cookie "my-id-cookie"
+           (make-id-cookie #"my-id-cookie"
                            test-secret-salt
                            "my-signed-value"
                            #:domain "example.com"
                            #:max-age 42
                            #:path "/some-path"
                            #:expires dt
-                           #:secure? 'yes
+                           #:secure? #t
                            #:http-only? 'yes
                            #:extension "ext"))
          (for ([c (list kw-c by-pos-c)]
-               [convention '(keyword by-position)])
+               [convention (map string-info '("keyword" "by-position"))])
            (with-check-info (['cookie c]
                              ['|make-id-cookie calling convention| convention])
              (test-not-false "infinite timeout"
@@ -275,7 +284,7 @@
                                                #:key test-secret-salt))
              (test-not-false "finite timeout"
                              (valid-id-cookie? c
-                                               #:name "my-id-cookie"
+                                               #:name #"my-id-cookie"
                                                #:key test-secret-salt
                                                #:timeout (current-seconds)))
              (test-false "reject expired"
@@ -283,8 +292,7 @@
                                            #:name "my-id-cookie"
                                            #:key test-secret-salt
                                            #:timeout (- (current-seconds)
-                                                        86400)))
-             ))))
+                                                        86400)))))))
       (test-suite
        "request-id-cookie"
        (let ()
@@ -292,22 +300,24 @@
            (make-request
             #"GET" (string->url "http://test.com/foo")
             (list (header #"Cookie"
-                          #"my-id-cookie=YmFLLOIDULjpLQOu1+cvMBM+m&1489023629&my-signed-value"))
+                          #"my-id-cookie=YmFLLOIDULjpLQOu1+cvMBM+m4o&1489023629&my-signed-value"))
             (delay empty) #f "host" 80 "client"))
          (test-not-false "infinite timeout & shelf life"
                          (request-id-cookie req
                                             #:name "my-id-cookie"
                                             #:key test-secret-salt))
-         (test-not-false "finite timeout"
-                     (request-id-cookie req
-                                        #:name "my-id-cookie"
-                                        #:key test-secret-salt
-                                        #:timeout (current-seconds)))
-         (test-not-false "finite timeout / by position"
-                     (request-id-cookie "my-id-cookie"
-                                        test-secret-salt
-                                        req
-                                        #:timeout (current-seconds)))
+         (for ([name (in-list '("my-id-cookie" #"my-id-cookie"))])
+           (with-check-info (['|name argument| name])
+             (test-not-false "finite timeout"
+                             (request-id-cookie req
+                                                #:name name
+                                                #:key test-secret-salt
+                                                #:timeout (current-seconds)))
+             (test-not-false "finite timeout / by position"
+                             (request-id-cookie name
+                                                test-secret-salt
+                                                req
+                                                #:timeout (current-seconds)))))
          (test-false "timeout / reject expired"
                      (request-id-cookie req
                                         #:name "my-id-cookie"
@@ -315,12 +325,11 @@
                                         #:timeout 1089023629))
          (test-equal? "long finite shelf-life / fresh cookie"
                       (valid-id-cookie? (make-id-cookie "fresh-id-cookie"
-                                                  "test-value"
-                                                  #:key #"test-key")
-                                  #:name "fresh-id-cookie"
-                                  #:key #"test-key"
-                                  #:shelf-life 500
-                                  )
+                                                        "test-value"
+                                                        #:key #"test-key")
+                                        #:name "fresh-id-cookie"
+                                        #:key #"test-key"
+                                        #:shelf-life 500)
                       "test-value")
          (test-equal? "long finite shelf-life"
                       (request-id-cookie req
