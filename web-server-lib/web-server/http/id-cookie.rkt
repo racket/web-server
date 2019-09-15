@@ -7,6 +7,7 @@
          racket/file
          racket/random
          racket/contract
+         racket/bool
          (except-in web-server/http
                     make-cookie)
          web-server/stuffers/hmac-sha1
@@ -18,49 +19,54 @@
    (-> path-string?
        bytes?)]
   [logout-id-cookie
-   (->* [(and/c string? cookie-name?)]
+   (->* [cookie-name?]
         [#:path (or/c path/extension-value? #f)
          #:domain (or/c domain-value? #f)]
         cookie?)]
   [valid-id-cookie?
    (->* [any/c
-         #:name (and/c string? cookie-name?)
+         #:name cookie-name?
          #:key bytes?]
         [#:timeout real?
          #:shelf-life real?]
         (or/c #f (and/c string? cookie-value?)))]
   [request-id-cookie
-   (->i ([name-or-req {kw-name}
+   (->i #:chaperone
+        ([name-or-req {kw-name}
                       (if (unsupplied-arg? kw-name)
-                          (and/c string? cookie-name?)
+                          cookie-name?
                           request?)])
-        ([maybe-key bytes?]
-         [maybe-req request?]
-         #:name [kw-name (and/c string? cookie-name?)]
+        ([pos-key bytes?]
+         [pos-req request?]
+         #:name [kw-name cookie-name?]
          #:key [kw-key bytes?]
-         #:timeout [timeout number?]
+         #:timeout [timeout real?]
          #:shelf-life [shelf-life real?])
-        #:pre/desc {maybe-key maybe-req kw-name kw-key}
-        (let ([maybe-key/un (unsupplied-arg? maybe-key)]
-              [maybe-req/un (unsupplied-arg? maybe-req)]
-              [kw-name/un (unsupplied-arg? kw-name)]
-              [kw-key/un (unsupplied-arg? kw-key)])
-          (or (and (if maybe-key/un maybe-req/un (not maybe-req/un))
-                   (if kw-name/un kw-key/un (not kw-key/un))
-                   (not (and maybe-key/un kw-key/un)))
-              `("expected: either three by-position arguments or one by-position argument and arguments with keywords #:name and #:key"
-                "given: something else")))
+        #:pre/desc {pos-key pos-req kw-name kw-key}
+        (let ([pos-key-unsupplied (unsupplied-arg? pos-key)]
+              [pos-req-unsupplied (unsupplied-arg? pos-req)]
+              [kw-name-unsupplied (unsupplied-arg? kw-name)]
+              [kw-key-unsupplied (unsupplied-arg? kw-key)])
+          (if (if pos-key-unsupplied
+                  (and pos-req-unsupplied
+                       (nor kw-name-unsupplied kw-key-unsupplied))
+                  (and (not pos-req-unsupplied)
+                       (and kw-name-unsupplied kw-key-unsupplied)))
+              #true
+              (string-append
+               "expected:\n  "
+               " either three by-position arguments,\n  "
+               " or both one by-position argument and #:name and #:key arguments\n  "
+               "given: something else")))
         [_ (or/c #f (and/c string? cookie-value?))])]
   [make-id-cookie
-   (->i ([name (and/c string? cookie-name?)]
+   (->i #:chaperone
+        ([name cookie-name?]
          [data-or-key {maybe-key}
                       (if (unsupplied-arg? maybe-key)
                           bytes?
-                          (and/c string? cookie-value?))])
-        ([maybe-data {maybe-key}
-                     (if (unsupplied-arg? maybe-key)
-                         (and/c string? cookie-value?)
-                         none/c)]
+                          cookie-value?)])
+        ([maybe-data cookie-value?]
          #:key [maybe-key bytes?]
          #:path [path (or/c path/extension-value? #f)]
          #:expires [expires (or/c date? #f)]	 	 	 
@@ -71,33 +77,39 @@
          #:http-only? [http-only? any/c]	 	 
          #:extension [extension
                       (or/c path/extension-value? #f)])
-        #:pre {maybe-data maybe-key}
-        (not (and (unsupplied-arg? maybe-data)
-                  (unsupplied-arg? maybe-key)))
+        #:pre/desc {maybe-data maybe-key}
+        (if (xor (unsupplied-arg? maybe-data)
+                 (unsupplied-arg? maybe-key))
+            #true
+            (string-append
+             "expected:\n  "
+             " either three by-position arguments,\n  "
+             " or both two by-position arguments and a #:key argument\n  "
+             "given: something else"))
         [_ cookie?])]
   ))
 
-(define (substring* s st en)
-  (substring s st (+ (string-length s) en)))
+;; stringify : (-> (or/c string? bytes?) bytes?)
+(define (stringify str-or-bs)
+  (if (bytes? str-or-bs)
+      (bytes->string/utf-8 str-or-bs)
+      str-or-bs))
 
-(define (mac key v)
-  (substring*
-   (bytes->string/utf-8
-    (base64-encode (HMAC-SHA1 key (write/bytes v)) #""))
-   0 -3))
+;; mac : (-> bytes? exact-integer? string? string?)
+(define (mac key authored data)
+  (let* ([v (list authored data)]
+         ;; 28 bytes including 1 byte of padding
+         [bs (base64-encode (HMAC-SHA1 key (write/bytes v)) #"")]
+         ;; drop the padding to get 27 bytes
+         [bs (subbytes bs 0 27)])
+    (bytes->string/utf-8 bs)))
 
 (define (make-secret-salt/file secret-salt-path)
   (unless (file-exists? secret-salt-path)
-    (with-output-to-file secret-salt-path
-      (λ ()
-        (write-bytes (crypto-random-bytes 128)))))
+    (call-with-output-file* secret-salt-path
+      (λ (out)
+        (write-bytes (crypto-random-bytes 128) out))))
   (file->bytes secret-salt-path))
-
-(define (id-cookie? name c)
-  (or (and (client-cookie? c)
-           (string=? (client-cookie-name c) name))
-      (and (cookie? c)
-           (equal? (cookie-name c) name))))
 
 (define (make-id-cookie name
                         data-or-key
@@ -109,50 +121,51 @@
                         #:domain [domain #f]	 	 	 
                         #:secure? [secure? #f] ;default ok?	 	 
                         #:http-only? [http-only? #t] ;default ok?	 	 
-                        #:extension [extension #f]
-                        )
-  (define-values {data key}
+                        #:extension [extension #f])
+  (define-values {data* key}
     (if maybe-key
         (values data-or-key maybe-key)
         (values maybe-data data-or-key)))
+  (define data (stringify data*))
   (define authored (current-seconds))
+  (define authored-str (number->string authored))
   (define digest
-    (mac key (list authored data)))
+    (mac key authored data))
   (make-cookie name
-               (format "~a&~a&~a"
-                       digest authored data)
+               (string-append digest "&" authored-str "&" data)
                #:path path
                #:expires exp-date	 	 	 	 
                #:max-age max-age	 	 	 	 
                #:domain domain	 	 	 	 
-               #:secure? (not (not secure?))	 	 	 
-               #:http-only? (not (not http-only?))	 	 	 
-               #:extension extension
-               ))
+               #:secure? (and secure? #t)
+               #:http-only? (and http-only? #t)
+               #:extension extension))
+
 
 (define (valid-id-cookie? c
-                          #:name name
+                          #:name expected-name
                           #:key key
                           #:timeout [timeout +inf.0]
                           #:shelf-life [shelf-life +inf.0])
-  (and (id-cookie? name c)
-       (with-handlers ([exn:fail? (lambda (x) #f)])
-         (match (if (client-cookie? c)
-                    (client-cookie-value c)
-                    (cookie-value c))
-           [(pregexp #px"^(.+)&(\\d+)&(.*)$"
-                     (list _
-                           digest
-                           (app string->number authored)
-                           data))
-            (and [authored . <= . timeout]
-                 [shelf-life . >= . (- (current-seconds)
-                                       authored)]
-                 (let ([re-digest (mac key (list authored data))])
-                   (string=? digest re-digest))
-                 data)]
-           [cv
-            #f]))))
+  (define-values [actual-name value]
+    (if (client-cookie? c)
+        (values (client-cookie-name c) (client-cookie-value c))
+        (values (cookie-name c) (cookie-value c))))
+  (and (string=? (stringify expected-name) actual-name)
+       (match value
+         ;; digest is 27 base64 digits
+         [(pregexp #px"^([[:alnum:]\\+/]{27})&(\\d+)&(.*)$"
+                   (list _
+                         digest
+                         (app string->number authored) ;; exact-integer? due to regexp
+                         data))
+          (and (<= (- (current-seconds) shelf-life) authored timeout)
+               (let ([re-digest (mac key authored data)])
+                 (string=? digest re-digest))
+               data)]
+         [_
+          #f])))
+
 
 (define (request-id-cookie name-or-req
                            [maybe-key #f]
@@ -161,9 +174,13 @@
                            #:key [kw-key #f]
                            #:timeout [timeout +inf.0]
                            #:shelf-life [shelf-life +inf.0])
-  (let ([name (or kw-name name-or-req)]
-        [key (or kw-key maybe-key)]
-        [req (or maybe-req name-or-req)])
+  (let-values ([{name* key req}
+                (if kw-name ;; contract says can't mix old & new conventions
+                    (values kw-name kw-key name-or-req)
+                    (values name-or-req maybe-key maybe-req))])
+    ;; valid-id-cookie? would stringify,
+    ;; but we don't want to (potentially) allocate inside the loop.
+    (define name (stringify name*))
     (for/or ([c (in-list (request-cookies req))])
       (valid-id-cookie? c
                         #:name name
@@ -171,14 +188,15 @@
                         #:timeout timeout
                         #:shelf-life shelf-life))))
 
+
 (define (logout-id-cookie name
                           #:path [path #f]
                           #:domain [domain #f])
-  ;net/cookies implements clear-cookie-header by wrapping
-  ;this in cookie->set-cookie-header
+  ;; net/cookies implements clear-cookie-header by wrapping
+  ;; this in cookie->set-cookie-header
   (make-cookie name ""
                #:expires
-               (seconds->date 1420070400 ; midnight UTC on 1/1/15
+               (seconds->date 1420070400 ;; midnight UTC on 2015-01-01
                               #f)
                #:path path
                #:domain domain))
