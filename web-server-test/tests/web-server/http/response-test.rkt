@@ -15,7 +15,7 @@
   (define buffer (make-bytes bufsize))
 
   (define (flush!)
-    (write-bytes-avail buffer out 0 position)
+    (write-bytes buffer out 0 position)
     (set! position 0)
     0)
 
