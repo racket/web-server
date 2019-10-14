@@ -133,27 +133,21 @@
     ;; connection will be closed. This shouldn't change any other
     ;; behavior: read-request is already blocking, peeking doesn't
     ;; consume a byte, etc.
-    (define the-evt
-      (choice-evt
-       (handle-evt
-        (port-closed-evt ip)
-        (λ (res)
-          (kill-connection! conn)))
-       (handle-evt
-        (peek-bytes-evt 1 0 #f ip)
-        (λ (res)
-          (cond
-            [(eof-object? res)
-             (kill-connection! conn)]
-            [else
-             (define-values
-               (req close?)
-               (config:read-request conn config:port port-addresses))
-             (set-connection-close?! conn close?)
-             (config:dispatch conn req)
-             (if (connection-close? conn)
-               (kill-connection! conn)
-               (connection-loop))])))))
     (define (connection-loop)
-      (sync the-evt))
+      (cond
+        [(eof-object? (peek-byte/safe ip))
+         (kill-connection! conn)]
+
+        [else
+         (define-values (req close?)
+           (config:read-request conn config:port port-addresses))
+         (set-connection-close?! conn close?)
+         (config:dispatch conn req)
+         (if (connection-close? conn)
+             (kill-connection! conn)
+             (connection-loop))]))
     (connection-loop)))
+
+(define (peek-byte/safe ip)
+  (with-handlers ([exn:fail? (lambda _ eof)])
+    (peek-bytes 1 0 ip)))
