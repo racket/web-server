@@ -133,37 +133,17 @@
     ;; connection will be closed. This shouldn't change any other
     ;; behavior: read-request is already blocking, peeking doesn't
     ;; consume a byte, etc.
-    (define the-evt
-      (choice-evt
-       (handle-evt
-        (port-closed-evt ip)
-        (λ (res)
-          (kill-connection! conn)))
-       (handle-evt
-        (peek-bytes-evt 1 0 #f ip)
-        (λ (res)
-          (cond
-            [(eof-object? res)
-             (kill-connection! conn)]
-            [else
-             (define-values
-               (req close?)
-               (config:read-request conn config:port port-addresses))
-             (set-connection-close?! conn close?)
-             (config:dispatch conn req)
-             (if (connection-close? conn)
-               (kill-connection! conn)
-               (connection-loop))])))))
-    (define liveness-bytes (make-bytes 1))
     (define (connection-loop)
-      ;; If the socket at the other end is abandoned and we don't
-      ;; get sent a FIN packet, then we'll happily start to sync on
-      ;; the-evt. When that happens, `port-closed-evt' never fires and
-      ;; `peek-bytes-evt' encounters a RST packet inside its waiter
-      ;; thread (in `poll-or-spawn' in the runtime's `port.rkt') and
-      ;; that thread then dies with an exception that we can't guard
-      ;; against in here. Doing a non-blocking peek here avoids that
-      ;; whole scenario.
-      (unless (eof-object? (peek-bytes-avail! liveness-bytes 0 #f ip))
-        (sync the-evt)))
+      (cond
+        [(eof-object? (peek-bytes 1 0 ip))
+         (kill-connection! conn)]
+
+        [else
+         (define-values (req close?)
+           (config:read-request conn config:port port-addresses))
+         (set-connection-close?! conn close?)
+         (config:dispatch conn req)
+         (if (connection-close? conn)
+             (kill-connection! conn)
+             (connection-loop))]))
     (connection-loop)))
