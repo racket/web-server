@@ -154,6 +154,16 @@
              (if (connection-close? conn)
                (kill-connection! conn)
                (connection-loop))])))))
+    (define liveness-bytes (make-bytes 1))
     (define (connection-loop)
-      (sync the-evt))
+      ;; If the socket at the other end is abandoned and we don't
+      ;; get sent a FIN packet, then we'll happily start to sync on
+      ;; the-evt. When that happens, `port-closed-evt' never fires and
+      ;; `peek-bytes-evt' encounters a RST packet inside its waiter
+      ;; thread (in `poll-or-spawn' in the runtime's `port.rkt') and
+      ;; that thread then dies with an exception that we can't guard
+      ;; against in here. Doing a non-blocking peek here avoids that
+      ;; whole scenario.
+      (unless (eof-object? (peek-bytes-avail! liveness-bytes 0 #f ip))
+        (sync the-evt)))
     (connection-loop)))
