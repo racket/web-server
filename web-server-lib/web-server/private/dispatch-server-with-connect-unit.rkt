@@ -135,7 +135,7 @@
     ;; consume a byte, etc.
     (define (connection-loop)
       (cond
-        [(eof-object? (peek-bytes 1 0 ip))
+        [(eof-object? (peek-byte/safe ip))
          (kill-connection! conn)]
 
         [else
@@ -147,3 +147,7 @@
              (kill-connection! conn)
              (connection-loop))]))
     (connection-loop)))
+
+(define (peek-byte/safe ip)
+  (with-handlers ([exn:fail? (lambda _ eof)])
+    (peek-bytes 1 0 ip)))
