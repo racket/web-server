@@ -104,13 +104,15 @@
         [else #f])))
 
 (define (output-response-body conn bresp)
+  ;; This function gets whatever time is left after the headers were
+  ;; written to write its body to the client.
   (define o-port (connection-o-port conn))
   ((response-output bresp) o-port)
   (flush-output o-port))
 
 (define (output-response-body/chunked conn bresp)
   ;; Flush the headers immediately since the response handler can wait
-  ;; indefinitely before writing anything out to the output port.
+  ;; a while before writing anything out to the output port.
   (flush-output (connection-o-port conn))
 
   (define-values (from-servlet to-chunker) (make-pipe))
@@ -130,6 +132,10 @@
       (define bytes-read-or-eof
         (read-bytes-avail! buffer from-servlet))
       (unless (eof-object? bytes-read-or-eof)
+        ;; For every chunk, increase the connection timeout s.t.
+        ;; a responder can run indefinitely as long as it writes
+        ;; *something* every 60 seconds.
+        (reset-connection-timeout! conn 60)
         (fprintf to-client "~a\r\n" (number->string bytes-read-or-eof 16))
         (write-bytes buffer to-client 0 bytes-read-or-eof)
         (fprintf to-client "\r\n")

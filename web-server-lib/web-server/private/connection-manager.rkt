@@ -17,12 +17,14 @@
           [close? boolean?])]
  [start-connection-manager
   (-> connection-manager?)]
- [new-connection 
+ [new-connection
   (-> connection-manager? number? input-port? output-port? custodian? boolean?
       connection?)]
  [kill-connection!
   (connection? . -> . void)]
  [adjust-connection-timeout!
+  (connection? number? . -> . void)]
+ [reset-connection-timeout!
   (connection? number? . -> . void)])
 
 ;; start-connection-manager: custodian -> connection-manager
@@ -40,11 +42,11 @@
      0 ;; (begin0 (unbox i) (set-box! i (add1 (unbox i))))
      #f i-port o-port cust close?))
   (define conn-wb (make-weak-box conn))
-  (set-connection-timer! 
+  (set-connection-timer!
    conn
    (start-timer tm
                 time-to-live
-                (lambda () 
+                (lambda ()
                   (cond
                     [(weak-box-value conn-wb)
                      => kill-connection-w/o-timer!]))))
@@ -58,7 +60,7 @@
     (cancel-timer! (connection-timer conn)))
   (kill-connection-w/o-timer! conn))
 
-(define (kill-connection-w/o-timer! conn)  
+(define (kill-connection-w/o-timer! conn)
   (with-handlers ([exn:fail:network? void])
     (close-output-port (connection-o-port conn)))
   (with-handlers ([exn:fail:network? void])
@@ -69,3 +71,8 @@
 ;; change the expiration time for this connection
 (define (adjust-connection-timeout! conn time)
   (increment-timer! (connection-timer conn) time))
+
+;; reset-connection-timeout!: connection number -> void
+;; reset the expiration time for this connection
+(define (reset-connection-timeout! conn time)
+  (reset-timer! (connection-timer conn) time))
