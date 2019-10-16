@@ -104,10 +104,12 @@
 
 ;; --- timeout plan
 
-;; start timeout on connection startup
-;; for POST requests increase the timeout proportionally when content-length is read
-;; adjust timeout in read-to-eof
-;; adjust timeout to starting timeout for next request with persistent connections
+;; for each connection:
+;;   * start timeout on connection startup
+;;
+;;     for each request on a connection:
+;;       - reset timeout when request data comes in
+;;       - reset timeout for every chunk of data that is written out
 
-;; adjust timeout proportionally when responding
+;; adjust timeout proportionally when responding with a file
 ;; for servlet - make it a day until the output is produced

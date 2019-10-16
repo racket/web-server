@@ -32,14 +32,15 @@ This module provides functions for launching dispatching servers.
                 [#:port port listen-port-number? 80]
                 [#:listen-ip listen-ip (or/c string? false/c) #f]
                 [#:max-waiting max-waiting integer? 511]
-                [#:initial-connection-timeout initial-connection-timeout integer? 60])
+                [#:initial-connection-timeout initial-connection-timeout integer? 60]
+                [#:request-read-timeout request-read-timeout integer? 60])
          (-> void)]{
  Constructs an appropriate @racket[dispatch-server-config^], invokes the
  @racket[dispatch-server@], and calls its @racket[serve] function.
- 
+
  If @racket[connection-close?] is @racket[#t], then every connection is closed after one
  request. Otherwise, the client decides based on what HTTP version it uses.
- 
+
  The @racket[#:dispatch-server-connect@] argument supports the conversion of raw connections;
  for example, @racket[make-ssl-connect@] produces a unit to serve SSL by converting
  raw TCP ports to SSL ports; see also @secref["faq:https"].
@@ -47,6 +48,12 @@ This module provides functions for launching dispatching servers.
   was formerly recommended for SLL support). Beware that the server expects the @racket[tcp-accept] operation
   from @racket[tcp@] to be effectively atomic; new connections are not accepted while @racket[tcp-accept]
   is in progress.
+
+ The @racket[#:request-read-timeout] argument controls how long the
+ request parser will wait for request data to come in from the client
+ before it closes the connection.  If you need to support large file
+ uploads over slow connections, then you may need to adjust this
+ value.
 
 Here's an example of a simple web server that serves files
 from a given path:
@@ -63,6 +70,7 @@ from a given path:
    #:port 8080))
 ]
 
+@history[#:changed "1.6" @elem{Added the @racket[#:request-read-timeout] argument.}]
 @history[#:changed "1.1" @elem{Added the @racket[#:dispatch-server-connect@] argument.}]}
 
 
@@ -77,11 +85,13 @@ from a given path:
                       [#:ports ports (listof listen-port-number?) (list 80)]
                       [#:listen-ip listen-ip (or/c string? false/c) #f]
                       [#:max-waiting max-waiting integer? 511]
-                      [#:initial-connection-timeout initial-connection-timeout integer? 60])
+                      [#:initial-connection-timeout initial-connection-timeout integer? 60]
+                      [#:request-read-timeout request-read-timeout integer? 60])
          (-> void)]{
  Calls @racket[serve] multiple times, once for each @racket[port], and returns
  a function that shuts down all of the server instances.
 
+@history[#:changed "1.6" @elem{Added the @racket[#:request-read-timeout] argument.}]
 @history[#:changed "1.1" @elem{Added the @racket[#:dispatch-server-connect@] argument.}]}
 
 
@@ -95,14 +105,16 @@ from a given path:
                           [#:tcp@ tcp@ (unit/c (import) (export tcp^)) raw:tcp@]
                           [#:ips+ports ips+ports (listof (cons/c (or/c string? false/c) (listof listen-port-number?))) (list (cons #f (list 80)))]
                           [#:max-waiting max-waiting integer? 511]
-                          [#:initial-connection-timeout initial-connection-timeout integer? 60])
+                          [#:initial-connection-timeout initial-connection-timeout integer? 60]
+                          [#:request-read-timeout request-read-timeout integer? 60])
          (-> void)]{
  Calls @racket[serve/ports] multiple times, once for each @racket[ip], and returns
  a function that shuts down all of the server instances.
 
+@history[#:changed "1.6" @elem{Added the @racket[#:request-read-timeout] argument.}]
 @history[#:changed "1.1" @elem{Added the @racket[#:dispatch-server-connect@] argument.}]}
 
-                  
+
 @defproc[(serve/web-config@ [config@ (unit/c (import) (export web-config^))]
                             [#:dispatch-server-connect@ dispatch-server-connect@
                                                         (unit/c (import)
@@ -112,12 +124,12 @@ from a given path:
                                     raw:tcp@])
          (-> void)]{
  Starts the @web-server with the settings defined by the given @racket[web-config^] unit.
-        
+
  Combine @racket[serve/web-config@] with @racket[configuration-table->web-config@] and @racket[configuration-table-sexpr->web-config@]:
- 
+
  @racketblock[
   (serve/web-config@
-   (configuration-table->web-config@ 
+   (configuration-table->web-config@
     default-configuration-table-path))]
 
 @history[#:changed "1.1" @elem{Added the @racket[#:dispatch-server-connect@] argument.}]}
@@ -130,7 +142,7 @@ A default implementation of the dispatch server's connection-conversion abstract
 @history[#:added "1.1"]}
 
 
-@defproc[(make-ssl-connect@ [server-cert-file path-string?] 
+@defproc[(make-ssl-connect@ [server-cert-file path-string?]
                             [server-key-file path-string?])
          (unit/c (import) (export dispatch-server-connect^))]{
 

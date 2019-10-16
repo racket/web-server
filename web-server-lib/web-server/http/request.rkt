@@ -10,7 +10,7 @@
          web-server/http/request-structs)
 
 (define read-request/c
-  (connection? 
+  (connection?
    listen-port-number?
    (input-port? . -> . (values string? string?))
    . -> .
@@ -20,7 +20,10 @@
  [parse-bindings (-> bytes? (listof binding?))]
  [read-headers (-> input-port? (listof header?))]
  [rename make-ext:read-request make-read-request
-         (->* () (#:connection-close? boolean?) read-request/c)]
+         (->* ()
+              (#:connection-close? boolean?
+               #:read-timeout number?)
+              read-request/c)]
  [rename ext:read-request read-request
          read-request/c])
 
@@ -28,42 +31,43 @@
 ;; read-request: connection number (input-port -> string string) -> request boolean?
 ;; read the request line, and the headers, determine if the connection should
 ;; be closed after servicing the request and build a request structure
-(define ((make-read-request 
-          #:connection-close? [connection-close? #f])
+(define ((make-read-request
+          #:connection-close? [connection-close? #f]
+          #:read-timeout [read-timeout 60])
          conn host-port port-addresses)
-  (define ip 
+  (define ip
     (connection-i-port conn))
+  ;; Every request gets at least `read-timeout' seconds to read the
+  ;; request data and write its first byte.
+  (reset-connection-timeout! conn read-timeout)
   (define-values (method uri major minor)
     (read-request-line ip))
-  (define initial-headers 
+  (define initial-headers
     (read-headers ip))
-  (match (headers-assq* #"Content-Length" initial-headers)
-    [(struct header (f v))
-     ;; Give it one second per byte (with 5 second minimum... a bit
-     ;; arbitrary)
-     (adjust-connection-timeout!
-      conn (max 5 (string->number (bytes->string/utf-8 v))))]
-    [#f
-     (void)])
   (define-values (data-ip headers)
     (complete-request ip initial-headers))
   (define-values (host-ip client-ip)
     (port-addresses ip))
   (define-values (bindings/raw-promise raw-post-data)
     (read-bindings&post-data/raw data-ip method uri headers))
-  (values
-   (make-request method uri headers bindings/raw-promise raw-post-data
-                 host-ip host-port client-ip)
-   (or connection-close?
-       (close-connection? headers major minor
-                          client-ip host-ip))))
+  (define request
+    (make-request method uri headers bindings/raw-promise raw-post-data
+                  host-ip host-port client-ip))
+  (define close?
+    (or connection-close?
+        (close-connection? headers major minor
+                           client-ip host-ip)))
+  ;; Ensure that there is enough time left to process and to output the
+  ;; response.
+  (reset-connection-timeout! conn 60)
+  (values request close?))
 
 ;; If the headers says it uses chunked transfer encoding, then decode
 ;; it
 (require racket/stxparam
          (for-syntax racket/base))
-(define-syntax-parameter break 
-  (λ (stx) 
+(define-syntax-parameter break
+  (λ (stx)
     (raise-syntax-error 'break "Used outside forever" stx)))
 (define-syntax-rule (forever e ...)
   (let/ec this-break
@@ -90,7 +94,7 @@
       ;; Ignore CRLF
       (read-line real-ip 'any))
      (define more-headers
-       (list* (header #"Content-Length" 
+       (list* (header #"Content-Length"
                       (string->bytes/utf-8 (number->string total-size)))
               (read-headers real-ip)))
      (close-output-port decode-op)
@@ -98,10 +102,12 @@
     [_
      (values real-ip initial-headers)]))
 
-(define (make-ext:read-request 
-         #:connection-close? [connection-close? #f])
-  (define read-request 
-    (make-read-request #:connection-close? connection-close?))
+(define (make-ext:read-request
+         #:connection-close? [connection-close? #f]
+         #:read-timeout [read-timeout 60])
+  (define read-request
+    (make-read-request #:connection-close? connection-close?
+                       #:read-timeout read-timeout))
   (define (ext:read-request conn host-port port-addresses)
     (with-handlers ([exn:fail?
                      (lambda (exn)
@@ -118,7 +124,7 @@
 ; close-connection? : (listof (cons symbol bytes)) number number string string -> boolean
 ;; determine if this connection should be closed after serving the
 ;; response
-(define close-connection? 
+(define close-connection?
   (let ([rx (byte-regexp #"[cC][lL][oO][sS][eE]")])
     (lambda (headers major minor client-ip host-ip)
       (or (< major 1)
@@ -152,7 +158,7 @@
               #f])))))
 
 ;; **************************************************
-;; read-request-line  
+;; read-request-line
 (define match-method
   (let ([rx (byte-regexp #"^([^ ]+) (.+) HTTP/([0-9]+)\\.([0-9]+)$")])
     (lambda (a) (regexp-match rx a))))
@@ -183,7 +189,7 @@
   (provide read-request-line))
 
 ;; **************************************************
-;; read-headers  
+;; read-headers
 (define match-colon
   (let ([rx (byte-regexp (bytes-append #"^([^:]*):[ " (bytes 9) #"]*(.*)"))])
     (lambda (a) (regexp-match rx a))))
@@ -195,7 +201,7 @@
     (cond
       [(eof-object? l) null]
       [(zero? (bytes-length l)) null]
-      [(match-colon l) 
+      [(match-colon l)
        => (match-lambda
             [(list _ field value)
              (list* (make-header field (read-one-head in value))
@@ -241,7 +247,7 @@
     [(bytes-ci=? #"POST" meth)
      (define content-type (headers-assq* #"Content-Type" headers))
      (cond
-       [(and content-type 
+       [(and content-type
              (regexp-match FILE-FORM-REGEXP (header-value content-type)))
         => (match-lambda
             [(list _ content-boundary)
@@ -255,12 +261,12 @@
                       (define rhs
                         (header-value
                          (headers-assq* #"Content-Disposition" headers)))
-                      (match* 
+                      (match*
                           ((regexp-match #"filename=(\"([^\"]*)\"|([^ ;]*))" rhs)
                            (regexp-match #"[^e]name=(\"([^\"]*)\"|([^ ;]*))" rhs))
                         [(#f #f)
-                         (network-error 
-                          'reading-bindings 
+                         (network-error
+                          'reading-bindings
                           "Couldn't extract form field name for file upload")]
                         [(#f (list _ _ f0 f1))
                          (make-binding:form (or f0 f1)
@@ -274,7 +280,7 @@
              (values
               (delay (append (force bindings-GET) bs))
               #f)])]
-       [else        
+       [else
         (match (headers-assq* #"Content-Length" headers)
           [(struct header (_ value))
            (cond
@@ -287,12 +293,12 @@
                          'read-bindings
                          "Post data ended pre-maturely")]
                        [else
-                        (values (delay 
+                        (values (delay
                                   (append
                                    (parse-bindings raw-bytes)
                                    (force bindings-GET)))
                                 raw-bytes)])))]
-             [else 
+             [else
               (network-error
                'read-bindings
                "Post request contained a non-numeric content-length")])]
@@ -313,7 +319,7 @@
                         [else
                          (values (delay empty) raw-bytes)])))]
               [else
-               (network-error 
+               (network-error
                 'read-bindings
                 "Non-GET/POST request contained a non-numeric content-length")])]
        [#f
@@ -374,7 +380,7 @@
       [(bytes=? line start-boundary)
        (let read-parts ()
          (define headers (read-headers in))
-         (let read-mime-part-body 
+         (let read-mime-part-body
            ([more-k (lambda (contents)
                       (list* (construct-mime-part
                               headers contents)
@@ -390,7 +396,7 @@
               (more-k empty)]
              [(bytes=? line end-boundary)
               (end-k empty)]
-             [else 
+             [else
               (read-mime-part-body
                (lambda (x) (more-k (list* line x)))
                (lambda (x) (end-k (list* line x))))])))]

@@ -3,7 +3,8 @@
 (require rackunit
          web-server/http
          web-server/http/response
-         web-server/private/connection-manager)
+         web-server/private/connection-manager
+         web-server/private/timer)
 (provide response-tests)
 
 ;; Adds buffering on top of a pair of pipes so that OS-level buffering
@@ -49,6 +50,9 @@
   (values (make-input-port 'in in in (lambda () (close-input-port in)))
           (make-output-port 'out out chomp! close)))
 
+(define current-connection
+  (make-parameter #f))
+
 (define (call-with-test-client+server resp f)
   (parameterize ([current-custodian (make-custodian)])
     (define-values [in out] (make-buffered-pipe))
@@ -69,7 +73,8 @@
          (define-values [conn-i conn-o] (make-pipe))
          (define connection
            (new-connection (start-connection-manager) 120 conn-i out (current-custodian) #f))
-         (output-response connection resp))))
+         (parameterize ([current-connection connection])
+           (output-response connection resp)))))
 
     (f in out chunks)))
 
@@ -134,7 +139,34 @@
 
            (semaphore-post write-ready)
            (check-equal? (sync/timeout 1 chunks) #f)
-           (check-true (thread-dead? responder-thread)))))))))
+           (check-true (thread-dead? responder-thread)))))
+
+     (test-case "every chunk resets the rolling 60 second timeout window"
+       (define connection #f)
+       (define write-ready (make-semaphore))
+       (define resp
+         (response/output
+          (lambda (out)
+            (set! connection (current-connection))
+            (let loop ()
+              (semaphore-wait write-ready)
+              (write-bytes #"a" out)
+              (loop)))))
+
+       (define (ttl)
+         (- (timer-expire-seconds (connection-timer connection))
+            (current-inexact-milliseconds)))
+
+       (call-with-test-client+server resp
+         (lambda (in out chunks)
+           (check-equal? (subbytes (sync/timeout 1 chunks) 0 8) #"HTTP/1.1")
+
+           (for ([_ (in-range 5)])
+             (semaphore-post write-ready)
+             (check-equal? (sync/timeout 1 chunks) #"1\r\na\r\n")
+
+             (check-= (ttl) 60000 3000)
+             (sleep 2)))))))))
 
 
 (module+ test

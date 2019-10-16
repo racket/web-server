@@ -20,42 +20,45 @@
  [serve
   (->* (#:dispatch dispatcher/c)
        (#:confirmation-channel (or/c false/c async-channel?)
-                               #:connection-close? boolean?
-                               #:dispatch-server-connect@ (unit/c (import) (export dispatch-server-connect^))
-                               #:tcp@ (unit/c (import) (export tcp^))
-                               #:port listen-port-number?
-                               #:listen-ip (or/c false/c string?)
-                               #:max-waiting exact-nonnegative-integer?
-                               #:initial-connection-timeout number?)
+        #:connection-close? boolean?
+        #:dispatch-server-connect@ (unit/c (import) (export dispatch-server-connect^))
+        #:tcp@ (unit/c (import) (export tcp^))
+        #:port listen-port-number?
+        #:listen-ip (or/c false/c string?)
+        #:max-waiting exact-nonnegative-integer?
+        #:initial-connection-timeout number?
+        #:request-read-timeout number?)
        (-> void))]
  [serve/ports
   (->* (#:dispatch dispatcher/c)
        (#:confirmation-channel (or/c false/c async-channel?)
-                               #:connection-close? boolean?
-                               #:dispatch-server-connect@ (unit/c (import) (export dispatch-server-connect^))
-                               #:tcp@ (unit/c (import) (export tcp^))
-                               #:ports (listof listen-port-number?)
-                               #:listen-ip (or/c false/c string?)
-                               #:max-waiting exact-nonnegative-integer?
-                               #:initial-connection-timeout number?)
+        #:connection-close? boolean?
+        #:dispatch-server-connect@ (unit/c (import) (export dispatch-server-connect^))
+        #:tcp@ (unit/c (import) (export tcp^))
+        #:ports (listof listen-port-number?)
+        #:listen-ip (or/c false/c string?)
+        #:max-waiting exact-nonnegative-integer?
+        #:initial-connection-timeout number?
+        #:request-read-timeout number?)
        (-> void))]
  [serve/ips+ports
   (->* (#:dispatch dispatcher/c)
        (#:confirmation-channel (or/c false/c async-channel?)
-                               #:connection-close? boolean?
-                               #:dispatch-server-connect@ (unit/c (import) (export dispatch-server-connect^))
-                               #:tcp@ (unit/c (import) (export tcp^))
-                               #:ips+ports (listof (cons/c (or/c false/c string?)
-                                                           (listof listen-port-number?)))
-                               #:max-waiting exact-nonnegative-integer?
-                               #:initial-connection-timeout number?)
+        #:connection-close? boolean?
+        #:dispatch-server-connect@ (unit/c (import) (export dispatch-server-connect^))
+        #:tcp@ (unit/c (import) (export tcp^))
+        #:ips+ports (listof (cons/c (or/c false/c string?)
+                                    (listof listen-port-number?)))
+        #:max-waiting exact-nonnegative-integer?
+        #:initial-connection-timeout number?
+        #:request-read-timeout number?)
        (-> void))]
  [raw:dispatch-server-connect@ (unit/c (import) (export dispatch-server-connect^))]
- [make-ssl-connect@ 
+ [make-ssl-connect@
   (-> path-string? path-string?
       (unit/c (import) (export dispatch-server-connect^)))]
  [do-not-return (-> void)]
- [serve/web-config@ 
+ [serve/web-config@
   (->*
    ((unit/c (import) (export web-config^)))
    (#:dispatch-server-connect@ (unit/c (import) (export dispatch-server-connect^))
@@ -87,10 +90,12 @@
          #:port [port 80]
          #:listen-ip [listen-ip #f]
          #:max-waiting [max-waiting 511]
-         #:initial-connection-timeout [initial-connection-timeout 60])
-  (define read-request 
+         #:initial-connection-timeout [initial-connection-timeout 60]
+         #:request-read-timeout [request-read-timeout 60])
+  (define read-request
     (http:make-read-request
-     #:connection-close? connection-close?))
+     #:connection-close? connection-close?
+     #:read-timeout request-read-timeout))
   (define-unit-binding a-dispatch-server-connect@
     dispatch-server-connect@ (import) (export dispatch-server-connect^))
   (define-unit-binding a-tcp@
@@ -103,7 +108,7 @@
     dispatch-server@/tcp@
     (import dispatch-server-config^)
     (export dispatch-server^))
-  
+
   (serve #:confirmation-channel confirmation-channel))
 
 (define (serve/ports
@@ -115,10 +120,11 @@
          #:ports [ports (list 80)]
          #:listen-ip [listen-ip #f]
          #:max-waiting [max-waiting 511]
-         #:initial-connection-timeout [initial-connection-timeout 60])
+         #:initial-connection-timeout [initial-connection-timeout 60]
+         #:request-read-timeout [request-read-timeout 60])
   (define shutdowns
     (map (lambda (port)
-           (serve 
+           (serve
             #:dispatch dispatch
             #:confirmation-channel confirmation-channel
             #:connection-close? connection-close?
@@ -127,7 +133,8 @@
             #:port port
             #:listen-ip listen-ip
             #:max-waiting max-waiting
-            #:initial-connection-timeout initial-connection-timeout))
+            #:initial-connection-timeout initial-connection-timeout
+            #:request-read-timeout request-read-timeout))
          ports))
   (lambda ()
     (for-each apply shutdowns)))
@@ -140,7 +147,8 @@
          #:tcp@ [tcp@ raw:tcp@]
          #:ips+ports [ips+ports (list (cons #f (list 80)))]
          #:max-waiting [max-waiting 511]
-         #:initial-connection-timeout [initial-connection-timeout 60])
+         #:initial-connection-timeout [initial-connection-timeout 60]
+         #:request-read-timeout [request-read-timeout 60])
   (define shutdowns
     (map (match-lambda
            [(list-rest listen-ip ports)
@@ -153,14 +161,15 @@
              #:ports ports
              #:listen-ip listen-ip
              #:max-waiting max-waiting
-             #:initial-connection-timeout initial-connection-timeout)])
+             #:initial-connection-timeout initial-connection-timeout
+             #:request-read-timeout request-read-timeout)])
          ips+ports))
   (lambda ()
     (for-each apply shutdowns)))
 
 ; serve/config@ : configuration -> (-> void)
 (define (serve/web-config@
-         config@ 
+         config@
          #:dispatch-server-connect@
          [dispatch-server-connect@ raw:dispatch-server-connect@]
          #:tcp@ [tcp@ raw:tcp@])
