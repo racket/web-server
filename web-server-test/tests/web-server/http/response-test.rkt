@@ -161,10 +161,13 @@
          (lambda (in out chunks)
            (check-equal? (subbytes (sync/timeout 1 chunks) 0 8) #"HTTP/1.1")
 
+           (semaphore-post write-ready)
+           (check-equal? (sync/timeout 1 chunks) #"1\r\na\r\n")
+           (check-= (ttl) 120000 3000)
+
            (for ([_ (in-range 5)])
              (semaphore-post write-ready)
              (check-equal? (sync/timeout 1 chunks) #"1\r\na\r\n")
-
              (check-= (ttl) 60000 3000)
              (sleep 2)))))))))
 
