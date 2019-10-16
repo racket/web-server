@@ -38,7 +38,7 @@
   (define ip
     (connection-i-port conn))
   ;; Every request gets at least `read-timeout' seconds to read the
-  ;; request data and write its first byte.
+  ;; request data.
   (reset-connection-timeout! conn read-timeout)
   (define-values (method uri major minor)
     (read-request-line ip))
@@ -57,8 +57,8 @@
     (or connection-close?
         (close-connection? headers major minor
                            client-ip host-ip)))
-  ;; Ensure that there is enough time left to process and to output the
-  ;; response.
+  ;; Ensure that there is enough time left to process the request and to
+  ;; output the response.
   (reset-connection-timeout! conn 60)
   (values request close?))
 
