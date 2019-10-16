@@ -117,7 +117,12 @@
            ;; other side closed the connection early during writing,
            ;; which we can't do anything about.
            (and (exn:fail? x)
-                (string=? "fprintf: output port is closed" (exn-message x)))))
+                (string=? "fprintf: output port is closed" (exn-message x)))
+           ;; The connection may get timed out while the request is
+           ;; being read, when that happens we need to gracefully kill
+           ;; the connection.
+           (and (exn:fail? x)
+                (regexp-match? #rx"input port is closed" (exn-message x)))))
         (λ (x)
           (kill-connection! conn))])
     ;; HTTP/1.1 allows any number of requests to come from this input
