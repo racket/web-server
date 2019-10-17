@@ -5,9 +5,11 @@
          racket/promise
          net/url
          net/uri-codec
+         ;; FIXME: why are these not local refs?
          web-server/private/util
          web-server/private/connection-manager
-         web-server/http/request-structs)
+         web-server/http/request-structs
+         web-server/http/parse-content-disposition)
 
 (define read-request/c
   (connection? 
@@ -252,22 +254,31 @@
              (define bs
                (map (match-lambda
                      [(struct mime-part (headers contents))
+                      ;; formatting of the Content-Disposition header appears
+                      ;; to be specified by RFC 6266.
                       (define rhs
                         (header-value
                          (headers-assq* #"Content-Disposition" headers)))
-                      (match* 
-                          ((regexp-match #"filename=(\"([^\"]*)\"|([^ ;]*))" rhs)
-                           (regexp-match #"[^e]name=(\"([^\"]*)\"|([^ ;]*))" rhs))
+                      (define rhs-assocs
+                        (match (parse-content-disposition-header rhs)
+                          [(list 'parsefail message)
+                           (network-error
+                            'reading-bindings
+                            message)]
+                          [(list ty assocs) assocs]))
+                      (match*
+                          ((assoc #"filename" rhs-assocs)
+                           (assoc #"name" rhs-assocs))
                         [(#f #f)
                          (network-error 
                           'reading-bindings 
                           "Couldn't extract form field name for file upload")]
-                        [(#f (list _ _ f0 f1))
-                         (make-binding:form (or f0 f1)
+                        [(#f (list _ name))
+                         (make-binding:form name
                                             (apply bytes-append contents))]
-                        [((list _ _ f00 f01) (list _ _ f10 f11))
-                         (make-binding:file (or f10 f11)
-                                            (or f00 f01)
+                        [((list _ filename) (list _ name))
+                         (make-binding:file name
+                                            filename
                                             headers
                                             (apply bytes-append contents))])])
                     (read-mime-multipart content-boundary in)))

@@ -154,6 +154,76 @@ another-footer: another-value
                    #f)))
 
     (test-suite
+     "Content-Transfer-Encoding"
+     (test-equal?
+      "filename with quotes"
+      (test-read-request
+       (regexp-replace*
+        #px#"\n"
+        #"POST /foo HTTP/1.1
+Host: localhost:8022
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.11; rv:48.0) Gecko/20100101 Firefox/48.0
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+Accept-Language: en-US,en;q=0.5
+Accept-Encoding: gzip, deflate
+Referer: http://localhost:8000/servlets/standalone.rkt
+Connection: keep-alive
+Upgrade-Insecure-Requests: 1
+Content-Type: multipart/form-data; boundary=---------------------------182000195915857045221383087
+Content-Length: 254
+
+-----------------------------182000195915857045221383087
+Content-Disposition: form-data; name=\"abcz\";
+ zokbar = no_quotes_needed;
+ filename=\"abc\\\"d\"
+Content-Type: application/octet-stream
+
+these lines are
+in the file
+
+-----------------------------182000195915857045221383087--
+"
+        #"\r\n"))
+      (list
+       (list
+        'request
+        (list
+         #"POST"
+         "/foo"
+         (list
+          (header #"Host" #"localhost:8022")
+          (header
+           #"User-Agent"
+           #"Mozilla/5.0 (Macintosh; Intel Mac OS X 10.11; rv:48.0) Gecko/20100101 Firefox/48.0")
+          (header
+           #"Accept"
+           #"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+          (header #"Accept-Language" #"en-US,en;q=0.5")
+          (header #"Accept-Encoding" #"gzip, deflate")
+          (header #"Referer" #"http://localhost:8000/servlets/standalone.rkt")
+          (header #"Connection" #"keep-alive")
+          (header #"Upgrade-Insecure-Requests" #"1")
+          (header
+           #"Content-Type"
+           #"multipart/form-data; boundary=---------------------------182000195915857045221383087")
+          (header #"Content-Length" #"254"))
+         (list
+          (binding:file
+           #"abcz"
+           #"abc\"d"
+           (list
+            (header
+             #"Content-Disposition"
+             #"form-data; name=\"abcz\"; zokbar = no_quotes_needed; filename=\"abc\\\"d\"")
+            (header #"Content-Type" #"application/octet-stream"))
+           #"these lines are\r\nin the file\r\n"))
+         #f
+         "to"
+         80
+         "from"))
+       #f)))
+
+    (test-suite
      "POST Bindings"
      (test-equal? "simple test 1"
                   (get-post-data/raw "hello world") #"hello world")
@@ -166,3 +236,5 @@ another-footer: another-value
 (module+ test
   (require rackunit/text-ui)
   (run-tests request-tests))
+
+
