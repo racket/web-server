@@ -216,32 +216,62 @@
 (define current-http-line-limit
   (make-parameter (* 8 1024)))
 
+(define (CR? b) (eqv? b 13))
+(define (LF? b) (eqv? b 10))
+
+(define (bytes-find-crlf bs len)
+  (for/first ([i (in-range 0 (sub1 len))]
+              #:when (and (CR? (bytes-ref bs i))
+                          (LF? (bytes-ref bs (add1 i)))))
+    i))
+
 (define (read-http-line/limited [in (current-input-port)]
-                                [limit (current-http-line-limit)])
-  (define buf (make-bytes (+ limit 2)))
-  (let loop ([i 0])
-    (cond
-      [(and (>= i 2)
-            (= (bytes-ref buf (- i 2)) 13)
-            (= (bytes-ref buf (- i 1)) 10))
-       (subbytes buf 0 (- i 2))]
+                                [limit (current-http-line-limit)]
+                                [bufsize 128])
+  (define buf (make-bytes bufsize))
+  (define-values (line-len suffix-len)
+    (let loop ([offset 0]
+               [boundary-CR? #f])
+      (define len
+        (peek-bytes-avail! buf offset #f in))
 
-      [(= i limit)
-       (network-error 'read-http-line/limited "line exceeds limit of ~a" limit)]
+      (cond
+        ;; the input port is depleted
+        [(eof-object? len)
+         (values offset 0)]
 
-      [else
-       (define b (read-byte in))
-       (cond
-         [(eof-object? b)
-          ;; this preserves the behaviour of (read-bytes-line (open-input-string ""))
-          ;; which returns #<eof> rather than #""
-          (cond
-            [(zero? i) eof]
-            [else (subbytes buf 0 i)])]
+        ;; the previous chunk had a CR right at the end and
+        ;; the current chunk has a LF right at the start
+        [(and boundary-CR? (LF? (bytes-ref buf 0)))
+         (values (sub1 offset) 2)]
 
-         [else
-          (bytes-set! buf i b)
-          (loop (add1 i))])])))
+        ;; the current chunk has a CRLF somewhere within it
+        [(bytes-find-crlf buf len)
+         => (lambda (pos)
+              (values (+ offset pos) 2))]
+
+        ;; we've read past what we're willing to accept so bail
+        [(> offset limit)
+         (values offset 0)]
+
+        ;; rinse and repeat
+        [else
+         (loop (+ offset len)
+               (CR? (bytes-ref buf (sub1 len))))])))
+
+  (cond
+    ;; preserve the behaviour of (read-bytes-line (open-input-string #""))
+    [(and (zero? line-len)
+          (zero? suffix-len))
+     eof]
+
+    [(> line-len limit)
+     (network-error 'read-http-line/limited "line exceeds limit of ~a" limit)]
+
+    [else
+     (begin0 (read-bytes line-len in)
+       (unless (zero? suffix-len)
+         (read-bytes suffix-len in)))]))
 
 (module+ internal-test
   (provide read-http-line/limited))
