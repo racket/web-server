@@ -1,23 +1,17 @@
 #lang racket/unit
-(require racket/async-channel
-         (only-in racket/tcp
-                  tcp-listen
-                  tcp-addresses
-                  tcp-close
-                  tcp-accept
-                  tcp-accept/enable-break)
-         racket/port
-         mzlib/thread
-         net/tcp-sig)
-(require racket/format)
-(require "web-server-structs.rkt"
+
+(require mzlib/thread
+         net/tcp-sig
+         racket/async-channel
          "connection-manager.rkt"
-         "dispatch-server-sig.rkt")
+         "dispatch-server-sig.rkt"
+         "web-server-structs.rkt")
 
 ;; ****************************************
 (import tcp^
         (prefix dispatch-server-connect: dispatch-server-connect^)
         (prefix config: dispatch-server-config^))
+
 (export dispatch-server^)
 
 (define (async-channel-put* ac v)
@@ -147,6 +141,9 @@
          (define-values (req close?)
            (config:read-request conn config:port port-addresses))
          (set-connection-close?! conn close?)
+         ;; Ensure that there is enough time left to process the request
+         ;; and to output the response.
+         (reset-connection-timeout! conn 60)
          (config:dispatch conn req)
          (if (connection-close? conn)
              (kill-connection! conn)

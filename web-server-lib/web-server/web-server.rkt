@@ -1,4 +1,5 @@
 #lang racket/base
+
 (require racket/match
          net/tcp-sig
          (prefix-in raw: net/tcp-unit)
@@ -15,7 +16,9 @@
          web-server/web-server-sig
          web-server/web-server-unit
          (prefix-in http: web-server/http/request))
+
 (define-syntax-rule (unit/c . _) any/c)
+
 (provide/contract
  [serve
   (->* (#:dispatch dispatcher/c)
@@ -27,7 +30,11 @@
         #:listen-ip (or/c false/c string?)
         #:max-waiting exact-nonnegative-integer?
         #:initial-connection-timeout number?
-        #:request-read-timeout number?)
+        #:request-read-timeout number?
+        #:max-request-line-length exact-positive-integer?
+        #:max-request-fields exact-positive-integer?
+        #:max-request-field-length exact-positive-integer?
+        #:max-request-body-length exact-positive-integer?)
        (-> void))]
  [serve/ports
   (->* (#:dispatch dispatcher/c)
@@ -39,7 +46,11 @@
         #:listen-ip (or/c false/c string?)
         #:max-waiting exact-nonnegative-integer?
         #:initial-connection-timeout number?
-        #:request-read-timeout number?)
+        #:request-read-timeout number?
+        #:max-request-line-length exact-positive-integer?
+        #:max-request-fields exact-positive-integer?
+        #:max-request-field-length exact-positive-integer?
+        #:max-request-body-length exact-positive-integer?)
        (-> void))]
  [serve/ips+ports
   (->* (#:dispatch dispatcher/c)
@@ -51,7 +62,11 @@
                                     (listof listen-port-number?)))
         #:max-waiting exact-nonnegative-integer?
         #:initial-connection-timeout number?
-        #:request-read-timeout number?)
+        #:request-read-timeout number?
+        #:max-request-line-length exact-positive-integer?
+        #:max-request-fields exact-positive-integer?
+        #:max-request-field-length exact-positive-integer?
+        #:max-request-body-length exact-positive-integer?)
        (-> void))]
  [raw:dispatch-server-connect@ (unit/c (import) (export dispatch-server-connect^))]
  [make-ssl-connect@
@@ -91,11 +106,19 @@
          #:listen-ip [listen-ip #f]
          #:max-waiting [max-waiting 511]
          #:initial-connection-timeout [initial-connection-timeout 60]
-         #:request-read-timeout [request-read-timeout 60])
+         #:request-read-timeout [request-read-timeout 60]
+         #:max-request-line-length [max-request-line-length (* 8 1024)]
+         #:max-request-fields [max-request-fields 100]
+         #:max-request-field-length [max-request-field-length (* 8 1024)]
+         #:max-request-body-length [max-request-body-length (* 10 1024 1024)])
   (define read-request
     (http:make-read-request
      #:connection-close? connection-close?
-     #:read-timeout request-read-timeout))
+     #:read-timeout request-read-timeout
+     #:max-request-line-length max-request-line-length
+     #:max-request-fields max-request-fields
+     #:max-request-field-length max-request-field-length
+     #:max-request-body-length max-request-body-length))
   (define-unit-binding a-dispatch-server-connect@
     dispatch-server-connect@ (import) (export dispatch-server-connect^))
   (define-unit-binding a-tcp@
@@ -121,7 +144,11 @@
          #:listen-ip [listen-ip #f]
          #:max-waiting [max-waiting 511]
          #:initial-connection-timeout [initial-connection-timeout 60]
-         #:request-read-timeout [request-read-timeout 60])
+         #:request-read-timeout [request-read-timeout 60]
+         #:max-request-line-length [max-request-line-length (* 8 1024)]
+         #:max-request-fields [max-request-fields 100]
+         #:max-request-field-length [max-request-field-length (* 8 1024)]
+         #:max-request-body-length [max-request-body-length (* 10 1024 1024)])
   (define shutdowns
     (map (lambda (port)
            (serve
@@ -134,7 +161,11 @@
             #:listen-ip listen-ip
             #:max-waiting max-waiting
             #:initial-connection-timeout initial-connection-timeout
-            #:request-read-timeout request-read-timeout))
+            #:request-read-timeout request-read-timeout
+            #:max-request-line-length max-request-line-length
+            #:max-request-fields max-request-fields
+            #:max-request-field-length max-request-field-length
+            #:max-request-body-length max-request-body-length))
          ports))
   (lambda ()
     (for-each apply shutdowns)))
@@ -148,7 +179,11 @@
          #:ips+ports [ips+ports (list (cons #f (list 80)))]
          #:max-waiting [max-waiting 511]
          #:initial-connection-timeout [initial-connection-timeout 60]
-         #:request-read-timeout [request-read-timeout 60])
+         #:request-read-timeout [request-read-timeout 60]
+         #:max-request-line-length [max-request-line-length (* 8 1024)]
+         #:max-request-field-length [max-request-field-length (* 8 1024)]
+         #:max-request-fields [max-request-fields 100]
+         #:max-request-body-length [max-request-body-length (* 10 1024 1024)])
   (define shutdowns
     (map (match-lambda
            [(list-rest listen-ip ports)
@@ -162,7 +197,11 @@
              #:listen-ip listen-ip
              #:max-waiting max-waiting
              #:initial-connection-timeout initial-connection-timeout
-             #:request-read-timeout request-read-timeout)])
+             #:request-read-timeout request-read-timeout
+             #:max-request-line-length max-request-line-length
+             #:max-request-fields max-request-fields
+             #:max-request-field-length max-request-field-length
+             #:max-request-body-length max-request-body-length)])
          ips+ports))
   (lambda ()
     (for-each apply shutdowns)))
