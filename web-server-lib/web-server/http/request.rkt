@@ -4,6 +4,7 @@
          racket/contract
          racket/match
          racket/list
+         racket/port
          racket/promise
          racket/stxparam
          net/url
@@ -34,11 +35,6 @@
    (values request? boolean?)))
 
 (provide/contract
- [parse-bindings (-> bytes? (listof binding?))]
- [read-headers (-> input-port?
-                   exact-positive-integer?
-                   exact-positive-integer?
-                   (listof header?))]
  [rename make-ext:read-request
          make-read-request
          (->* ()
@@ -308,6 +304,9 @@
                 (loop (cons head heads))])]
          [else (network-error 'read-headers "malformed header: ~e" l)])))))
 
+(module+ internal-test
+  (provide read-headers))
+
 ; read-folded-head : iport bytes number -> bytes
 ; reads the next line of input for headers that are line-folded
 (define (read-folded-head in rhs max-length)
@@ -433,27 +432,53 @@
                        (values (delay empty) data)))]))
 
 ;; parse-bindings : bytes? -> (listof binding?)
-(define (parse-bindings raw)
-  (define len (bytes-length raw))
-  (let loop ([start 0])
-    (let find= ([key-end start])
-      (if (>= key-end len)
-          empty
-          (if (eq? (bytes-ref raw key-end) (char->integer #\=))
-              (let find-amp ([amp-end (add1 key-end)])
-                (if (or (= amp-end len) (eq? (bytes-ref raw amp-end) (char->integer #\&)))
-                    (list* (make-binding:form
-                            (string->bytes/utf-8
-                             (form-urlencoded-decode
-                              (bytes->string/utf-8
-                               (subbytes raw start key-end))))
-                            (string->bytes/utf-8
-                             (form-urlencoded-decode
-                              (bytes->string/utf-8
-                               (subbytes raw (add1 key-end) amp-end)))))
-                           (loop (add1 amp-end)))
-                    (find-amp (add1 amp-end))))
-              (find= (add1 key-end)))))))
+(define match-query-key
+  (let ([rx (byte-regexp #"^([^=&]+)([=&]?)")])
+    (lambda (in)
+      (regexp-try-match rx in))))
+
+(define match-query-value
+  (let ([rx (byte-regexp #"^([^&]+)(&?)")])
+    (lambda (in)
+      (regexp-try-match rx in))))
+
+(define (urldecode bs)
+  (string->bytes/utf-8
+   (form-urlencoded-decode
+    (bytes->string/utf-8 bs))))
+
+(define (parse-bindings data)
+  (call-with-input-bytes data
+    (lambda (in)
+      (let loop ([bindings null])
+        (match (match-query-key in)
+          [(list _ key #"=")
+           (match (match-query-value in)
+             ;; k=&...
+             [#f
+              ;; skip the & or do nothing on #<eof>
+              (read-byte in)
+              (loop (cons (make-binding:form (urldecode key) #"")
+                          bindings))]
+
+             ;; k=...&...
+             [(list _ value _)
+              (loop (cons (make-binding:form (urldecode key)
+                                             (urldecode value))
+                          bindings))])]
+
+          ;; k
+          ;; k&
+          [(list _ key (or #"" #"&"))
+           (loop (cons (make-binding:form (urldecode key) #"")
+                       bindings))]
+
+          ;; #<eof>
+          [#f
+           (reverse bindings)])))))
+
+(module+ internal-test
+  (provide parse-bindings))
 
 
 ;; **************************************************

@@ -119,9 +119,94 @@
 
    (test-suite
     "Bindings"
-    (test-equal? "Simple" (binding:form-value (bindings-assq #"key" (list (make-binding:form #"key" #"val")))) #"val")
-    (test-equal? "Simple (File)" (binding:file-content (bindings-assq #"key" (list (make-binding:file #"key" #"name" empty #"val")))) #"val")
-    (test-false "Not present" (bindings-assq #"key" (list))))
+
+    (test-suite
+     "parse-bindings"
+
+     (test-equal?
+      "empty"
+      (parse-bindings #"")
+      (list))
+
+     (test-equal?
+      "basic"
+      (parse-bindings #"a=1&b=2")
+      (list (make-binding:form #"a" #"1")
+            (make-binding:form #"b" #"2")))
+
+     (test-equal?
+      "repeated"
+      (parse-bindings #"a=1&a=2&b=3")
+      (list (make-binding:form #"a" #"1")
+            (make-binding:form #"a" #"2")
+            (make-binding:form #"b" #"3")))
+
+     (test-equal?
+      "value-less"
+      (parse-bindings #"a=1&a=2&b=3&c&d=4")
+      (list (make-binding:form #"a" #"1")
+            (make-binding:form #"a" #"2")
+            (make-binding:form #"b" #"3")
+            (make-binding:form #"c" #"")
+            (make-binding:form #"d" #"4")))
+
+     (test-equal?
+      "value-less"
+      (parse-bindings #"a=1&a=2&b=3&c=&d=4")
+      (list (make-binding:form #"a" #"1")
+            (make-binding:form #"a" #"2")
+            (make-binding:form #"b" #"3")
+            (make-binding:form #"c" #"")
+            (make-binding:form #"d" #"4")))
+
+     (test-equal?
+      "value-less at the end"
+      (parse-bindings #"a=1&a=2&b=3&c=&d=")
+      (list (make-binding:form #"a" #"1")
+            (make-binding:form #"a" #"2")
+            (make-binding:form #"b" #"3")
+            (make-binding:form #"c" #"")
+            (make-binding:form #"d" #"")))
+
+     (test-equal?
+      "value-less at the end 2"
+      (parse-bindings #"a=1&a=2&b=3&c=&d")
+      (list (make-binding:form #"a" #"1")
+            (make-binding:form #"a" #"2")
+            (make-binding:form #"b" #"3")
+            (make-binding:form #"c" #"")
+            (make-binding:form #"d" #"")))
+
+     (test-equal?
+      "with encoded data"
+      (parse-bindings #"a=hi%20there&b=what%27s%20up")
+      (list (make-binding:form #"a" #"hi there")
+            (make-binding:form #"b" #"what's up")))
+
+     (test-equal?
+      "with encoded data 2"
+      (parse-bindings #"x=%26encoded%3D&y=1")
+      (list (make-binding:form #"x" #"&encoded=")
+            (make-binding:form #"y" #"1"))))
+
+    (test-suite
+     "bindings-assq"
+
+     (test-equal?
+      "Simple"
+      (let ([binds (list (make-binding:form #"key" #"val"))])
+        (binding:form-value (bindings-assq #"key" binds)))
+      #"val")
+
+     (test-equal?
+      "Simple (File)"
+      (let ([binds (list (make-binding:file #"key" #"name" empty #"val"))])
+        (binding:file-content (bindings-assq #"key" binds)))
+      #"val")
+
+     (test-false
+      "Not present"
+      (bindings-assq #"key" (list)))))
 
    ; XXX This needs to be really extensive, see what Apache has
    (test-suite
