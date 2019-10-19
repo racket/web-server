@@ -33,7 +33,11 @@ This module provides functions for launching dispatching servers.
                 [#:listen-ip listen-ip (or/c string? false/c) #f]
                 [#:max-waiting max-waiting integer? 511]
                 [#:initial-connection-timeout initial-connection-timeout integer? 60]
-                [#:request-read-timeout request-read-timeout integer? 60])
+                [#:request-read-timeout request-read-timeout integer? 60]
+                [#:max-request-line-length max-request-line-length exact-positive-integer? (* 8 1024)]
+                [#:max-request-fields max-request-fields exact-positive-integer? 100]
+                [#:max-request-field-length max-request-field-length exact-positive-integer? (* 8 1024)]
+                [#:max-request-body-length max-request-body-length exact-positive-integer? (* 10 1024 1024)])
          (-> void)]{
  Constructs an appropriate @racket[dispatch-server-config^], invokes the
  @racket[dispatch-server@], and calls its @racket[serve] function.
@@ -55,6 +59,24 @@ This module provides functions for launching dispatching servers.
  uploads over slow connections, then you may need to adjust this
  value.
 
+ The @racket[#:max-request-line-length] argument controls how long the
+ (in bytes) "request line" (the first line of an HTTP request, which
+ specifies the request method, path and protocol version) can be.
+ Increase this if you have very long URLs.  Requests with a longer
+ request line than this value are rejected.
+
+ The @racket[#:max-request-fields] argument controls how many request
+ haders there can be per request.  Requests with more headers than
+ this value are rejected.
+
+ The @racket[#:max-request-field-length] argument controls how long
+ (in bytes) individual request headers can be.  Requests containing
+ headers longer than this value are rejected.
+
+ The @racket[#:max-request-body-length] argument controls how long (in
+ bytes) the request body can be.  Requests containing larger bodies
+ than this value are rejected.
+
 Here's an example of a simple web server that serves files
 from a given path:
 
@@ -70,8 +92,13 @@ from a given path:
    #:port 8080))
 ]
 
-@history[#:changed "1.6" @elem{Added the @racket[#:request-read-timeout] argument.}]
-@history[#:changed "1.1" @elem{Added the @racket[#:dispatch-server-connect@] argument.}]}
+@history[
+  #:changed "1.6" @elem{Added the @racket[#:request-read-timeout] argument.}
+  #:changed "1.6" @elem{Added the @racket[#:max-request-line-length] argument.}
+  #:changed "1.6" @elem{Added the @racket[#:max-request-fields] argument.}
+  #:changed "1.6" @elem{Added the @racket[#:max-request-field-length] argument.}
+  #:changed "1.6" @elem{Added the @racket[#:max-request-body-length] argument.}
+  #:changed "1.1" @elem{Added the @racket[#:dispatch-server-connect@] argument.}]}
 
 
 @defproc[(serve/ports [#:dispatch dispatch dispatcher/c]
@@ -86,13 +113,22 @@ from a given path:
                       [#:listen-ip listen-ip (or/c string? false/c) #f]
                       [#:max-waiting max-waiting integer? 511]
                       [#:initial-connection-timeout initial-connection-timeout integer? 60]
-                      [#:request-read-timeout request-read-timeout integer? 60])
+                      [#:request-read-timeout request-read-timeout integer? 60]
+                      [#:max-request-line-length max-request-line-length exact-positive-integer? (* 8 1024)]
+                      [#:max-request-fields max-request-fields exact-positive-integer? 100]
+                      [#:max-request-field-length max-request-field-length exact-positive-integer? (* 8 1024)]
+                      [#:max-request-body-length max-request-body-length exact-positive-integer? (* 10 1024 1024)])
          (-> void)]{
  Calls @racket[serve] multiple times, once for each @racket[port], and returns
  a function that shuts down all of the server instances.
 
-@history[#:changed "1.6" @elem{Added the @racket[#:request-read-timeout] argument.}]
-@history[#:changed "1.1" @elem{Added the @racket[#:dispatch-server-connect@] argument.}]}
+@history[
+  #:changed "1.6" @elem{Added the @racket[#:request-read-timeout] argument.}
+  #:changed "1.6" @elem{Added the @racket[#:max-request-line-length] argument.}
+  #:changed "1.6" @elem{Added the @racket[#:max-request-fields] argument.}
+  #:changed "1.6" @elem{Added the @racket[#:max-request-field-length] argument.}
+  #:changed "1.6" @elem{Added the @racket[#:max-request-body-length] argument.}
+  #:changed "1.1" @elem{Added the @racket[#:dispatch-server-connect@] argument.}]}
 
 
 @defproc[(serve/ips+ports [#:dispatch dispatch dispatcher/c]
@@ -106,14 +142,22 @@ from a given path:
                           [#:ips+ports ips+ports (listof (cons/c (or/c string? false/c) (listof listen-port-number?))) (list (cons #f (list 80)))]
                           [#:max-waiting max-waiting integer? 511]
                           [#:initial-connection-timeout initial-connection-timeout integer? 60]
-                          [#:request-read-timeout request-read-timeout integer? 60])
+                          [#:request-read-timeout request-read-timeout integer? 60]
+                          [#:max-request-line-length max-request-line-length exact-positive-integer? (* 8 1024)]
+                          [#:max-request-fields max-request-fields exact-positive-integer? 100]
+                          [#:max-request-field-length max-request-field-length exact-positive-integer? (* 8 1024)]
+                          [#:max-request-body-length max-request-body-length exact-positive-integer? (* 10 1024 1024)])
          (-> void)]{
  Calls @racket[serve/ports] multiple times, once for each @racket[ip], and returns
  a function that shuts down all of the server instances.
 
-@history[#:changed "1.6" @elem{Added the @racket[#:request-read-timeout] argument.}]
-@history[#:changed "1.1" @elem{Added the @racket[#:dispatch-server-connect@] argument.}]}
-
+@history[
+  #:changed "1.6" @elem{Added the @racket[#:request-read-timeout] argument.}
+  #:changed "1.6" @elem{Added the @racket[#:max-request-line-length] argument.}
+  #:changed "1.6" @elem{Added the @racket[#:max-request-fields] argument.}
+  #:changed "1.6" @elem{Added the @racket[#:max-request-field-length] argument.}
+  #:changed "1.6" @elem{Added the @racket[#:max-request-body-length] argument.}
+  #:changed "1.1" @elem{Added the @racket[#:dispatch-server-connect@] argument.}]}
 
 @defproc[(serve/web-config@ [config@ (unit/c (import) (export web-config^))]
                             [#:dispatch-server-connect@ dispatch-server-connect@
