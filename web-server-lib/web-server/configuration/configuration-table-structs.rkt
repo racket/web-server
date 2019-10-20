@@ -3,16 +3,16 @@
          net/url)
 (require web-server/http/response-structs
          web-server/http/request-structs
-         "../private/util.rkt")           
+         "../private/util.rkt")
 
 ; configuration-table = (make-configuration-table nat nat num host-table (listof (cons str host-table)))
 (define-struct configuration-table
-  (port max-waiting initial-connection-timeout default-host virtual-hosts))
+  (port max-waiting initial-connection-timeout response-timeout response-send-timeout default-host virtual-hosts))
 
 ; host-table = (make-host-table (listof str) sym messages timeouts paths)
 (define-struct host-table (indices log-format messages timeouts paths))
 
-(define-struct host (indices log-format log-path passwords responders timeouts paths))  
+(define-struct host (indices log-format log-path passwords responders timeouts paths))
 
 (define-struct responders
   (servlet servlet-loading authentication servlets-refreshed passwords-refreshed file-not-found protocol collect-garbage))
@@ -32,15 +32,17 @@
          ([port port-number?]
           [max-waiting exact-nonnegative-integer?]
           [initial-connection-timeout natural-number/c]
+          [response-timeout exact-positive-integer?]
+          [response-send-timeout exact-positive-integer?]
           [default-host host-table?]
           [virtual-hosts (listof (cons/c string? host-table?))])]
- [struct host-table 
+ [struct host-table
          ([indices (listof string?)]
           [log-format symbol?]
           [messages messages?]
           [timeouts timeouts?]
           [paths paths?])]
- [struct host 
+ [struct host
          ([indices (listof string?)]
           [log-format symbol?]
           [log-path (or/c false/c path-string?)]
@@ -65,13 +67,13 @@
           [file-not-found string?]
           [protocol string?]
           [collect-garbage string?])]
- [struct timeouts 
+ [struct timeouts
          ([default-servlet number?]
           [password number?]
           [servlet-connection number?]
           [file-per-byte number?]
           [file-base number?])]
- [struct paths 
+ [struct paths
          ([conf (or/c false/c path-string?)]
           [host-base (or/c false/c path-string?)]
           [log (or/c false/c path-string?)]

@@ -55,14 +55,22 @@ ports (e.g., to implement SSL) as used by the dispatch server.
 }
 
 @defsignature[dispatch-server-config^ ()]{
-
  @defthing[port listen-port-number?]{Specifies the port to serve on.}
  @defthing[listen-ip (or/c string? false/c)]{Passed to @racket[tcp-listen].}
  @defthing[max-waiting exact-nonnegative-integer?]{Passed to @racket[tcp-listen].}
  @defthing[initial-connection-timeout integer?]{Specifies the initial timeout given to a connection.}
+ @defthing[response-timeout exact-positive-integer?]{
+  Specifies the allotted time each request handler has in order to
+  produce a response.
+ }
+ @defthing[response-send-timeout exact-positive-integer?]{
+  Specifies the amount of time the server will wait for a chunk of
+  response data to be sent to the client.  This timeout is reset every
+  time a chunk of data is successfully sent to the client.
+ }
  @defproc[(read-request [c connection?]
                         [p listen-port-number?]
-                        [port-addresses 
+                        [port-addresses
                          (input-port? . -> . (values string? string?))])
           (values any/c boolean?)]{
   Defines the way the server reads requests off connections to be passed
@@ -82,7 +90,7 @@ provides the unit that actually implements a dispatching server.
 
 @defthing[dispatch-server-with-connect@ (unit/c (import tcp^
                                                         dispatch-server-connect^
-                                                        dispatch-server-config^) 
+                                                        dispatch-server-config^)
                                                 (export dispatch-server^))]{
  Runs the dispatching server config in a very basic way, except that it uses
  @secref["connection-manager"] to manage connections.
@@ -92,7 +100,7 @@ provides the unit that actually implements a dispatching server.
 }
 
 @defthing[dispatch-server@ (unit/c (import tcp^
-                                           dispatch-server-config^) 
+                                           dispatch-server-config^)
                                    (export dispatch-server^))]{
  Like @racket[dispatch-server-with-connect@], but using @racket[raw:dispatch-server-connect@].}
 

@@ -8,23 +8,25 @@
 (define configuration-table-tests
   (test-suite
    "Configuration Table"
-   
+
    (test-case
     "Default configuration file may be parsed"
     (check-not-false (read-configuration-table default-configuration-table-path)))
-   
+
    (test-case
     "Default configuration file may be written"
-    (check-not-false (write-configuration-table 
+    (check-not-false (write-configuration-table
                       (read-configuration-table default-configuration-table-path)
                       (make-temporary-file))))
-   
+
    (test-case
     "False allowed in configuration file for passwords"
     (let ([false-sexpr
            `((port 80)
              (max-waiting 40)
              (initial-connection-timeout 30)
+             (response-timeout 60)
+             (response-send-timeout 60)
              (default-host-table
                (host-table
                 (default-indices "index.html" "index.htm")
@@ -52,13 +54,13 @@
                  (mime-types "mime.types")
                  (password-authentication #f))))
              (virtual-host-table))])
-      (check-equal? 
+      (check-equal?
        (configuration-table->sexpr
         (sexpr->configuration-table
-         false-sexpr))        
+         false-sexpr))
        false-sexpr)))
-   
-   
+
+
    (test-case
     "Default configuration file may be converted to sexpr and back"
     (check-not-false

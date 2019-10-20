@@ -33,15 +33,17 @@
   (export dispatch-server-config^)
   (init-depend web-config^)
   (define read-request http:read-request)
-  
+
   (define port config:port)
   (define listen-ip config:listen-ip)
   (define max-waiting config:max-waiting)
   (define initial-connection-timeout config:initial-connection-timeout)
-  
+  (define response-timeout config:response-timeout)
+  (define response-send-timeout config:response-send-timeout)
+
   ;; dispatch : connection request -> void
   (define dispatch-cache (make-cache-table))
-  (define dispatch 
+  (define dispatch
     (host:make
      (lambda (host)
        (cache-table-lookup!
@@ -50,7 +52,7 @@
           (parameterize ([current-custodian (current-server-custodian)])
             (host-info->dispatcher
              (config:virtual-hosts (symbol->string host)))))))))
-  
+
   ;; host-info->dispatcher : host-info -> conn request -> void
   (define (host-info->dispatcher host-info)
     (sequencer:make
@@ -77,7 +79,7 @@
      (path-procedure:make "/conf/collect-garbage"
                           (lambda _
                             (collect-garbage)
-                            ((responders-collect-garbage (host-responders host-info)))))     
+                            ((responders-collect-garbage (host-responders host-info)))))
      (let-values ([(clear-cache! url->servlet)
                    (servlets:make-cached-url->servlet
                     (fsmap:filter-url->path

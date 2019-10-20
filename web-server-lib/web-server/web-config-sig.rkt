@@ -14,6 +14,8 @@
     [max-waiting integer?]
     [virtual-hosts (string? . -> . host?)]
     [initial-connection-timeout integer?]
+    [response-timeout exact-positive-integer?]
+    [response-send-timeout exact-positive-integer?]
     [port port-number?]
     [listen-ip (or/c false/c string?)]
     [make-servlet-namespace make-servlet-namespace/c])))

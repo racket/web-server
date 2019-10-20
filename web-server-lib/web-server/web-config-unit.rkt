@@ -24,12 +24,12 @@
        (unit/c (import) (export web-config^)))])
 
 ; configuration-table->web-config@ : path -> configuration
-(define (configuration-table->web-config@ 
+(define (configuration-table->web-config@
          table-file-name
          #:port [port #f]
          #:listen-ip [listen-ip #f]
          #:make-servlet-namespace [make-servlet-namespace (make-make-servlet-namespace)])
-  (configuration-table-sexpr->web-config@ 
+  (configuration-table-sexpr->web-config@
    (call-with-input-file table-file-name read)
    #:web-server-root (directory-part table-file-name)
    #:port port
@@ -39,7 +39,7 @@
 ; configuration-table-sexpr->web-config@ : string? sexp -> configuration
 (define (configuration-table-sexpr->web-config@
          sexpr
-         #:web-server-root [web-server-root (directory-part default-configuration-table-path)]         
+         #:web-server-root [web-server-root (directory-part default-configuration-table-path)]
          #:port [port #f]
          #:listen-ip [listen-ip #f]
          #:make-servlet-namespace [make-servlet-namespace (make-make-servlet-namespace)])
@@ -51,8 +51,8 @@
    #:make-servlet-namespace make-servlet-namespace))
 
 ; : str configuration-table -> configuration
-(define (complete-configuration 
-         base table         
+(define (complete-configuration
+         base table
          #:port [port #f]
          #:listen-ip [listen-ip #f]
          #:make-servlet-namespace [make-servlet-namespace (make-make-servlet-namespace)])
@@ -72,7 +72,7 @@
    #:make-servlet-namespace make-servlet-namespace))
 
 ; : configuration-table host-table -> configuration
-(define (build-configuration 
+(define (build-configuration
          table the-virtual-hosts
          #:port [port #f]
          #:listen-ip [listen-ip #f]
@@ -87,6 +87,8 @@
     (define max-waiting (configuration-table-max-waiting table))
     (define listen-ip the-listen-ip)
     (define initial-connection-timeout (configuration-table-initial-connection-timeout table))
+    (define response-timeout (configuration-table-response-timeout table))
+    (define response-send-timeout (configuration-table-response-send-timeout table))
     (define virtual-hosts the-virtual-hosts)
     (define make-servlet-namespace the-make-servlet-namespace)))
 
@@ -115,8 +117,8 @@
 ; expand-paths : str paths -> paths
 (define (expand-paths web-server-root paths)
   (let ([build-path-unless-absolute
-         (lambda (b p) 
-           (if p 
+         (lambda (b p)
+           (if p
                (build-path-unless-absolute b p)
                #f))])
     (let* ([host-base (build-path-unless-absolute web-server-root (paths-host-base paths))]
@@ -126,7 +128,7 @@
                   (build-path-unless-absolute host-base (paths-log paths))
                   htdocs-base
                   (build-path-unless-absolute htdocs-base (paths-servlet paths))
-                  (build-path-unless-absolute host-base (paths-mime-types paths))                    
+                  (build-path-unless-absolute host-base (paths-mime-types paths))
                   (build-path-unless-absolute host-base (paths-passwords paths))))))
 
 ; gen-virtual-hosts : (listof (list regexp host)) host ->

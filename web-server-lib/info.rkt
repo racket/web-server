@@ -4,7 +4,7 @@
 
 (define deps '("srfi-lite-lib"
                ("base" #:version "6.2.900.15")
-	       "net-lib"
+               "net-lib"
                "net-cookies-lib"
                "compatibility-lib"
                "scribble-text-lib"

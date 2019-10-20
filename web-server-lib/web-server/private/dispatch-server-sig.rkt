@@ -1,4 +1,5 @@
 #lang racket/base
+
 (require racket/unit
          racket/contract
          racket/async-channel
@@ -22,13 +23,15 @@
     [listen-ip (or/c string? false/c)]
     [max-waiting exact-nonnegative-integer?]
     [initial-connection-timeout integer?]
+    [response-timeout exact-positive-integer?]
+    [response-send-timeout exact-positive-integer?]
     [read-request
-     (connection? 
+     (connection?
       listen-port-number?
       (input-port? . -> . (values string? string?))
       . -> .
       (values any/c boolean?))]
-    [dispatch 
+    [dispatch
      (-> connection? any/c void)])))
 
 (provide
