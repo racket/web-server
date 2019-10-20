@@ -106,7 +106,56 @@
         (and (exn:fail:network? e)
              (equal? (exn-message e) "read-http-line/limited: line exceeds limit of 5")))
       (lambda _
-        (read-http-line/limited (open-input-string "hello world\r\n") 5)))))
+        (read-http-line/limited (open-input-string "hello world\r\n") 5))))
+
+    (test-suite
+     "read-bytes/lazy"
+
+     (test-equal?
+      "empty input"
+      (read-bytes/lazy 10 (open-input-string ""))
+      (read-bytes 10 (open-input-string "")))
+
+     (test-equal?
+      "short input"
+      (read-bytes/lazy 10 (open-input-string "hi"))
+      (read-bytes 10 (open-input-string "hi")))
+
+     (test-equal?
+      "short input, short buffer"
+      (read-bytes/lazy 10 (open-input-string "hi") 1)
+      #"hi")
+
+     (for ([bufsize (in-list '(1 2 4 8 16 32 64 128 256 512))])
+       (let ([buf (open-input-string "hello there, how are you doing this fine day?")])
+         (test-equal?
+          "short input, short buffer 1/5"
+          (read-bytes/lazy 10 buf bufsize)
+          #"hello ther")
+
+         (test-equal?
+          "short input, short buffer 2/5"
+          (read-bytes/lazy 10 buf bufsize)
+          #"e, how are")
+
+         (test-equal?
+          "short input, short buffer 3/5"
+          (read-bytes/lazy 10 buf bufsize)
+          #" you doing")
+
+         (test-equal?
+          "short input, short buffer 4/5"
+          (read-bytes/lazy 10 buf bufsize)
+          #" this fine")
+
+         (test-equal?
+          "short input, short buffer 5/5"
+          (read-bytes/lazy 10 buf bufsize)
+          #" day?")
+
+         (test-not-false
+          "short input, short buffer 6/5"
+          (eof-object? (read-bytes/lazy 10 buf bufsize)))))))
 
    (test-suite
     "Headers"
