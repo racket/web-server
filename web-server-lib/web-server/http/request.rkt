@@ -294,7 +294,7 @@
 
   (cond
     [(zero? offset) eof]
-    [else (read-bytes n in)]))
+    [else (read-bytes (min offset n) in)]))
 
 (module+ internal-test
   (provide read-bytes/lazy))
