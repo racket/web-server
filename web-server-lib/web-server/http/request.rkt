@@ -156,10 +156,8 @@
         (network-error 'complete-request "content (~a) exceeds max length (~a)" total-size max-body-length))
 
       ;; This is safe because of the preceding guard on total-size,
-      ;; though it would be nice if we could somehow avoid the buffering
-      ;; here and write directly from one port to the other.
-      (define data-bytes (read-bytes size-in-bytes real-ip))
-      (write-bytes data-bytes decode-op)
+      (define limited-input (make-limited-input-port real-ip size-in-bytes #f))
+      (copy-port limited-input decode-op)
       (read-http-line/limited real-ip 2))
 
      (define more-headers
