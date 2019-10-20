@@ -79,14 +79,18 @@
 (define ((handle-connection/cm cm)
          i-ip i-op
          #:port-addresses [real-port-addresses tcp-addresses])
-  (define-values (ip op) (dispatch-server-connect:port->real-ports i-ip i-op))
+  (define-values (ip op)
+    (dispatch-server-connect:port->real-ports i-ip i-op))
+
   (define (port-addresses some-ip)
     (if (eq? ip some-ip)
         (real-port-addresses i-ip)
         (real-port-addresses ip)))
+
   (define conn
     (new-connection cm config:initial-connection-timeout
                     ip op (current-custodian) #f))
+
   (with-handlers
       ([(λ (x)
           (or
@@ -140,10 +144,8 @@
         [else
          (define-values (req close?)
            (config:read-request conn config:port port-addresses))
+         (reset-connection-timeout! conn config:response-timeout)
          (set-connection-close?! conn close?)
-         ;; Ensure that there is enough time left to process the request
-         ;; and to output the response.
-         (reset-connection-timeout! conn 60)
          (config:dispatch conn req)
          (if (connection-close? conn)
              (kill-connection! conn)

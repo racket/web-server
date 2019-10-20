@@ -37,21 +37,28 @@ This module provides functions for launching dispatching servers.
                 [#:max-request-line-length max-request-line-length exact-positive-integer? (* 8 1024)]
                 [#:max-request-fields max-request-fields exact-positive-integer? 100]
                 [#:max-request-field-length max-request-field-length exact-positive-integer? (* 8 1024)]
-                [#:max-request-body-length max-request-body-length exact-positive-integer? (* 10 1024 1024)])
+                [#:max-request-body-length max-request-body-length exact-positive-integer? (* 10 1024 1024)]
+                [#:response-timeout response-timeout exact-positive-integer? 60]
+                [#:response-send-timeout response-send-timeout exact-positive-integer? 60])
          (-> void)]{
+
  Constructs an appropriate @racket[dispatch-server-config^], invokes the
  @racket[dispatch-server@], and calls its @racket[serve] function.
 
- If @racket[connection-close?] is @racket[#t], then every connection is closed after one
- request. Otherwise, the client decides based on what HTTP version it uses.
+ If @racket[connection-close?] is @racket[#t], then every connection is
+ closed after one request. Otherwise, the client decides based on what
+ HTTP version it uses.
 
- The @racket[#:dispatch-server-connect@] argument supports the conversion of raw connections;
- for example, @racket[make-ssl-connect@] produces a unit to serve SSL by converting
- raw TCP ports to SSL ports; see also @secref["faq:https"].
- The @racket[#:tcp@] argument supports replacing TCP connections with other kinds of connections (and
-  was formerly recommended for SLL support). Beware that the server expects the @racket[tcp-accept] operation
-  from @racket[tcp@] to be effectively atomic; new connections are not accepted while @racket[tcp-accept]
-  is in progress.
+ The @racket[#:dispatch-server-connect@] argument supports the
+ conversion of raw connections; for example, @racket[make-ssl-connect@]
+ produces a unit to serve SSL by converting raw TCP ports to SSL ports;
+ see also @secref["faq:https"].
+
+ The @racket[#:tcp@] argument supports replacing TCP connections with
+ other kinds of connections (and was formerly recommended for SLL
+ support). Beware that the server expects the @racket[tcp-accept]
+ operation from @racket[tcp@] to be effectively atomic; new connections
+ are not accepted while @racket[tcp-accept] is in progress.
 
  The @racket[#:request-read-timeout] argument controls how long the
  request parser will wait for request data to come in from the client
@@ -59,8 +66,8 @@ This module provides functions for launching dispatching servers.
  uploads over slow connections, then you may need to adjust this
  value.
 
- The @racket[#:max-request-line-length] argument controls how long the
- (in bytes) "request line" (the first line of an HTTP request, which
+ The @racket[#:max-request-line-length] argument controls how long (in
+ bytes) the "request line" (the first line of an HTTP request, which
  specifies the request method, path and protocol version) can be.
  Increase this if you have very long URLs.  Requests with a longer
  request line than this value are rejected.
@@ -76,6 +83,19 @@ This module provides functions for launching dispatching servers.
  The @racket[#:max-request-body-length] argument controls how long (in
  bytes) the request body can be.  Requests containing larger bodies
  than this value are rejected.
+
+ The @racket[#:response-timeout] argument controls how long individual
+ request handlers are allowed to run until they write their first byte
+ of response data.  This timeout starts after the request has been
+ read.  If the request handler doesn't write its data in time, the
+ connection is killed.
+
+ The @racket[#:response-send-timeout] argument controls how long the
+ server will wait for response data to be sent to the client.  Every
+ time a new chunk of data is sent to the client, this timeout resets.
+ If your application uses streaming responses or long polling, then
+ make sure that you send data (such as a no-op) periodically so your
+ request handler doesn't hit this timeout.
 
 Here's an example of a simple web server that serves files
 from a given path:
@@ -98,6 +118,8 @@ from a given path:
   #:changed "1.6" @elem{Added the @racket[#:max-request-fields] argument.}
   #:changed "1.6" @elem{Added the @racket[#:max-request-field-length] argument.}
   #:changed "1.6" @elem{Added the @racket[#:max-request-body-length] argument.}
+  #:changed "1.6" @elem{Added the @racket[#:response-timeout] argument.}
+  #:changed "1.6" @elem{Added the @racket[#:response-send-timeout] argument.}
   #:changed "1.1" @elem{Added the @racket[#:dispatch-server-connect@] argument.}]}
 
 
@@ -117,7 +139,9 @@ from a given path:
                       [#:max-request-line-length max-request-line-length exact-positive-integer? (* 8 1024)]
                       [#:max-request-fields max-request-fields exact-positive-integer? 100]
                       [#:max-request-field-length max-request-field-length exact-positive-integer? (* 8 1024)]
-                      [#:max-request-body-length max-request-body-length exact-positive-integer? (* 10 1024 1024)])
+                      [#:max-request-body-length max-request-body-length exact-positive-integer? (* 10 1024 1024)]
+                      [#:response-timeout response-timeout exact-positive-integer? 60]
+                      [#:response-send-timeout response-send-timeout exact-positive-integer? 60])
          (-> void)]{
  Calls @racket[serve] multiple times, once for each @racket[port], and returns
  a function that shuts down all of the server instances.
@@ -128,6 +152,8 @@ from a given path:
   #:changed "1.6" @elem{Added the @racket[#:max-request-fields] argument.}
   #:changed "1.6" @elem{Added the @racket[#:max-request-field-length] argument.}
   #:changed "1.6" @elem{Added the @racket[#:max-request-body-length] argument.}
+  #:changed "1.6" @elem{Added the @racket[#:response-timeout] argument.}
+  #:changed "1.6" @elem{Added the @racket[#:response-send-timeout] argument.}
   #:changed "1.1" @elem{Added the @racket[#:dispatch-server-connect@] argument.}]}
 
 
@@ -146,7 +172,9 @@ from a given path:
                           [#:max-request-line-length max-request-line-length exact-positive-integer? (* 8 1024)]
                           [#:max-request-fields max-request-fields exact-positive-integer? 100]
                           [#:max-request-field-length max-request-field-length exact-positive-integer? (* 8 1024)]
-                          [#:max-request-body-length max-request-body-length exact-positive-integer? (* 10 1024 1024)])
+                          [#:max-request-body-length max-request-body-length exact-positive-integer? (* 10 1024 1024)]
+                          [#:response-timeout response-timeout exact-positive-integer? 60]
+                          [#:response-send-timeout response-send-timeout exact-positive-integer? 60])
          (-> void)]{
  Calls @racket[serve/ports] multiple times, once for each @racket[ip], and returns
  a function that shuts down all of the server instances.
@@ -157,6 +185,8 @@ from a given path:
   #:changed "1.6" @elem{Added the @racket[#:max-request-fields] argument.}
   #:changed "1.6" @elem{Added the @racket[#:max-request-field-length] argument.}
   #:changed "1.6" @elem{Added the @racket[#:max-request-body-length] argument.}
+  #:changed "1.6" @elem{Added the @racket[#:response-timeout] argument.}
+  #:changed "1.6" @elem{Added the @racket[#:response-send-timeout] argument.}
   #:changed "1.1" @elem{Added the @racket[#:dispatch-server-connect@] argument.}]}
 
 @defproc[(serve/web-config@ [config@ (unit/c (import) (export web-config^))]

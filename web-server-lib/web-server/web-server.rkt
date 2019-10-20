@@ -15,7 +15,8 @@
          web-server/web-config-sig
          web-server/web-server-sig
          web-server/web-server-unit
-         (prefix-in http: web-server/http/request))
+         (prefix-in http: web-server/http/request)
+         (prefix-in http: web-server/http/response))
 
 (define-syntax-rule (unit/c . _) any/c)
 
@@ -34,7 +35,9 @@
         #:max-request-line-length exact-positive-integer?
         #:max-request-fields exact-positive-integer?
         #:max-request-field-length exact-positive-integer?
-        #:max-request-body-length exact-positive-integer?)
+        #:max-request-body-length exact-positive-integer?
+        #:response-timeout exact-positive-integer?
+        #:response-send-timeout exact-positive-integer?)
        (-> void))]
  [serve/ports
   (->* (#:dispatch dispatcher/c)
@@ -50,7 +53,9 @@
         #:max-request-line-length exact-positive-integer?
         #:max-request-fields exact-positive-integer?
         #:max-request-field-length exact-positive-integer?
-        #:max-request-body-length exact-positive-integer?)
+        #:max-request-body-length exact-positive-integer?
+        #:response-timeout exact-positive-integer?
+        #:response-send-timeout exact-positive-integer?)
        (-> void))]
  [serve/ips+ports
   (->* (#:dispatch dispatcher/c)
@@ -66,7 +71,9 @@
         #:max-request-line-length exact-positive-integer?
         #:max-request-fields exact-positive-integer?
         #:max-request-field-length exact-positive-integer?
-        #:max-request-body-length exact-positive-integer?)
+        #:max-request-body-length exact-positive-integer?
+        #:response-timeout exact-positive-integer?
+        #:response-send-timeout exact-positive-integer?)
        (-> void))]
  [raw:dispatch-server-connect@ (unit/c (import) (export dispatch-server-connect^))]
  [make-ssl-connect@
@@ -110,7 +117,9 @@
          #:max-request-line-length [max-request-line-length (* 8 1024)]
          #:max-request-fields [max-request-fields 100]
          #:max-request-field-length [max-request-field-length (* 8 1024)]
-         #:max-request-body-length [max-request-body-length (* 10 1024 1024)])
+         #:max-request-body-length [max-request-body-length (* 10 1024 1024)]
+         #:response-timeout [response-timeout 60]
+         #:response-send-timeout [response-send-timeout 60])
   (define read-request
     (http:make-read-request
      #:connection-close? connection-close?
@@ -132,7 +141,8 @@
     (import dispatch-server-config^)
     (export dispatch-server^))
 
-  (serve #:confirmation-channel confirmation-channel))
+  (parameterize ([http:current-send-timeout response-send-timeout])
+    (serve #:confirmation-channel confirmation-channel)))
 
 (define (serve/ports
          #:dispatch dispatch
@@ -148,7 +158,9 @@
          #:max-request-line-length [max-request-line-length (* 8 1024)]
          #:max-request-fields [max-request-fields 100]
          #:max-request-field-length [max-request-field-length (* 8 1024)]
-         #:max-request-body-length [max-request-body-length (* 10 1024 1024)])
+         #:max-request-body-length [max-request-body-length (* 10 1024 1024)]
+         #:response-timeout [response-timeout 60]
+         #:response-send-timeout [response-send-timeout 60])
   (define shutdowns
     (map (lambda (port)
            (serve
@@ -165,7 +177,9 @@
             #:max-request-line-length max-request-line-length
             #:max-request-fields max-request-fields
             #:max-request-field-length max-request-field-length
-            #:max-request-body-length max-request-body-length))
+            #:max-request-body-length max-request-body-length
+            #:response-timeout response-timeout
+            #:response-send-timeout response-send-timeout))
          ports))
   (lambda ()
     (for-each apply shutdowns)))
@@ -183,7 +197,9 @@
          #:max-request-line-length [max-request-line-length (* 8 1024)]
          #:max-request-field-length [max-request-field-length (* 8 1024)]
          #:max-request-fields [max-request-fields 100]
-         #:max-request-body-length [max-request-body-length (* 10 1024 1024)])
+         #:max-request-body-length [max-request-body-length (* 10 1024 1024)]
+         #:response-timeout [response-timeout 60]
+         #:response-send-timeout [response-send-timeout 60])
   (define shutdowns
     (map (match-lambda
            [(list-rest listen-ip ports)
@@ -201,7 +217,9 @@
              #:max-request-line-length max-request-line-length
              #:max-request-fields max-request-fields
              #:max-request-field-length max-request-field-length
-             #:max-request-body-length max-request-body-length)])
+             #:max-request-body-length max-request-body-length
+             #:response-timeout response-timeout
+             #:response-send-timeout response-send-timeout)])
          ips+ports))
   (lambda ()
     (for-each apply shutdowns)))

@@ -13,9 +13,17 @@
 
 (provide/contract
  [print-headers (output-port? (listof header?) . -> . void)]
+ [current-send-timeout (parameter/c exact-positive-integer?)]
  [rename ext:output-response output-response (connection? response? . -> . void)]
  [rename ext:output-response/method output-response/method (connection? response? bytes? . -> . void)]
  [rename ext:output-file output-file (connection? path-string? bytes? (or/c bytes? false/c) (or/c pair? false/c) . -> . void)])
+
+; current-send-timeout : parameter-of number
+; This parameter controls the allotted time between sends to the client
+; per individual response. Whenever a chunk of data is written to a
+; client, the timeout for that connection resets to this value.
+(define current-send-timeout
+  (make-parameter 60))
 
 (define (output-response conn resp)
   (output-response/method conn resp #"GET"))
@@ -134,8 +142,8 @@
       (unless (eof-object? bytes-read-or-eof)
         ;; For every chunk, increase the connection timeout s.t.
         ;; a responder can run indefinitely as long as it writes
-        ;; *something* every 60 seconds.
-        (reset-connection-timeout! conn 60)
+        ;; *something* every (current-send-timeout) seconds.
+        (reset-connection-timeout! conn (current-send-timeout))
         (fprintf to-client "~a\r\n" (number->string bytes-read-or-eof 16))
         (write-bytes buffer to-client 0 bytes-read-or-eof)
         (fprintf to-client "\r\n")
@@ -222,6 +230,11 @@
 ;;              (U bytes #f)
 ;;           -> void
 (define (output-file/boundary conn file-path method maybe-mime-type ranges boundary)
+  ;; Ensure there is enough time left to write the first chunk of
+  ;; response data. `output-file-range' then resets the connection
+  ;; timeout once for every chunk it's able to write to the client.
+  (reset-connection-timeout! conn (current-send-timeout))
+
   ; total-file-length : integer
   (define total-file-length
     (file-size file-path))
@@ -278,13 +291,10 @@
            (make-206-response modified-seconds maybe-mime-type total-content-length total-file-length converted-ranges boundary)
            (make-200-response modified-seconds maybe-mime-type total-content-length)))
       ; Send the appropriate file content:
+      ; TODO: What if we want to output-file during a POST?
       (when (bytes-ci=? method #"GET")
-        (adjust-connection-timeout! ; Give it one second per byte.
-         conn
-         (apply + (map (lambda (range)
-                         (- (cdr range) (car range)))
-                       converted-ranges)))
-        (with-handlers ([exn:fail? (lambda (exn) (network-error 'output-file (exn-message exn)))])
+        (with-handlers ([exn:fail? (lambda (exn)
+                                     (network-error 'output-file (exn-message exn)))])
           (call-with-input-file* file-path
             (lambda (input)
               (if (= (length converted-ranges) 1)
@@ -292,7 +302,8 @@
                   ; in their simplest form:
                   (output-file-range conn input (caar converted-ranges) (cdar converted-ranges))
                   ; Multiple ranges are encoded as multipart/byteranges:
-                  (let loop ([ranges converted-ranges] [multipart-headers multipart-headers])
+                  (let loop ([ranges converted-ranges]
+                             [multipart-headers multipart-headers])
                     (match ranges
                       [(list)
                        ; Final boundary (must start on new line; ends with a new line)
@@ -327,7 +338,19 @@
 ;; start must be inclusive; end must be exclusive.
 (define (output-file-range conn input start end)
   (file-position input start)
-  (let ([limited-input (make-limited-input-port input (- end start) #f)])
+  (define custodian (make-custodian))
+  (parameterize ([current-custodian custodian])
+    (define limited-input (make-limited-input-port input (- end start) #f))
+    (thread
+     (lambda _
+       (let loop ()
+         ;; Every time the limited-input is read from, reset
+         ;; the connection timeout and give the client another
+         ;; (current-send-timeout) seconds' worth of lease.
+         (sync (port-progress-evt limited-input))
+         (unless (port-closed? limited-input)
+           (reset-connection-timeout! conn (current-send-timeout))
+           (loop)))))
     (copy-port limited-input (connection-o-port conn))
     (close-input-port limited-input)))
 

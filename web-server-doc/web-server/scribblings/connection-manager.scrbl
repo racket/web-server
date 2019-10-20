@@ -53,4 +53,10 @@ for doing this.
  Calls @racket[increment-timer!] with the timer behind @racket[c] with @racket[t].
 }
 
+@defproc[(reset-connection-timeout! [c connection?]
+                                    [t number?]) void?]{
+
+ Calls @racket[reset-timer!] with the timer behind @racket[c] with @racket[t].
+}
+
 }
