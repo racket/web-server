@@ -274,6 +274,31 @@
 (module+ internal-test
   (provide read-http-line/limited))
 
+; read-bytes/lazy : number inp -> bytes
+; Like `read-bytes', but waits until the expected number of bytes is
+; available within the input port before allocating the final buffer.
+(define (read-bytes/lazy n in [bufsize 4096])
+  (define buf (make-bytes bufsize))
+  (define offset
+    (let loop ([offset 0])
+      (define len
+        (peek-bytes-avail! buf offset #f in))
+
+      (cond
+        [(eof-object? len) offset]
+        [else
+         (define offset* (+ offset len))
+         (cond
+           [(> offset* n) offset*]
+           [else (loop offset*)])])))
+
+  (cond
+    [(zero? offset) eof]
+    [else (read-bytes n in)]))
+
+(module+ internal-test
+  (provide read-bytes/lazy))
+
 
 ;; **************************************************
 ;; read-request-line
@@ -384,7 +409,7 @@
                  (network-error 'read-bindings&post-data/raw "body length exceeds limit of ~a" max-body-length))
 
                ;; this is safe because of the preceding guard on the length.
-               (define data (read-bytes len in))
+               (define data (read-bytes/lazy len in))
                (cond
                  [(eof-object? data)
                   (network-error
