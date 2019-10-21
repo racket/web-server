@@ -278,7 +278,7 @@
 ; Like `read-bytes', but waits until the expected number of bytes is
 ; available within the input port before allocating the final buffer.
 (define (read-bytes/lazy n in [bufsize 4096])
-  (define buf (make-bytes bufsize))
+  (define buf (make-bytes (min n bufsize)))
   (define offset
     (let loop ([offset 0])
       (define len
