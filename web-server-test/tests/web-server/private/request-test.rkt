@@ -1,6 +1,8 @@
 #lang racket
 
-(require net/url
+(require (for-syntax racket/base)
+         net/url
+         racket/runtime-path
          rackunit
          web-server/http/request
          web-server/private/timer
@@ -12,6 +14,12 @@
 
 (require/expose web-server/http/request
                 (read-bindings&post-data/raw))
+
+(define-runtime-path fixtures
+  (build-path "fixtures"))
+
+(define (fixture filename)
+  (file->bytes (build-path fixtures filename)))
 
 ;; mock connection object for test on post body parsing
 (define (make-mock-connection&headers post-body)
@@ -50,20 +58,37 @@
 (define tm (start-timer-manager))
 
 (define (test-read-request b [read-request read-request])
-  (define ip (open-input-bytes b))
-  (define op (open-output-bytes))
-  (define c
-    (make-connection 0 (make-timer tm ip +inf.0 (lambda () (void)))
-                     ip op (make-custodian) #f))
-  (define-values (req close?)
-    (read-request c 80 (λ (_) (values "to" "from"))))
-  (list (list 'request
-              (map (λ (f) (f req))
-                   (list request-method (compose url->string request-uri)
-                         request-headers/raw
-                         request-bindings/raw request-post-data/raw
-                         request-host-ip request-host-port request-client-ip)))
-        close?))
+  (define custodian (make-custodian))
+  (parameterize ([current-custodian custodian])
+    (define ip (open-input-bytes b))
+    (define op (open-output-bytes))
+    (define timer (make-timer tm ip +inf.0 void))
+    (define conn
+      (make-connection 0 timer ip op custodian #f))
+
+    (define-values (req close?)
+      (read-request conn 80 (lambda _ (values "to" "from"))))
+
+    (hasheq
+     'method (request-method req)
+     'uri (string->bytes/utf-8 (url->string (request-uri req)))
+     'headers (request-headers/raw req)
+     'bindings (request-bindings/raw req)
+     'body (request-post-data/raw req)
+     'host-ip (request-host-ip req)
+     'host-port (request-host-port req)
+     'client-ip (request-client-ip req)
+     'close? close?)))
+
+(define-syntax-rule (test-request name data e)
+  (let* ([e* e]
+         [r (for/hasheq ([(k v) (in-hash (test-read-request data))]
+                         #:when (hash-has-key? e* k))
+              (values k v))])
+    (test-equal? name r e*)))
+
+(define-syntax-rule (test-request/fixture filename e)
+  (test-request filename (fixture filename) e))
 
 (define request-tests
   (test-suite
@@ -349,11 +374,12 @@ TE: Trailers\r
     (test-suite
      "Request Line"
 
-     (test-equal?
+     (test-request
       "asterisk path"
-      (test-read-request
-       #"OPTIONS * HTTP/1.1\r\n\r\n")
-      (list (list 'request (list #"OPTIONS" "*" '() '() #f "to" 80 "from")) #f))
+      #"OPTIONS * HTTP/1.1\r\n\r\n"
+      (hasheq
+       'method #"OPTIONS"
+       'uri #"*"))
 
      (test-exn
       "request line too short"
@@ -365,52 +391,20 @@ TE: Trailers\r
                            (make-read-request #:max-request-line-length 5)))))
 
     (test-suite
-     "URL Query"
-
-     (test-not-exn
-      "Unfinished URL query"
-      (lambda ()
-        (define ip (open-input-string "GET http://127.0.0.1:8080/servlets/examples/hello.rkt?a=1&b: HTTP/1.1"))
-        (read-request
-         (make-connection 0 (make-timer tm ip +inf.0 (lambda () (void)))
-                          ip
-                          (open-output-bytes) (make-custodian) #f)
-         8081
-         (lambda _ (values "s1" "s2")))
-        (void))))
-
-    (test-suite
      "Headers"
 
-     (test-equal?
+     (test-request
       "multi-line header values"
-      (test-read-request
-       #"POST / HTTP/1.1\r
-Content-Type: text/plain\r
-Content-Length: 42\r
-X-Multi-Line: hello\r
- there\r
-X-Forty-Two: 42\r
-\r
-abcdefghijklmnopqrstuvwxyz1234567890abcdef\r
-")
-      (list
-       (list
-        'request
-        (list
-         #"POST"
-         "/"
-         (list
-          (header #"Content-Type" #"text/plain")
-          (header #"Content-Length" #"42")
-          (header #"X-Multi-Line" #"hello there")
-          (header #"X-Forty-Two" #"42"))
-         '()
-         #"abcdefghijklmnopqrstuvwxyz1234567890abcdef"
-         "to"
-         80
-         "from"))
-       #f))
+      (fixture "post-with-multi-line-header")
+      (hasheq
+       'method #"POST"
+       'uri #"/"
+       'headers (list (header #"Date" #"Fri, 31 Dec 1999 23:59:59 GMT")
+                      (header #"Content-Type" #"text/plain")
+                      (header #"Content-Length" #"42")
+                      (header #"X-Multi-Line" #"hello there")
+                      (header #"X-Forty-Two" #"42"))
+       'body #"abcdefghijklmnopqrstuvwxyz1234567890abcdef"))
 
      (test-exn
       "too many headers"
@@ -458,79 +452,61 @@ B: way\r
     (test-suite
      "Chunked transfer-encoding"
 
-     (test-equal?
+     (test-request
       "example"
-      (test-read-request
-       #"POST http://127.0.0.1/test HTTP/1.0\r
-Date: Fri, 31 Dec 1999 23:59:59 GMT\r
-Content-Type: text/plain\r
-Content-Length: 42\r
-\r
-abcdefghijklmnopqrstuvwxyz1234567890abcdef\r
-")
-      (list
-       (list
-        'request
-        (list
-         #"POST"
-         "http://127.0.0.1/test"
-         (list
-          (header #"Date" #"Fri, 31 Dec 1999 23:59:59 GMT")
-          (header #"Content-Type" #"text/plain")
-          (header #"Content-Length" #"42"))
-         '()
-         #"abcdefghijklmnopqrstuvwxyz1234567890abcdef"
-         "to"
-         80
-         "from"))
-       #t))
+      (fixture "post-with-chunked-transfer-encoding")
+      (hasheq
+       'method #"POST"
+       'uri #"/test"
+       'headers (list (header #"Date" #"Fri, 31 Dec 1999 23:59:59 GMT")
+                      (header #"Content-Type" #"text/plain")
+                      (header #"Transfer-Encoding" #"chunked")
+                      (header #"Content-Length" #"42")
+                      (header #"Some-Footer" #"some-value")
+                      (header #"Another-Footer" #"another-value"))
+       'body #"abcdefghijklmnopqrstuvwxyz1234567890abcdef")))
 
-     (test-equal?
-      "example"
+    (test-suite
+     "JSON data"
 
-      (test-read-request
-       #"POST http://127.0.0.1/test HTTP/1.1\r
-Date: Fri, 31 Dec 1999 23:59:59 GMT\r
-Content-Type: text/plain\r
-Transfer-Encoding: chunked\r
-\r
-1a; ignore-stuff-here\r
-abcdefghijklmnopqrstuvwxyz\r
-10\r
-1234567890abcdef\r
-0\r
-some-footer: some-value\r
-another-footer: another-value\r
-")
-      (list
-       (list
-        'request
-        (list
-         #"POST"
-         "http://127.0.0.1/test"
-         (list
-          (header #"Date" #"Fri, 31 Dec 1999 23:59:59 GMT")
-          (header #"Content-Type" #"text/plain")
-          (header #"Transfer-Encoding" #"chunked")
-          (header #"Content-Length" #"42")
-          (header #"some-footer" #"some-value")
-          (header #"another-footer" #"another-value"))
-         '()
-         #"abcdefghijklmnopqrstuvwxyz1234567890abcdef"
-         "to"
-         80
-         "from"))
-       #f)))
+     (test-request/fixture
+      "post-with-json-body"
+      (hasheq
+       'method #"POST"
+       'uri #"/books"
+       'headers (list (header #"Date" #"Fri, 31 Dec 1999 23:59:59 GMT")
+                      (header #"Content-Type" #"application/json; charset=utf-8")
+                      (header #"Content-Length" #"35"))
+       'body #"{\"title\": \"How to Design Programs\"}"))
+
+     (test-request/fixture
+      "post-with-json-body-and-query-param"
+      (hasheq
+       'method #"POST"
+       'uri #"/books?upsert=1"
+       'headers (list (header #"Date" #"Fri, 31 Dec 1999 23:59:59 GMT")
+                      (header #"Content-Type" #"application/json; charset=utf-8")
+                      (header #"Content-Length" #"35"))
+       'bindings (list (binding:form #"upsert" #"1"))
+       'body #"{\"title\": \"How to Design Programs\"}")))
 
     (test-suite
      "POST Bindings"
-     (test-equal? "simple test 1"
-                  (get-post-data/raw "hello world") #"hello world")
-     (test-equal? "simple test 2"
-                  (get-post-data/raw "hello=world") #"hello=world")
-     (test-equal? "simple test 3"
-                  (binding:form-value (bindings-assq #"hello" (force (get-bindings "hello=world"))))
-                  #"world")))))
+
+     (test-equal?
+      "simple test 1"
+      (get-post-data/raw "hello world")
+      #"hello world")
+
+     (test-equal?
+      "simple test 2"
+      (get-post-data/raw "hello=world")
+      #"hello=world")
+
+     (test-equal?
+      "simple test 3"
+      (binding:form-value (bindings-assq #"hello" (force (get-bindings "hello=world"))))
+      #"world")))))
 
 (module+ test
   (require rackunit/text-ui)
