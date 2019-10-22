@@ -117,7 +117,7 @@
          #:max-request-line-length [max-request-line-length (* 8 1024)]
          #:max-request-fields [max-request-fields 100]
          #:max-request-field-length [max-request-field-length (* 8 1024)]
-         #:max-request-body-length [max-request-body-length (* 10 1024 1024)]
+         #:max-request-body-length [max-request-body-length (* 1 1024 1024)]
          #:response-timeout [response-timeout 60]
          #:response-send-timeout [response-send-timeout 60])
   (define read-request
@@ -158,7 +158,7 @@
          #:max-request-line-length [max-request-line-length (* 8 1024)]
          #:max-request-fields [max-request-fields 100]
          #:max-request-field-length [max-request-field-length (* 8 1024)]
-         #:max-request-body-length [max-request-body-length (* 10 1024 1024)]
+         #:max-request-body-length [max-request-body-length (* 1 1024 1024)]
          #:response-timeout [response-timeout 60]
          #:response-send-timeout [response-send-timeout 60])
   (define shutdowns
@@ -197,7 +197,7 @@
          #:max-request-line-length [max-request-line-length (* 8 1024)]
          #:max-request-field-length [max-request-field-length (* 8 1024)]
          #:max-request-fields [max-request-fields 100]
-         #:max-request-body-length [max-request-body-length (* 10 1024 1024)]
+         #:max-request-body-length [max-request-body-length (* 1 1024 1024)]
          #:response-timeout [response-timeout 60]
          #:response-send-timeout [response-send-timeout 60])
   (define shutdowns
