@@ -452,9 +452,8 @@ B: way\r
     (test-suite
      "Chunked transfer-encoding"
 
-     (test-request
-      "example"
-      (fixture "post-with-chunked-transfer-encoding")
+     (test-request/fixture
+      "post-with-chunked-transfer-encoding"
       (hasheq
        'method #"POST"
        'uri #"/test"
@@ -464,7 +463,17 @@ B: way\r
                       (header #"Content-Length" #"42")
                       (header #"Some-Footer" #"some-value")
                       (header #"Another-Footer" #"another-value"))
-       'body #"abcdefghijklmnopqrstuvwxyz1234567890abcdef")))
+       'body #"abcdefghijklmnopqrstuvwxyz1234567890abcdef"))
+
+     (test-exn
+      "too many headers after chunked body"
+      (lambda (e)
+        (and (exn:fail:network? e)
+             (regexp-match #rx"header count exceeds limit" (exn-message e))))
+      (lambda _
+        (test-read-request
+         (fixture "post-with-chunked-transfer-encoding")
+         (make-read-request #:max-request-fields 3)))))
 
     (test-suite
      "JSON data"

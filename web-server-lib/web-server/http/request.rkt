@@ -1,17 +1,15 @@
 #lang racket/base
 
-(require (for-syntax racket/base)
+(require net/uri-codec
+         net/url
          racket/contract
-         racket/match
          racket/list
+         racket/match
          racket/port
          racket/promise
-         racket/stxparam
-         net/url
-         net/uri-codec
-         web-server/private/util
+         web-server/http/request-structs
          web-server/private/connection-manager
-         web-server/http/request-structs)
+         web-server/private/util)
 
 ;;
 ;;                    **READ ME FIRST**
@@ -114,17 +112,6 @@
 ;; **************************************************
 ;; complete-request
 
-(define-syntax-parameter break
-  (λ (stx)
-    (raise-syntax-error 'break "Used outside forever" stx)))
-
-(define-syntax-rule (forever e ...)
-  (let/ec this-break
-    (let loop ()
-      (syntax-parameterize ([break (make-rename-transformer #'this-break)])
-        (begin e ...))
-      (loop))))
-
 (define (hex-string->number s)
   (string->number s 16))
 
@@ -140,25 +127,26 @@
      (define-values (decoded-ip decode-op)
        (make-pipe))
 
-     (define total-size 0)
-     (forever
-      (define size-line (read-http-line/limited real-ip max-header-length))
-      (define size-in-bytes
-        (match (regexp-split #rx";" size-line)
-          [(cons size-in-hex _)
-           (hex-string->number (bytes->string/utf-8 size-in-hex))]))
+     (define total-size
+       (let loop ([total-size 0])
+         (define size-line (read-http-line/limited real-ip max-header-length))
+         (define size-in-bytes
+           (match (regexp-split #rx";" size-line)
+             [(cons size-in-hex _)
+              (hex-string->number (bytes->string/utf-8 size-in-hex))]))
 
-      (when (zero? size-in-bytes)
-        (break))
+         (cond
+           [(zero? size-in-bytes) total-size]
+           [else
+            (define new-size (+ total-size size-in-bytes))
+            (when (> new-size max-body-length)
+              (network-error 'complete-request "content (~a) exceeds max length (~a)" new-size max-body-length))
 
-      (set! total-size (+ total-size size-in-bytes))
-      (when (> total-size max-body-length)
-        (network-error 'complete-request "content (~a) exceeds max length (~a)" total-size max-body-length))
-
-      ;; This is safe because of the preceding guard on total-size,
-      (define limited-input (make-limited-input-port real-ip size-in-bytes #f))
-      (copy-port limited-input decode-op)
-      (read-http-line/limited real-ip 2))
+            ;; This is safe because of the preceding guard on new-size,
+            (define limited-input (make-limited-input-port real-ip size-in-bytes #f))
+            (copy-port limited-input decode-op)
+            (read-http-line/limited real-ip 2)
+            (loop new-size)])))
 
      (define more-headers
        (list* (header #"Content-Length" (string->bytes/utf-8 (number->string total-size)))
