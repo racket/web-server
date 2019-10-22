@@ -37,7 +37,7 @@ This module provides functions for launching dispatching servers.
                 [#:max-request-line-length max-request-line-length exact-positive-integer? (* 8 1024)]
                 [#:max-request-fields max-request-fields exact-positive-integer? 100]
                 [#:max-request-field-length max-request-field-length exact-positive-integer? (* 8 1024)]
-                [#:max-request-body-length max-request-body-length exact-positive-integer? (* 10 1024 1024)]
+                [#:max-request-body-length max-request-body-length exact-positive-integer? (* 1 1024 1024)]
                 [#:response-timeout response-timeout exact-positive-integer? 60]
                 [#:response-send-timeout response-send-timeout exact-positive-integer? 60])
          (-> void)]{
@@ -139,7 +139,7 @@ from a given path:
                       [#:max-request-line-length max-request-line-length exact-positive-integer? (* 8 1024)]
                       [#:max-request-fields max-request-fields exact-positive-integer? 100]
                       [#:max-request-field-length max-request-field-length exact-positive-integer? (* 8 1024)]
-                      [#:max-request-body-length max-request-body-length exact-positive-integer? (* 10 1024 1024)]
+                      [#:max-request-body-length max-request-body-length exact-positive-integer? (* 1 1024 1024)]
                       [#:response-timeout response-timeout exact-positive-integer? 60]
                       [#:response-send-timeout response-send-timeout exact-positive-integer? 60])
          (-> void)]{
@@ -172,7 +172,7 @@ from a given path:
                           [#:max-request-line-length max-request-line-length exact-positive-integer? (* 8 1024)]
                           [#:max-request-fields max-request-fields exact-positive-integer? 100]
                           [#:max-request-field-length max-request-field-length exact-positive-integer? (* 8 1024)]
-                          [#:max-request-body-length max-request-body-length exact-positive-integer? (* 10 1024 1024)]
+                          [#:max-request-body-length max-request-body-length exact-positive-integer? (* 1 1024 1024)]
                           [#:response-timeout response-timeout exact-positive-integer? 60]
                           [#:response-send-timeout response-send-timeout exact-positive-integer? 60])
          (-> void)]{

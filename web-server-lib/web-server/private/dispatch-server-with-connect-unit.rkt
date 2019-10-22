@@ -92,37 +92,39 @@
                     ip op (current-custodian) #f))
 
   (with-handlers
-      ([(λ (x)
-          (or
-           (and (exn:fail:network:errno? x)
-                (or
-                 ;; This error is "Connection reset by peer" and doesn't
-                 ;; really indicate a problem with the server. It
-                 ;; occurs when our end doesn't "realize" that the
-                 ;; connection was interrupted (for whatever reason)
-                 ;; and it attempts to send a packet to the other end,
-                 ;; to which the other end replies with an RST packet
-                 ;; because it wasn't expecting anything from our end.
-                 (equal? (cons 54 'posix) (exn:fail:network:errno-errno x))
+    ([(λ (x)
+        (or
+         (and (exn:fail:network:errno? x)
+              (or
+               ;; This error is "Connection reset by peer" and doesn't
+               ;; really indicate a problem with the server. It
+               ;; occurs when our end doesn't "realize" that the
+               ;; connection was interrupted (for whatever reason)
+               ;; and it attempts to send a packet to the other end,
+               ;; to which the other end replies with an RST packet
+               ;; because it wasn't expecting anything from our end.
+               (equal? (cons 54 'posix) (exn:fail:network:errno-errno x))
 
-                 ;; This error is "Broken pipe" and it occurs when our
-                 ;; end attempts to write to the other end over a closed
-                 ;; socket. It can happen when a browser suddenly closes
-                 ;; the socket while we're sending it data (eg. because
-                 ;; the user closed a tab).
-                 (equal? (cons 32 'posix) (exn:fail:network:errno-errno x))))
-           ;; This is error is not useful because it just means the
-           ;; other side closed the connection early during writing,
-           ;; which we can't do anything about.
-           (and (exn:fail? x)
-                (string=? "fprintf: output port is closed" (exn-message x)))
-           ;; The connection may get timed out while the request is
-           ;; being read, when that happens we need to gracefully kill
-           ;; the connection.
-           (and (exn:fail? x)
-                (regexp-match? #rx"input port is closed" (exn-message x)))))
-        (λ (x)
-          (kill-connection! conn))])
+               ;; This error is "Broken pipe" and it occurs when our
+               ;; end attempts to write to the other end over a closed
+               ;; socket. It can happen when a browser suddenly closes
+               ;; the socket while we're sending it data (eg. because
+               ;; the user closed a tab).
+               (equal? (cons 32 'posix) (exn:fail:network:errno-errno x))))
+
+         ;; This is error is not useful because it just means the
+         ;; other side closed the connection early during writing,
+         ;; which we can't do anything about.
+         (and (exn:fail? x)
+              (string=? "fprintf: output port is closed" (exn-message x)))
+
+         ;; The connection may get timed out while the request is
+         ;; being read, when that happens we need to gracefully kill
+         ;; the connection.
+         (and (exn:fail? x)
+              (regexp-match? #rx"input port is closed" (exn-message x)))))
+      (λ (x)
+        (kill-connection! conn))])
     ;; HTTP/1.1 allows any number of requests to come from this input
     ;; port. However, there is no explicit cancellation of a
     ;; connection---the browser will just close the port. This leaves

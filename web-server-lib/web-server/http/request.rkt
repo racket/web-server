@@ -60,7 +60,7 @@
           #:max-request-line-length [max-request-line-length (* 8 1024)]
           #:max-request-fields [max-request-fields 100]
           #:max-request-field-length [max-request-field-length (* 8 1024)]
-          #:max-request-body-length [max-request-body-length (* 10 1024 1024)])
+          #:max-request-body-length [max-request-body-length (* 1 1024 1024)])
          conn host-port port-addresses)
 
   (reset-connection-timeout! conn read-timeout)
@@ -108,7 +108,7 @@
          (read-request conn host-port port-addresses))))))
 
 (define ext:read-request
-  (make-ext:read-request #:connection-close? #f))
+  (make-ext:read-request))
 
 
 ;; **************************************************
