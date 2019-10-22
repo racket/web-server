@@ -18,6 +18,9 @@
 (define-runtime-path fixtures
   (build-path "fixtures"))
 
+(define (fixture/ip filename)
+  (open-input-file (build-path fixtures filename)))
+
 (define (fixture filename)
   (file->bytes (build-path fixtures filename)))
 
@@ -151,7 +154,7 @@
       (read-bytes/lazy 10 (open-input-string "hi") 1)
       #"hi")
 
-     (for ([bufsize (in-list '(1 2 4 8 16 32 64 128 256 512))])
+     (for ([bufsize (in-list '(1 2 4 8 16 32 64 128 256 512 1024 2048 4096 8192))])
        (let ([buf (open-input-string "hello there, how are you doing this fine day?")])
          (test-equal?
           "short input, short buffer 1/5"
@@ -190,61 +193,31 @@
 
      (test-equal?
       "real-world 1"
-      (let ([in (open-input-bytes #"Host: github.com\r
-User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.14; rv:69.0) Gecko/20100101 Firefox/69.0\r
-Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\r
-Accept-Language: en-US,en;q=0.5\r
-Accept-Encoding: gzip, deflate, br\r
-Connection: keep-alive\r
-Cookie: logged_in=yes; _octo=xxxxxxxxxxxxxxxxxxxxxxxxxx; user_session=xxxxxx; __Host-user_session_same_site=xxxxxx; dotcom_user=x; _device_id=xxxx; _ga=xxxxxxxxxxxxxxxxxxxxxxxxxx; _gh_sess=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; ignored_unsupported_browser_notice=false; tz=Europe%2FBucharest\r
-Upgrade-Insecure-Requests: 1\r
-Pragma: no-cache\r
-Cache-Control: no-cache\r
-"
-                                  )])
-        (read-headers in 100 4096))
+      (read-headers (fixture/ip "headers-to-github-dot-com") 100 4096)
       (list
        (header #"Host" #"github.com")
        (header #"User-Agent"
                #"Mozilla/5.0 (Macintosh; Intel Mac OS X 10.14; rv:69.0) Gecko/20100101 Firefox/69.0")
-       (header #"Accept"
-               #"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+       (header #"Accept" #"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
        (header #"Accept-Language" #"en-US,en;q=0.5")
        (header #"Accept-Encoding" #"gzip, deflate, br")
        (header #"Connection" #"keep-alive")
-       (header #"Cookie"
-               #"logged_in=yes; _octo=xxxxxxxxxxxxxxxxxxxxxxxxxx; user_session=xxxxxx; __Host-user_session_same_site=xxxxxx; dotcom_user=x; _device_id=xxxx; _ga=xxxxxxxxxxxxxxxxxxxxxxxxxx; _gh_sess=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; ignored_unsupported_browser_notice=false; tz=Europe%2FBucharest")
+       (header #"Cookie" #"logged_in=yes; _octo=xxxxxxxxxxxxxxxxxxxxxxxxxx; user_session=xxxxxx; __Host-user_session_same_site=xxxxxx; dotcom_user=x; _device_id=xxxx; _ga=xxxxxxxxxxxxxxxxxxxxxxxxxx; _gh_sess=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; ignored_unsupported_browser_notice=false; tz=Europe%2FBucharest")
        (header #"Upgrade-Insecure-Requests" #"1")
        (header #"Pragma" #"no-cache")
        (header #"Cache-Control" #"no-cache")))
 
      (test-equal?
       "real-world 1"
-      (let ([in (open-input-bytes #"Host: www.reddit.com\r
-User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.14; rv:69.0) Gecko/20100101 Firefox/69.0\r
-Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\r
-Accept-Language: en-US,en;q=0.5\r
-Accept-Encoding: gzip, deflate, br\r
-Connection: keep-alive\r
-Cookie: loid=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; eu_cookie_v2=x; edgebucket=xxxxxxxxxxxxxxxxxx; recent_srs=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; reddaid=xxxxxxxxxxxxxxxx; reddit_session=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; redesign_optout=xxxx; xxxxxxx_recentclicks2=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; USER=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; session=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; d2_token=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; session_tracker=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; pc=xx\r
-Upgrade-Insecure-Requests: 1\r
-Pragma: no-cache\r
-Cache-Control: no-cache\r
-TE: Trailers\r
-"
-                                  )])
-        (read-headers in 100 4096))
+      (read-headers (fixture/ip "headers-to-reddit-dot-com") 100 4096)
       (list
        (header #"Host" #"www.reddit.com")
-       (header #"User-Agent"
-               #"Mozilla/5.0 (Macintosh; Intel Mac OS X 10.14; rv:69.0) Gecko/20100101 Firefox/69.0")
-       (header #"Accept"
-               #"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+       (header #"User-Agent" #"Mozilla/5.0 (Macintosh; Intel Mac OS X 10.14; rv:69.0) Gecko/20100101 Firefox/69.0")
+       (header #"Accept" #"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
        (header #"Accept-Language" #"en-US,en;q=0.5")
        (header #"Accept-Encoding" #"gzip, deflate, br")
        (header #"Connection" #"keep-alive")
-       (header #"Cookie"
-               #"loid=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; eu_cookie_v2=x; edgebucket=xxxxxxxxxxxxxxxxxx; recent_srs=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; reddaid=xxxxxxxxxxxxxxxx; reddit_session=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; redesign_optout=xxxx; xxxxxxx_recentclicks2=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; USER=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; session=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; d2_token=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; session_tracker=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; pc=xx")
+       (header #"Cookie" #"loid=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; eu_cookie_v2=x; edgebucket=xxxxxxxxxxxxxxxxxx; recent_srs=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; reddaid=xxxxxxxxxxxxxxxx; reddit_session=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; redesign_optout=xxxx; xxxxxxx_recentclicks2=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; USER=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; session=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; d2_token=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; session_tracker=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; pc=xx")
        (header #"Upgrade-Insecure-Requests" #"1")
        (header #"Pragma" #"no-cache")
        (header #"Cache-Control" #"no-cache")
@@ -410,15 +383,11 @@ TE: Trailers\r
       "too many headers"
       (lambda (e)
         (and (exn:fail:network? e)
-             (regexp-match? #rx"header count exceeds limit of 2" (exn-message e))))
+             (regexp-match? #rx"header count exceeds limit" (exn-message e))))
       (lambda _
         (test-read-request
-         #"GET / HTTP/1.1\r
-A: 1\r
-B: 2\r
-C: 3\r
-\r"
-         (make-read-request #:max-request-fields 2))))
+         (fixture "get-with-many-headers")
+         (make-read-request #:max-request-fields 10))))
 
      (test-exn
       "header too long"
@@ -427,26 +396,17 @@ C: 3\r
              (regexp-match? #rx"line exceeds limit of 10" (exn-message e))))
       (lambda _
         (test-read-request
-         #"GET / HTTP/1.1\r
-A: notlong\r
-B: waytoofreakinglong\r
-\r"
+         (fixture "get-with-long-single-line-header")
          (make-read-request #:max-request-field-length 10))))
 
      (test-exn
       "folded header too long"
       (lambda (e)
         (and (exn:fail:network? e)
-             (regexp-match? #rx"line exceeds limit of 10" (exn-message e))))
+             (regexp-match? #rx"header too long" (exn-message e))))
       (lambda _
         (test-read-request
-         #"GET / HTTP/1.1\r
-A: notlong\r
-B: way\r
- too\r
- freaking\
- long\r
-\r"
+         (fixture "get-with-long-multi-line-header")
          (make-read-request #:max-request-field-length 10)))))
 
     (test-suite
