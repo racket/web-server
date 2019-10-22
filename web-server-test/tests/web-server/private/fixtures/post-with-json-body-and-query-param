@@ -1,0 +1,6 @@
+POST /books?upsert=1 HTTP/1.1
+Date: Fri, 31 Dec 1999 23:59:59 GMT
+Content-Type: application/json; charset=utf-8
+Content-Length: 35
+
+{"title": "How to Design Programs"}

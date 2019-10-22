@@ -406,7 +406,7 @@
          [(string->number (bytes->string/utf-8 value))
           => (lambda (len)
                (when (> len max-body-length)
-                 (network-error 'read-bindings&post-data/raw "body length exceeds limit of ~a" max-body-length))
+                 (network-error 'read-bindings "body length exceeds limit of ~a" max-body-length))
 
                ;; this is safe because of the preceding guard on the length.
                (define data (read-bytes/lazy len in))
@@ -482,7 +482,7 @@
 
     [else
      (read-data meth (lambda (data)
-                       (values (delay empty) data)))]))
+                       (values bindings-GET data)))]))
 
 ;; parse-bindings : bytes? -> (listof binding?)
 (define match-query-key
@@ -508,6 +508,7 @@
           [(list _ key #"=")
            (match (match-query-value in)
              ;; k=&...
+             ;; k=#<eof>
              [#f
               ;; skip the & or do nothing on #<eof>
               (read-byte in)
