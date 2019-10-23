@@ -172,24 +172,7 @@
           (and (= major 1) (= minor 0))
           (match (headers-assq* #"Connection" headers)
             [(struct header (f v)) (regexp-match? rx v)]
-            [#f #f])
-          (msie-from-local-machine? headers client-ip host-ip)))))
-
-; msie-from-local-machine? : table str str -> bool
-; to work around an error in MSIE for documents < 265 bytes when
-; connecting from the local machine.  The server could pad the
-; response as MSIIS does, but closing the connection works, too.  We
-; do not check for version numbers since IE 6 under windows is 5.2
-; under macosX
-(define msie-from-local-machine?
-  (let ([rx (byte-regexp #"MSIE")])
-    (lambda (headers client-ip host-ip)
-      (and (string=? host-ip client-ip)
-           (match
-               (or (headers-assq* #"HTTP_USER_AGENT" headers)
-                   (headers-assq* #"User-Agent" headers))
-             [(struct header (f v)) (regexp-match? rx v)]
-             [#f #f])))))
+            [#f #f])))))
 
 
 ;; **************************************************
