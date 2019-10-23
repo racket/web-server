@@ -39,7 +39,7 @@ This module provides functions for launching dispatching servers.
                 [#:max-request-field-length max-request-field-length exact-positive-integer? (* 8 1024)]
                 [#:max-request-body-length max-request-body-length exact-positive-integer? (* 1 1024 1024)]
                 [#:max-request-files max-request-files exact-positive-integer? 100]
-                [#:max-request-file-length max-request-file-length exact-positive-integer? (* 1 1024 1024)]
+                [#:max-request-file-length max-request-file-length exact-positive-integer? (* 10 1024 1024)]
                 [#:response-timeout response-timeout exact-positive-integer? 60]
                 [#:response-send-timeout response-send-timeout exact-positive-integer? 60])
          (-> void)]{
@@ -95,7 +95,12 @@ This module provides functions for launching dispatching servers.
 
  The @racket[#:max-request-file-length] argument controls the maxium
  size of each field within a multipart request.  Requests containing
- more fields than this value are rejected.
+ files or fields longer than this value are rejected.  Files longer
+ than 1MB are written to disk, however, note that the entire file may
+ be buffered in memory before that happens meaning that an individual
+ request can use a little over @racket[#:max-request-file-length]
+ bytes per file upload regardless of how many files are being
+ uploaded.
 
  The @racket[#:response-timeout] argument controls how long individual
  request handlers are allowed to run until they write their first byte
@@ -156,7 +161,7 @@ from a given path:
                       [#:max-request-field-length max-request-field-length exact-positive-integer? (* 8 1024)]
                       [#:max-request-body-length max-request-body-length exact-positive-integer? (* 1 1024 1024)]
                       [#:max-request-files max-request-files exact-positive-integer? 100]
-                      [#:max-request-file-length max-request-file-length exact-positive-integer? (* 1 1024 1024)]
+                      [#:max-request-file-length max-request-file-length exact-positive-integer? (* 10 1024 1024)]
                       [#:response-timeout response-timeout exact-positive-integer? 60]
                       [#:response-send-timeout response-send-timeout exact-positive-integer? 60])
          (-> void)]{
@@ -193,7 +198,7 @@ from a given path:
                           [#:max-request-field-length max-request-field-length exact-positive-integer? (* 8 1024)]
                           [#:max-request-body-length max-request-body-length exact-positive-integer? (* 1 1024 1024)]
                           [#:max-request-files max-request-files exact-positive-integer? 100]
-                          [#:max-request-file-length max-request-file-length exact-positive-integer? (* 1 1024 1024)]
+                          [#:max-request-file-length max-request-file-length exact-positive-integer? (* 10 1024 1024)]
                           [#:response-timeout response-timeout exact-positive-integer? 60]
                           [#:response-send-timeout response-send-timeout exact-positive-integer? 60])
          (-> void)]{
