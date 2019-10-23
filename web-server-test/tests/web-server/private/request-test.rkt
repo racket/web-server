@@ -231,6 +231,25 @@
         '(#"a" #"b" #"c\r"))))
 
     (test-suite
+     "make-spooled-temporary-file"
+
+     (test-equal?
+      "doesn't spill"
+      (let-values ([(in out) (make-spooled-temporary-file 4096)])
+        (display "hello, world!" out)
+        (close-output-port out)
+        (port->bytes in))
+      #"hello, world!")
+
+     (test-equal?
+      "spills"
+      (let-values ([(in out) (make-spooled-temporary-file 5)])
+        (display "hello, world!" out)
+        (close-output-port out)
+        (port->bytes in))
+      #"hello, world!"))
+
+    (test-suite
      "read-mime-multipart"
 
      (test-exn

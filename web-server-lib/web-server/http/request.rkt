@@ -3,6 +3,7 @@
 (require net/uri-codec
          net/url
          racket/contract
+         racket/file
          racket/generator
          racket/list
          racket/match
@@ -63,7 +64,7 @@
           #:max-request-field-length [max-request-field-length (* 8 1024)]
           #:max-request-body-length [max-request-body-length (* 1 1024 1024)]
           #:max-request-files [max-request-files 100]
-          #:max-request-file-length [max-request-file-length (* 1 1024 1024)])
+          #:max-request-file-length [max-request-file-length (* 10 1024 1024)])
          conn host-port port-addresses)
 
   (reset-connection-timeout! conn read-timeout)
@@ -570,6 +571,62 @@
 (module+ internal-test
   (provide in-http-lines))
 
+; make-spooled-temporary-file : number -> inp outp
+; Like make-pipe, but data is written to a real file if the total amount
+; of data starts to excceed `max-length'.
+(define (make-spooled-temporary-file max-length)
+  (define filename (make-temporary-file))
+  (define-values (in out)
+    (make-pipe))
+
+  (define (choose-writer non-blocking? enable-breaks?)
+    (cond
+      [enable-breaks? write-bytes-avail/enable-break]
+      [non-blocking? write-bytes-avail*]
+      [else write-bytes]))
+
+  ; write data to the port until the limit is hit
+  (define (write/port! bs start-pos end-pos non-blocking? enable-breaks?)
+    (define current-length (pipe-content-length out))
+    (define input-length (- end-pos start-pos))
+    (cond
+      [(> (+ current-length input-length) max-length)
+       (transition!)
+       (write/file! bs start-pos end-pos non-blocking? enable-breaks?)]
+
+      [else
+       ((choose-writer non-blocking? enable-breaks?) bs out start-pos end-pos)]))
+
+  ; write data to the file
+  (define (write/file! bs start-pos end-pos non-blocking? enable-breaks?)
+    ((choose-writer non-blocking? enable-breaks?) bs out start-pos end-pos))
+
+  ; create a temp file, copy the data from the pipe and then close the pipe
+  (define (transition!)
+    (define new-out (open-output-file filename #:exists 'truncate/replace))
+    (define new-in (open-input-file filename))
+    (close-output-port out)
+    (copy-port in new-out)
+    (close-input-port in)
+    (set! in new-in)
+    (set! out new-out)
+    (set! write! write/file!))
+
+  (define write! write/port!)
+
+  (values
+   (make-input-port filename
+                    (lambda (bs) (read-bytes-avail! bs in))
+                    (lambda (bs s p) (peek-bytes-avail! bs s p in))
+                    (lambda _ (close-input-port in)))
+   (make-output-port filename
+                     (guard-evt (lambda _ out))
+                     (lambda args (apply write! args))
+                     (lambda _ (close-output-port out)))))
+
+(module+ internal-test
+  (provide make-spooled-temporary-file))
+
 ;; This is kind of high just to be safe, but I don't think you ever see
 ;; more than a couple headers (Content-Disposition and Content-Type) per
 ;; field in practice.
@@ -603,7 +660,7 @@
 
   (define (collect-part-content)
     (define-values (in out)
-      (make-pipe))
+      (make-spooled-temporary-file (* 1 1024 1024)))
 
     (define-values (len more-parts?)
       (let loop ([len 0])
@@ -639,9 +696,10 @@
        (define headers (collect-part-headers))
        (define-values (content more-parts?) (collect-part-content))
        (define part (mime-part headers content))
+       (define parts* (cons part parts))
        (if more-parts?
-           (read-parts (cons part parts))
-           (reverse (cons part parts)))]
+           (read-parts parts*)
+           (reverse parts*))]
 
       [else
        (reverse parts)]))
