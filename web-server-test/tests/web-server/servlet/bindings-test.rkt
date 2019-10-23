@@ -11,7 +11,7 @@
 (define bindings-tests
   (test-suite
    "Bindings"
-   
+
    (test-suite
     "request-bindings"
     (test-case
@@ -42,10 +42,10 @@
      "File"
      (check-equal? (request-bindings
                     (make-request #"GET" (string->url "http://test.com/foo")
-                                  empty (delay (list (make-binding:file #"key" #"file" empty #"val"))) #f
+                                  empty (delay (list (make-binding:file #"key" #"file" empty (open-input-bytes #"val")))) #f
                                   "host" 80 "client"))
                    '((key . #"val")))))
-   
+
    (test-suite
     "request-headers"
     (test-case
@@ -62,18 +62,18 @@
                                   (list (make-header #"KEY" #"val")) (delay empty) #f
                                   "host" 80 "client"))
                    '((key . "val")))))
-   
+
    (test-case
     "exists-binding? - true"
     (check-true (exists-binding? 'foo bs)))
    (test-case
     "exists-binding? - false"
     (check-false (exists-binding? 'bar bs)))
-   
+
    (test-case
     "extract-bindings"
     (check-equal? (extract-bindings 'foos bs) (list 1 2)))
-   
+
    (test-case
     "extract-binding/single - success"
     (check-equal? (extract-binding/single 'foo bs) 3))

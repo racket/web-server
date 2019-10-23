@@ -10,7 +10,7 @@
     (send/suspend
      (lambda (k-url)
        (response/xexpr
-        `(html (body (form ([action ,k-url] 
+        `(html (body (form ([action ,k-url]
                             [method "post"]
                             [enctype "multipart/form-data"])
                            (input ([type "file"]
@@ -26,11 +26,11 @@
       [(struct binding:form (field value))
        `(li (ul (li "Field: " ,(bytes->string/utf-8 field))
                 (li "Value: " ,(bytes->string/utf-8 value))))]
-      [(struct binding:file (field filename headers content))
+      [(struct binding:file (field filename headers _))
        `(li (ul (li "Field: " ,(bytes->string/utf-8 field))
                 (li "Name: " ,(bytes->string/utf-8 filename))
                 (li "Headers: " (ul ,@(map header->xexpr headers)))
-                (li "Contents: " (pre ,(bytes->string/utf-8 content)))))]))
+                (li "Contents: " (pre ,(bytes->string/utf-8 (binding:file-content b))))))]))
   (response/xexpr
    `(html (body ([bgcolor "white"])
                 (p "Uploaded:"
