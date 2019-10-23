@@ -118,6 +118,8 @@
          #:max-request-fields [max-request-fields 100]
          #:max-request-field-length [max-request-field-length (* 8 1024)]
          #:max-request-body-length [max-request-body-length (* 1 1024 1024)]
+         #:max-request-files [max-request-files 100]
+         #:max-request-file-length [max-request-file-length (* 1 1024 1024)]
          #:response-timeout [response-timeout 60]
          #:response-send-timeout [response-send-timeout 60])
   (define read-request
@@ -127,7 +129,9 @@
      #:max-request-line-length max-request-line-length
      #:max-request-fields max-request-fields
      #:max-request-field-length max-request-field-length
-     #:max-request-body-length max-request-body-length))
+     #:max-request-body-length max-request-body-length
+     #:max-request-files max-request-files
+     #:max-request-file-length max-request-file-length))
   (define-unit-binding a-dispatch-server-connect@
     dispatch-server-connect@ (import) (export dispatch-server-connect^))
   (define-unit-binding a-tcp@
@@ -159,6 +163,8 @@
          #:max-request-fields [max-request-fields 100]
          #:max-request-field-length [max-request-field-length (* 8 1024)]
          #:max-request-body-length [max-request-body-length (* 1 1024 1024)]
+         #:max-request-files [max-request-files 100]
+         #:max-request-file-length [max-request-file-length (* 1 1024 1024)]
          #:response-timeout [response-timeout 60]
          #:response-send-timeout [response-send-timeout 60])
   (define shutdowns
@@ -178,6 +184,8 @@
             #:max-request-fields max-request-fields
             #:max-request-field-length max-request-field-length
             #:max-request-body-length max-request-body-length
+            #:max-request-files max-request-files
+            #:max-request-file-length max-request-file-length
             #:response-timeout response-timeout
             #:response-send-timeout response-send-timeout))
          ports))
@@ -198,6 +206,8 @@
          #:max-request-field-length [max-request-field-length (* 8 1024)]
          #:max-request-fields [max-request-fields 100]
          #:max-request-body-length [max-request-body-length (* 1 1024 1024)]
+         #:max-request-files [max-request-files 100]
+         #:max-request-file-length [max-request-file-length (* 1 1024 1024)]
          #:response-timeout [response-timeout 60]
          #:response-send-timeout [response-send-timeout 60])
   (define shutdowns
@@ -218,6 +228,8 @@
              #:max-request-fields max-request-fields
              #:max-request-field-length max-request-field-length
              #:max-request-body-length max-request-body-length
+             #:max-request-files max-request-files
+             #:max-request-file-length max-request-file-length
              #:response-timeout response-timeout
              #:response-send-timeout response-send-timeout)])
          ips+ports))
