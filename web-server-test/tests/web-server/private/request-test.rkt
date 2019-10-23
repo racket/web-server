@@ -37,7 +37,7 @@
                              ip op (make-custodian) #f)
             headers)))
 
-(define (get-bindings post-data [max-body-length 1024])
+(define (get-bindings post-data [max-body-length 1024] [max-files 100] [max-file-length (* 1 1024 1024)])
   (define-values (conn headers)
     (make-mock-connection&headers post-data))
   (call-with-values
@@ -48,14 +48,22 @@
                                   (cons (make-header #"content-type"
                                                      #"application/x-www-form-urlencoded")
                                         headers)
-                                  max-body-length))
+                                  max-body-length
+                                  max-files
+                                  max-file-length))
    (lambda (f s) f)))
 
-(define (get-post-data/raw post-data [max-body-length 1024])
+(define (get-post-data/raw post-data [max-body-length 1024] [max-files 100] [max-file-length (* 1 1024 1024)])
   (define-values (conn headers) (make-mock-connection&headers post-data))
   (call-with-values
    (lambda ()
-     (read-bindings&post-data/raw (connection-i-port conn) #"POST" (string->url "http://localhost") headers max-body-length))
+     (read-bindings&post-data/raw (connection-i-port conn)
+                                  #"POST"
+                                  (string->url "http://localhost")
+                                  headers
+                                  max-body-length
+                                  max-files
+                                  max-file-length))
    (lambda (f s) s)))
 
 (define tm (start-timer-manager))
@@ -92,6 +100,19 @@
 
 (define-syntax-rule (test-request/fixture filename e)
   (test-request filename (fixture filename) e))
+
+(define-syntax-rule (test-mime name data boundary ps)
+  (let ([r (read-mime-multipart data boundary)])
+    (test-equal? name (length r) (length ps))
+    (for ([rp (in-list r)]
+          [ep (in-list ps)])
+      (test-equal? name (mime-part-headers rp) (mime-part-headers ep))
+      (test-equal? name
+                   (port->bytes (mime-part-contents rp))
+                   (port->bytes (mime-part-contents ep))))))
+
+(define-syntax-rule (test-mime/fixture filename boundary ps)
+  (test-mime filename (fixture/ip filename) boundary ps))
 
 (define request-tests
   (test-suite
@@ -183,7 +204,147 @@
 
          (test-not-false
           "short input, short buffer 6/5"
-          (eof-object? (read-bytes/lazy 10 buf bufsize)))))))
+          (eof-object? (read-bytes/lazy 10 buf bufsize))))))
+
+    (test-suite
+     "in-http-lines"
+
+     (test-equal?
+      "empty input"
+      (sequence->list (in-http-lines (open-input-string "") 100))
+      '(#""))
+
+     (for ([bufsize (in-list '(1 2 4 8 16 32 64 128 256 512 1024 2048 4096))])
+       (test-equal?
+        "small input"
+        (sequence->list (in-http-lines (open-input-string "a\r\nb\r\nc\r\n") 100 bufsize))
+        '(#"a" #"b" #"c" #""))
+
+       (test-equal?
+        "small input, smaller limit"
+        (sequence->list (in-http-lines (open-input-string "a\r\nb\r\nc\r\n") 1 bufsize))
+        '(#"a"))
+
+       (test-equal?
+        "small input, middling limit"
+        (sequence->list (in-http-lines (open-input-string "a\r\nb\r\nc\r\n") 8 bufsize))
+        '(#"a" #"b" #"c\r"))))
+
+    (test-suite
+     "read-mime-multipart"
+
+     (test-exn
+      "multipart-body-empty"
+      (lambda (e)
+        (and (exn:fail:network? e)
+             (regexp-match #"malformed header" (exn-message e))))
+      (lambda _
+        (read-mime-multipart (fixture/ip "multipart-body-empty") #"abc")))
+
+     (test-mime/fixture
+      "multipart-body-fields-only"
+      #"abc"
+      (list
+       (mime-part (list (header #"Content-Disposition" #"multipart/form-data; name=\"x\""))
+                  (open-input-bytes #"42"))
+       (mime-part (list (header #"Content-Disposition" #"multipart/form-data; name=\"y\""))
+                  (open-input-bytes #"20"))))
+
+     (test-exn
+      "multipart-body-field-with-many-headers"
+      (lambda (e)
+        (and (exn:fail:network? e)
+             (regexp-match #"header count exceeds limit of 20" (exn-message e))))
+      (lambda _
+        (read-mime-multipart (fixture/ip "multipart-body-field-with-many-headers") #"abc" +inf.0)))
+
+     (test-mime/fixture
+      "multipart-body-field-without-name"
+      #"abc"
+      (list
+       (mime-part (list (header #"Content-Disposition" #"multipart/form-data"))
+                  (open-input-bytes #"42"))))
+
+     (test-mime/fixture
+      "multipart-body-field-without-data"
+      #"abc"
+      (list
+       (mime-part (list (header #"Content-Disposition" #"multipart/form-data; name=\"a\""))
+                  (open-input-bytes #""))))
+
+     (test-mime/fixture
+      "multipart-body-with-line-breaks"
+      #"abc"
+      (list
+       (mime-part (list (header #"Content-Disposition" #"multipart/form-data; name=\"f\"; filename=\"a.txt\""))
+                  (open-input-bytes #"a\r\nb\r\nc"))))
+
+     (test-mime/fixture
+      "multipart-body-with-long-field"
+      #"------------------------4cb1363b48c1c499"
+      (list
+       (mime-part (list (header #"Content-Disposition" #"multipart/form-data; name=\"a\""))
+                  (open-input-bytes (make-bytes 1000 97)))))
+
+     (test-exn
+      "multipart-body-with-long-field, shorter content length"
+      (lambda (e)
+        (and (exn:fail:network? e)
+             (regexp-match #"port closed prematurely" (exn-message e))))
+      (lambda _
+        (read-mime-multipart (fixture/ip "multipart-body-with-long-field")
+                             #"------------------------4cb1363b48c1c499"
+                             100)))
+
+     (test-exn
+      "multipart-body-with-long-files, small file limit"
+      (lambda (e)
+        (and (exn:fail:network? e)
+             (regexp-match #"too many fields" (exn-message e))))
+      (lambda _
+        (read-mime-multipart (fixture/ip "multipart-body-with-long-files")
+                             #"------------------------4cb1363b48c1c499"
+                             +inf.0
+                             2
+                             +inf.0)))
+
+     (test-exn
+      "multipart-body-with-long-files, small file length limit"
+      (lambda (e)
+        (and (exn:fail:network? e)
+             (regexp-match #"field exceeds max file length" (exn-message e))))
+      (lambda _
+        (read-mime-multipart (fixture/ip "multipart-body-with-long-files")
+                             #"------------------------4cb1363b48c1c499"
+                             +inf.0
+                             100
+                             100)))
+
+     (test-mime/fixture
+      "multipart-body-with-multiple-files"
+      #"abc"
+      (list
+       (mime-part (list (header #"Content-Disposition" #"multipart/form-data; name=\"f\"; filename=\"a.txt\""))
+                  (open-input-bytes #"a"))
+       (mime-part (list (header #"Content-Disposition" #"multipart/form-data; name=\"f\"; filename=\"b.txt\""))
+                  (open-input-bytes #"b"))
+       (mime-part (list (header #"Content-Disposition" #"multipart/form-data; name=\"f\"; filename=\"c.txt\""))
+                  (open-input-bytes #"c"))))
+
+     (test-mime/fixture
+      "multipart-body-without-disposition"
+      #"abc"
+      (list
+       (mime-part (list)
+                  (open-input-bytes #"42"))))
+
+     (test-exn
+      "multipart-body-without-end-boundary"
+      (lambda (e)
+        (and (exn:fail:network? e)
+             (regexp-match #"port closed prematurely" (exn-message e))))
+      (lambda _
+        (read-mime-multipart (fixture/ip "multipart-body-without-end-boundary") #"abc")))))
 
    (test-suite
     "Headers"
