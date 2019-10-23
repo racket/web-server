@@ -111,7 +111,7 @@
 (define-syntax-rule (test-request/fixture filename e)
   (test-request filename (fixture filename) e))
 
-(define-syntax-rule (test-mime name data boundary ps)
+(define-syntax-rule (test-multipart name data boundary ps)
   (let ([r (read-mime-multipart data boundary)])
     (test-equal? name (length r) (length ps))
     (for ([rp (in-list r)]
@@ -121,8 +121,8 @@
                    (port->bytes (mime-part-contents rp))
                    (port->bytes (mime-part-contents ep))))))
 
-(define-syntax-rule (test-mime/fixture filename boundary ps)
-  (test-mime filename (fixture/ip filename) boundary ps))
+(define-syntax-rule (test-multipart/fixture filename boundary ps)
+  (test-multipart filename (fixture/ip filename) boundary ps))
 
 (define request-tests
   (test-suite
@@ -270,7 +270,7 @@
       (lambda _
         (read-mime-multipart (fixture/ip "multipart-body-empty") #"abc")))
 
-     (test-mime/fixture
+     (test-multipart/fixture
       "multipart-body-fields-only"
       #"abc"
       (list
@@ -287,28 +287,28 @@
       (lambda _
         (read-mime-multipart (fixture/ip "multipart-body-field-with-many-headers") #"abc" +inf.0)))
 
-     (test-mime/fixture
+     (test-multipart/fixture
       "multipart-body-field-without-name"
       #"abc"
       (list
        (mime-part (list (header #"Content-Disposition" #"multipart/form-data"))
                   (open-input-bytes #"42"))))
 
-     (test-mime/fixture
+     (test-multipart/fixture
       "multipart-body-field-without-data"
       #"abc"
       (list
        (mime-part (list (header #"Content-Disposition" #"multipart/form-data; name=\"a\""))
                   (open-input-bytes #""))))
 
-     (test-mime/fixture
+     (test-multipart/fixture
       "multipart-body-with-line-breaks"
       #"abc"
       (list
        (mime-part (list (header #"Content-Disposition" #"multipart/form-data; name=\"f\"; filename=\"a.txt\""))
                   (open-input-bytes #"a\r\nb\r\nc"))))
 
-     (test-mime/fixture
+     (test-multipart/fixture
       "multipart-body-with-long-field"
       #"------------------------4cb1363b48c1c499"
       (list
@@ -362,7 +362,7 @@
                              100
                              100)))
 
-     (test-mime/fixture
+     (test-multipart/fixture
       "multipart-body-with-multiple-files"
       #"abc"
       (list
@@ -373,7 +373,7 @@
        (mime-part (list (header #"Content-Disposition" #"multipart/form-data; name=\"f\"; filename=\"c.txt\""))
                   (open-input-bytes #"c"))))
 
-     (test-mime/fixture
+     (test-multipart/fixture
       "multipart-body-without-disposition"
       #"abc"
       (list
