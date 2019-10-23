@@ -90,7 +90,8 @@
                                  headers
                                  max-request-body-length
                                  max-request-files
-                                 max-request-file-length))
+                                 max-request-file-length
+                                 max-request-field-length))
   (define request
     (make-request method uri headers bindings/raw-promise raw-post-data
                   host-ip host-port client-ip))
@@ -366,7 +367,7 @@
       (and t (regexp-match rx t)))))
 
 ;; read-bindings&post-data/raw: input-port symbol url (listof header?) number number number -> (values (or/c (listof binding?) string?) (or/c bytes? false/c?))
-(define (read-bindings&post-data/raw in meth uri headers max-body-length max-files max-file-length)
+(define (read-bindings&post-data/raw in meth uri headers max-body-length max-files max-file-length max-field-length)
   (define bindings-GET
     (delay
       (filter-map
@@ -419,11 +420,16 @@
           [(list _ content-boundary)
            (define content-length
              (cond
-               [(headers-assq* #"Content-Length" headers) => header-value]
-               [else (network-error 'read-bindings "multipart data without Content-Length is not allowed")]))
+               [(headers-assq* #"Content-Length" headers)
+                => (lambda (h)
+                     (string->number (bytes->string/utf-8 (header-value h))))]
+               [else #f]))
+
+           (unless content-length
+             (network-error 'read-bindings "multipart data without Content-Length is not allowed"))
 
            (define bindings
-             (for/list ([part (in-list (read-mime-multipart in content-boundary content-length max-files max-file-length))])
+             (for/list ([part (in-list (read-mime-multipart in content-boundary content-length max-files max-file-length max-field-length))])
                (match part
                  [(struct mime-part (headers contents))
                   (define rhs
@@ -439,15 +445,13 @@
 
                     [(#f (list _ _ f0 f1))
                      (make-binding:form (or f0 f1)
-                                        ;; FIXME
                                         (port->bytes contents))]
 
                     [((list _ _ f00 f01) (list _ _ f10 f11))
                      (make-binding:file (or f10 f11)
                                         (or f00 f01)
                                         headers
-                                        ;; FIXME
-                                        (port->bytes contents))])])))
+                                        contents)])])))
 
            (values (delay
                      (append (force bindings-GET) bindings))
@@ -529,7 +533,7 @@
   (in-generator
    (let loop ([buff #""]
               [remaining limit])
-     (define data (read-bytes bufsize in))
+     (define data (read-bytes (min remaining bufsize) in))
      (cond
        ;; the port was closed prematurely so yield whatever we buffered
        ;; up so far
@@ -635,7 +639,11 @@
 (define CRLF #"\r\n")
 
 ; read-mime-multipart : inp string number number number -> list-of mime-part
-(define (read-mime-multipart in boundary [max-length +inf.0] [max-files 100] [max-file-length (* 1 1024 1024)])
+(define (read-mime-multipart in boundary
+                             [max-length +inf.0]
+                             [max-files 100]
+                             [max-file-length (* 1 1024 1024)]
+                             [max-field-length (* 8 1024)])
   (define start-boundary (bytes-append #"--" boundary))
   (define end-boundary (bytes-append start-boundary #"--"))
   (define-values (more? next-line)
@@ -658,7 +666,7 @@
     (close-output-port out)
     (read-headers in MAX-HEADERS/FIELD (current-http-line-limit)))
 
-  (define (collect-part-content)
+  (define (collect-part-content file?)
     (define-values (in out)
       (make-spooled-temporary-file (* 1 1024 1024)))
 
@@ -675,8 +683,9 @@
 
           [else
            (define len* (+ len (bytes-length line) 2))
-           (when (> len* max-file-length)
-             (network-error 'read-mime-multipart "field exceeds max file length"))
+           (when (> len* (if file? max-file-length max-field-length))
+             (define who (if file? "file" "field"))
+             (network-error 'read-mime-multipart "~a exceeds max length" who))
 
            (display line out)
            (display CRLF out)
@@ -694,7 +703,8 @@
          (network-error 'read-mime-multipart "too many fields"))
 
        (define headers (collect-part-headers))
-       (define-values (content more-parts?) (collect-part-content))
+       (define-values (content more-parts?)
+         (collect-part-content (file-part? headers)))
        (define part (mime-part headers content))
        (define parts* (cons part parts))
        (if more-parts?
@@ -713,6 +723,11 @@
       (if (bytes=? (next-line) start-boundary)
           (read-parts)
           (skip-preamble)))))
+
+(define (file-part? headers)
+  (match (headers-assq* #"Content-Disposition" headers)
+    [(header _ (regexp #rx"filename=")) #t]
+    [_ #f]))
 
 (module+ internal-test
   (provide (struct-out mime-part)

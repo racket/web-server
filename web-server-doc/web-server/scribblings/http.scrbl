@@ -59,11 +59,23 @@ The @web-server implements many HTTP libraries that are provided by this module.
 
 @defstruct[(binding:file binding) ([filename bytes?]
                                    [headers (listof header?)]
-                                   [content bytes?])]{
- Represents the uploading of the file @racket[filename] with the id @racket[id]
- and the content @racket[content], where @racket[headers] are the additional headers from
- the MIME envelope the file was in. (For example, the @racket[#"Content-Type"] header may
- be included by some browsers.)
+                                   [in input-port?])]{
+
+  Represents the uploading of the file @racket[filename] with the
+  id @racket[id] and the content input port @racket[in], where
+  @racket[headers] are the additional headers from the MIME envelope
+  the file was in.  For example, the @racket[#"Content-Type"] header
+  may be included by some browsers.
+
+  @history[
+    #:changed "1.6" @elem{Replaced the @tt{content} field with @racket[binding:file-in].}
+  ]
+}
+
+@defproc[(binding:file-content [binding binding:form?]) bytes?]{
+  Reads the entire file into a byte string. This function is provided
+  for backwards-compatibilty and should be avoided.  Instead, you
+  should read from the file's input port (@racket[binding:file-in]).
 }
 
 @defproc[(bindings-assq [id bytes?]
@@ -137,8 +149,8 @@ they are provided for compatibility with old code.}
                        (cons/c symbol? bytes?)))]{
  Translates the @racket[request-bindings/raw] of @racket[req] by
  interpreting @racket[bytes?] as @racket[string?]s, except in the case
- of @racket[binding:file] bindings, which are left as is. Ids are then
- translated into lowercase symbols.
+ of @racket[binding:file] bindings, whose contents are returned as
+ bytes. Ids are then translated into lowercase symbols.
 }
 
 @defproc[(request-headers [req request?])

@@ -16,9 +16,9 @@
          [(struct binding:form (id value))
           (cons (lowercase-symbol! (bytes->string/utf-8 id))
                 (bytes->string/utf-8 value))]
-         [(struct binding:file (id fname headers value))
+         [(and (struct binding:file (id fname headers _)) b)
           (cons (lowercase-symbol! (bytes->string/utf-8 id))
-                value)])
+                (binding:file-content b))])
        (request-bindings/raw request)))
 
 ; extract-binding/single : sym (listof (cons str str)) -> str
@@ -29,7 +29,7 @@
      (error 'extract-binding/single "~e not found in ~e" name bindings)]
     [(empty? (rest lst))
      (first lst)]
-    [else 
+    [else
      (error 'extract-binding/single "~e occurs multiple times in ~e" name bindings)]))
 
 ; extract-bindings : sym (listof (cons str str)) -> (listof str)
@@ -46,7 +46,7 @@
 (provide/contract
  [extract-binding/single (symbol? (listof (cons/c symbol? any/c)) . -> . any/c)]
  [extract-bindings (symbol? (listof (cons/c symbol? any/c)) . -> . (listof any/c))]
- [exists-binding? (symbol? (listof (cons/c symbol? any/c)) . -> . boolean?)]   
+ [exists-binding? (symbol? (listof (cons/c symbol? any/c)) . -> . boolean?)]
  [request-bindings (request? . -> . (listof (or/c (cons/c symbol? string?)
                                                   (cons/c symbol? bytes?))))]
  [request-headers (request? . -> . (listof (cons/c symbol? string?)))])

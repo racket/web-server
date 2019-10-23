@@ -37,7 +37,11 @@
                              ip op (make-custodian) #f)
             headers)))
 
-(define (get-bindings post-data [max-body-length 1024] [max-files 100] [max-file-length (* 1 1024 1024)])
+(define (get-bindings post-data
+                      [max-body-length 1024]
+                      [max-files 100]
+                      [max-file-length (* 10 1024 1024)]
+                      [max-field-length (* 8 1024)])
   (define-values (conn headers)
     (make-mock-connection&headers post-data))
   (call-with-values
@@ -50,10 +54,15 @@
                                         headers)
                                   max-body-length
                                   max-files
-                                  max-file-length))
+                                  max-file-length
+                                  max-field-length))
    (lambda (f s) f)))
 
-(define (get-post-data/raw post-data [max-body-length 1024] [max-files 100] [max-file-length (* 1 1024 1024)])
+(define (get-post-data/raw post-data
+                           [max-body-length 1024]
+                           [max-files 100]
+                           [max-file-length (* 10 1024 1024)]
+                           [max-field-length (* 8 1024)])
   (define-values (conn headers) (make-mock-connection&headers post-data))
   (call-with-values
    (lambda ()
@@ -63,7 +72,8 @@
                                   headers
                                   max-body-length
                                   max-files
-                                  max-file-length))
+                                  max-file-length
+                                  max-field-length))
    (lambda (f s) s)))
 
 (define tm (start-timer-manager))
@@ -316,6 +326,19 @@
                              100)))
 
      (test-exn
+      "multipart-body-with-long-field, short field limit"
+      (lambda (e)
+        (and (exn:fail:network? e)
+             (regexp-match #"field exceeds max length" (exn-message e))))
+      (lambda _
+        (read-mime-multipart (fixture/ip "multipart-body-with-long-field")
+                             #"------------------------4cb1363b48c1c499"
+                             +inf.0
+                             +inf.0
+                             +inf.0
+                             10)))
+
+     (test-exn
       "multipart-body-with-long-files, small file limit"
       (lambda (e)
         (and (exn:fail:network? e)
@@ -331,7 +354,7 @@
       "multipart-body-with-long-files, small file length limit"
       (lambda (e)
         (and (exn:fail:network? e)
-             (regexp-match #"field exceeds max file length" (exn-message e))))
+             (regexp-match #"file exceeds max length" (exn-message e))))
       (lambda _
         (read-mime-multipart (fixture/ip "multipart-body-with-long-files")
                              #"------------------------4cb1363b48c1c499"
@@ -512,7 +535,7 @@
 
      (test-equal?
       "Simple (File)"
-      (let ([binds (list (make-binding:file #"key" #"name" empty #"val"))])
+      (let ([binds (list (make-binding:file #"key" #"name" empty (open-input-bytes #"val")))])
         (binding:file-content (bindings-assq #"key" binds)))
       #"val")
 
@@ -655,7 +678,22 @@
      (test-equal?
       "simple test 3"
       (binding:form-value (bindings-assq #"hello" (force (get-bindings "hello=world"))))
-      #"world")))))
+      #"world"))
+
+    (test-suite
+     "File Uploads"
+
+     (let ([r (test-read-request (fixture "post-with-short-file"))])
+       (check-equal? (length (hash-ref r 'bindings)) 1)
+       (check-equal? (binding-id (car (hash-ref r 'bindings))) #"file")
+       (check-equal? (binding:file-filename (car (hash-ref r 'bindings))) #"blob1.dat")
+       (check-equal? (binding:file-content (car (hash-ref r 'bindings))) #"aaaa"))
+
+     (let ([r (test-read-request (fixture "post-with-long-file"))])
+       (check-equal? (length (hash-ref r 'bindings)) 1)
+       (check-equal? (binding-id (car (hash-ref r 'bindings))) #"somename")
+       (check-equal? (binding:file-filename (car (hash-ref r 'bindings))) #"racket-logo.svg")
+       (check-equal? (bytes-length (binding:file-content (car (hash-ref r 'bindings)))) 1321))))))
 
 (module+ test
   (require rackunit/text-ui)
