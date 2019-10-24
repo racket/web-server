@@ -59,23 +59,38 @@ The @web-server implements many HTTP libraries that are provided by this module.
 
 @defstruct[(binding:file binding) ([filename bytes?]
                                    [headers (listof header?)]
-                                   [in input-port?])]{
+                                   [content bytes?])]{
 
-  Represents the uploading of the file @racket[filename] with the
-  id @racket[id] and the content input port @racket[in], where
-  @racket[headers] are the additional headers from the MIME envelope
-  the file was in.  For example, the @racket[#"Content-Type"] header
-  may be included by some browsers.
+  This struct has been superseded by @racket[binding:file/port].
 
-  @history[
-    #:changed "1.6" @elem{Replaced the @tt{content} field with @racket[binding:file-in].}
-  ]
+  Represents the uploading of the file @racket[filename] with the id
+  @racket[id] and the content @racket[content], where @racket[headers]
+  are the additional headers from the MIME envelope the file was in.
+  For example, the @racket[#"Content-Type"] header may be included by
+  some browsers.
 }
 
-@defproc[(binding:file-content [binding binding:form?]) bytes?]{
-  Reads the entire file into a byte string. This function is provided
-  for backwards-compatibilty and should be avoided.  Instead, you
-  should read from the file's input port (@racket[binding:file-in]).
+@defstruct[(binding:file/port binding:file) ([in input-port?])]{
+
+  Prior to version 1.6, all file uploads were represented using
+  @racket[binding:file]s.  In version 1.6, file uploads were changed
+  so that uploaded files can be offloaded to disk if they are larger
+  than some threshold.  This meant that the API provided by
+  @racket[binding:file] could not be used to represent these new types
+  of uploads so this struct was introduced to preserve
+  backwards-compatibility.
+
+  Values created with @racket[make-binding:file/port] and
+  @racket[make-binding:file] are instances of
+  @racket[binding:file/port] that are backwards-compatible with
+  @racket[binding:file].  Backwards-compatibility is preserved by
+  lazily hooking around @racket[binding:file-content] so that whenever
+  that procedure is applied to one of these values, the port's
+  contents are read, memoized and returned.
+
+  Going forward, you should avoid using @racket[binding:file-content]
+  and instead read from @racket[in] as it is significantly more memory
+  efficient to do so.
 }
 
 @defproc[(bindings-assq [id bytes?]

@@ -95,9 +95,9 @@ This module provides functions for launching dispatching servers.
 
  The @racket[#:max-request-file-length] argument controls the maxium
  size of each field within a multipart request.  Requests containing
- files or fields longer than this value are rejected.  Files longer
- than 1MB are written to disk, however, note that the entire file may
- be buffered in memory before that happens meaning that an individual
+ files longer than this value are rejected.  Files longer than 1MB are
+ offloaded to disk.  Note, however, that the entire file may be
+ buffered in memory before that happens meaning that an individual
  request can use a little over @racket[#:max-request-file-length]
  bytes per file upload regardless of how many files are being
  uploaded.

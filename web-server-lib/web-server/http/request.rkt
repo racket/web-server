@@ -448,10 +448,10 @@
                                         (port->bytes contents))]
 
                     [((list _ _ f00 f01) (list _ _ f10 f11))
-                     (make-binding:file (or f10 f11)
-                                        (or f00 f01)
-                                        headers
-                                        contents)])])))
+                     (make-binding:file/port (or f10 f11)
+                                             (or f00 f01)
+                                             headers
+                                             contents)])])))
 
            (values (delay
                      (append (force bindings-GET) bindings))
@@ -533,7 +533,7 @@
   (in-generator
    (let loop ([buff #""]
               [remaining limit])
-     (define data (read-bytes (min remaining bufsize) in))
+     (define data (read-bytes (inexact->exact (min remaining bufsize)) in))
      (cond
        ;; the port was closed prematurely so yield whatever we buffered
        ;; up so far

@@ -26,11 +26,11 @@
       [(struct binding:form (field value))
        `(li (ul (li "Field: " ,(bytes->string/utf-8 field))
                 (li "Value: " ,(bytes->string/utf-8 value))))]
-      [(struct binding:file (field filename headers _))
+      [(struct binding:file (field filename headers content))
        `(li (ul (li "Field: " ,(bytes->string/utf-8 field))
                 (li "Name: " ,(bytes->string/utf-8 filename))
                 (li "Headers: " (ul ,@(map header->xexpr headers)))
-                (li "Contents: " (pre ,(bytes->string/utf-8 (binding:file-content b))))))]))
+                (li "Contents: " (pre ,(bytes->string/utf-8 content)))))]))
   (response/xexpr
    `(html (body ([bgcolor "white"])
                 (p "Uploaded:"

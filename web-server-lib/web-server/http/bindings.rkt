@@ -16,9 +16,9 @@
          [(struct binding:form (id value))
           (cons (lowercase-symbol! (bytes->string/utf-8 id))
                 (bytes->string/utf-8 value))]
-         [(and (struct binding:file (id fname headers _)) b)
+         [(struct binding:file (id fname headers content))
           (cons (lowercase-symbol! (bytes->string/utf-8 id))
-                (binding:file-content b))])
+                content)])
        (request-bindings/raw request)))
 
 ; extract-binding/single : sym (listof (cons str str)) -> str
