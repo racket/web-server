@@ -36,6 +36,9 @@
         #:max-request-fields exact-positive-integer?
         #:max-request-field-length exact-positive-integer?
         #:max-request-body-length exact-positive-integer?
+        #:max-request-files exact-positive-integer?
+        #:max-request-file-length exact-positive-integer?
+        #:max-request-file-memory-threshold exact-positive-integer?
         #:response-timeout exact-positive-integer?
         #:response-send-timeout exact-positive-integer?)
        (-> void))]
@@ -54,6 +57,9 @@
         #:max-request-fields exact-positive-integer?
         #:max-request-field-length exact-positive-integer?
         #:max-request-body-length exact-positive-integer?
+        #:max-request-files exact-positive-integer?
+        #:max-request-file-length exact-positive-integer?
+        #:max-request-file-memory-threshold exact-positive-integer?
         #:response-timeout exact-positive-integer?
         #:response-send-timeout exact-positive-integer?)
        (-> void))]
@@ -72,6 +78,9 @@
         #:max-request-fields exact-positive-integer?
         #:max-request-field-length exact-positive-integer?
         #:max-request-body-length exact-positive-integer?
+        #:max-request-files exact-positive-integer?
+        #:max-request-file-length exact-positive-integer?
+        #:max-request-file-memory-threshold exact-positive-integer?
         #:response-timeout exact-positive-integer?
         #:response-send-timeout exact-positive-integer?)
        (-> void))]
@@ -120,6 +129,7 @@
          #:max-request-body-length [max-request-body-length (* 1 1024 1024)]
          #:max-request-files [max-request-files 100]
          #:max-request-file-length [max-request-file-length (* 10 1024 1024)]
+         #:max-request-file-memory-threshold [max-request-file-memory-threshold (* 1 1024 1024)]
          #:response-timeout [response-timeout 60]
          #:response-send-timeout [response-send-timeout 60])
   (define read-request
@@ -131,7 +141,8 @@
      #:max-request-field-length max-request-field-length
      #:max-request-body-length max-request-body-length
      #:max-request-files max-request-files
-     #:max-request-file-length max-request-file-length))
+     #:max-request-file-length max-request-file-length
+     #:max-request-file-memory-threshold max-request-file-memory-threshold))
   (define-unit-binding a-dispatch-server-connect@
     dispatch-server-connect@ (import) (export dispatch-server-connect^))
   (define-unit-binding a-tcp@
@@ -165,6 +176,7 @@
          #:max-request-body-length [max-request-body-length (* 1 1024 1024)]
          #:max-request-files [max-request-files 100]
          #:max-request-file-length [max-request-file-length (* 10 1024 1024)]
+         #:max-request-file-memory-threshold [max-request-file-memory-threshold (* 1 1024 1024)]
          #:response-timeout [response-timeout 60]
          #:response-send-timeout [response-send-timeout 60])
   (define shutdowns
@@ -186,6 +198,7 @@
             #:max-request-body-length max-request-body-length
             #:max-request-files max-request-files
             #:max-request-file-length max-request-file-length
+            #:max-request-file-memory-threshold max-request-file-memory-threshold
             #:response-timeout response-timeout
             #:response-send-timeout response-send-timeout))
          ports))
@@ -208,6 +221,7 @@
          #:max-request-body-length [max-request-body-length (* 1 1024 1024)]
          #:max-request-files [max-request-files 100]
          #:max-request-file-length [max-request-file-length (* 10 1024 1024)]
+         #:max-request-file-memory-threshold [max-request-file-memory-threshold (* 1 1024 1024)]
          #:response-timeout [response-timeout 60]
          #:response-send-timeout [response-send-timeout 60])
   (define shutdowns
@@ -230,6 +244,7 @@
              #:max-request-body-length max-request-body-length
              #:max-request-files max-request-files
              #:max-request-file-length max-request-file-length
+             #:max-request-file-memory-threshold max-request-file-memory-threshold
              #:response-timeout response-timeout
              #:response-send-timeout response-send-timeout)])
          ips+ports))

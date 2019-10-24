@@ -51,11 +51,7 @@
                                   (string->url "http://localhost")
                                   (cons (make-header #"content-type"
                                                      #"application/x-www-form-urlencoded")
-                                        headers)
-                                  max-body-length
-                                  max-files
-                                  max-file-length
-                                  max-field-length))
+                                        headers)))
    (lambda (f s) f)))
 
 (define (get-post-data/raw post-data
@@ -69,11 +65,7 @@
      (read-bindings&post-data/raw (connection-i-port conn)
                                   #"POST"
                                   (string->url "http://localhost")
-                                  headers
-                                  max-body-length
-                                  max-files
-                                  max-file-length
-                                  max-field-length))
+                                  headers))
    (lambda (f s) s)))
 
 (define tm (start-timer-manager))
@@ -217,30 +209,6 @@
           (eof-object? (read-bytes/lazy 10 buf bufsize))))))
 
     (test-suite
-     "in-http-lines"
-
-     (test-equal?
-      "empty input"
-      (sequence->list (in-http-lines (open-input-string "") 100))
-      '(#""))
-
-     (for ([bufsize (in-list '(1 2 4 8 16 32 64 128 256 512 1024 2048 4096))])
-       (test-equal?
-        "small input"
-        (sequence->list (in-http-lines (open-input-string "a\r\nb\r\nc\r\n") 100 bufsize))
-        '(#"a" #"b" #"c" #""))
-
-       (test-equal?
-        "small input, smaller limit"
-        (sequence->list (in-http-lines (open-input-string "a\r\nb\r\nc\r\n") 1 bufsize))
-        '(#"a"))
-
-       (test-equal?
-        "small input, middling limit"
-        (sequence->list (in-http-lines (open-input-string "a\r\nb\r\nc\r\n") 8 bufsize))
-        '(#"a" #"b" #"c\r"))))
-
-    (test-suite
      "make-spooled-temporary-file"
 
      (test-equal?
@@ -285,7 +253,7 @@
         (and (exn:fail:network? e)
              (regexp-match #"header count exceeds limit of 20" (exn-message e))))
       (lambda _
-        (read-mime-multipart (fixture/ip "multipart-body-field-with-many-headers") #"abc" +inf.0)))
+        (read-mime-multipart (fixture/ip "multipart-body-field-with-many-headers") #"abc")))
 
      (test-multipart/fixture
       "multipart-body-field-without-name"
@@ -295,11 +263,19 @@
                   (open-input-bytes #"42"))))
 
      (test-multipart/fixture
-      "multipart-body-field-without-data"
+      "multipart-body-field-empty"
       #"abc"
       (list
        (mime-part (list (header #"Content-Disposition" #"multipart/form-data; name=\"a\""))
                   (open-input-bytes #""))))
+
+     (test-exn
+      "multipart-body-field-without-data"
+      (lambda (e)
+        (and (exn:fail:network? e)
+             (regexp-match #"port closed prematurely" (exn-message e))))
+            (lambda _
+        (read-mime-multipart (fixture/ip "multipart-body-field-without-data") #"abc")))
 
      (test-multipart/fixture
       "multipart-body-with-line-breaks"
@@ -316,16 +292,6 @@
                   (open-input-bytes (make-bytes 1000 97)))))
 
      (test-exn
-      "multipart-body-with-long-field, shorter content length"
-      (lambda (e)
-        (and (exn:fail:network? e)
-             (regexp-match #"port closed prematurely" (exn-message e))))
-      (lambda _
-        (read-mime-multipart (fixture/ip "multipart-body-with-long-field")
-                             #"------------------------4cb1363b48c1c499"
-                             100)))
-
-     (test-exn
       "multipart-body-with-long-field, short field limit"
       (lambda (e)
         (and (exn:fail:network? e)
@@ -333,22 +299,24 @@
       (lambda _
         (read-mime-multipart (fixture/ip "multipart-body-with-long-field")
                              #"------------------------4cb1363b48c1c499"
-                             +inf.0
-                             +inf.0
-                             +inf.0
-                             10)))
+                             #:max-field-length 10)))
 
      (test-exn
       "multipart-body-with-long-files, small file limit"
       (lambda (e)
         (and (exn:fail:network? e)
-             (regexp-match #"too many fields" (exn-message e))))
+             (regexp-match #"too many files" (exn-message e))))
       (lambda _
         (read-mime-multipart (fixture/ip "multipart-body-with-long-files")
                              #"------------------------4cb1363b48c1c499"
-                             +inf.0
-                             2
-                             +inf.0)))
+                             #:max-files 2)))
+
+     (test-not-exn
+      "multipart-body-with-long-files, small field limit"
+      (lambda _
+        (read-mime-multipart (fixture/ip "multipart-body-with-long-files")
+                             #"------------------------4cb1363b48c1c499"
+                             #:max-fields 2)))
 
      (test-exn
       "multipart-body-with-long-files, small file length limit"
@@ -358,9 +326,8 @@
       (lambda _
         (read-mime-multipart (fixture/ip "multipart-body-with-long-files")
                              #"------------------------4cb1363b48c1c499"
-                             +inf.0
-                             100
-                             100)))
+                             #:max-files 100
+                             #:max-file-length 100)))
 
      (test-multipart/fixture
       "multipart-body-with-multiple-files"

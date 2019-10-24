@@ -40,6 +40,7 @@ This module provides functions for launching dispatching servers.
                 [#:max-request-body-length max-request-body-length exact-positive-integer? (* 1 1024 1024)]
                 [#:max-request-files max-request-files exact-positive-integer? 100]
                 [#:max-request-file-length max-request-file-length exact-positive-integer? (* 10 1024 1024)]
+                [#:max-request-file-memory-threshold max-request-file-memory-threshold exact-positive-integer? (* 1 1024 1024)]
                 [#:response-timeout response-timeout exact-positive-integer? 60]
                 [#:response-send-timeout response-send-timeout exact-positive-integer? 60])
          (-> void)]{
@@ -75,7 +76,7 @@ This module provides functions for launching dispatching servers.
  request line than this value are rejected.
 
  The @racket[#:max-request-fields] argument controls how many request
- haders there can be per request.  Requests with more headers than
+ headers there can be per request.  Requests with more headers than
  this value are rejected.
 
  The @racket[#:max-request-field-length] argument controls how long
@@ -89,18 +90,16 @@ This module provides functions for launching dispatching servers.
  and @racket[#:max-request-file-length] below for details on how those
  types of requests are limited.
 
- The @racket[#:max-request-files] argument controls how many files and
- fields can be sent to the server in a multipart request.  Requests
- containing more fields than this value are rejected.
+ The @racket[#:max-request-files] argument controls how many files can
+ be sent to the server in a multipart request.  Requests containing
+ more files than this value are rejected.
 
  The @racket[#:max-request-file-length] argument controls the maxium
  size of each field within a multipart request.  Requests containing
- files longer than this value are rejected.  Files longer than 1MB are
- offloaded to disk.  Note, however, that the entire file may be
- buffered in memory before that happens meaning that an individual
- request can use a little over @racket[#:max-request-file-length]
- bytes per file upload regardless of how many files are being
- uploaded.
+ files longer than this value are rejected.  Files longer than
+ @racket[#:max-request-file-memory-threshold] are automatically
+ offloaded to disk (into temporary files) to avoid running out of
+ memory.
 
  The @racket[#:response-timeout] argument controls how long individual
  request handlers are allowed to run until they write their first byte
@@ -138,6 +137,7 @@ from a given path:
   #:changed "1.6" @elem{Added the @racket[#:max-request-body-length] argument.}
   #:changed "1.6" @elem{Added the @racket[#:max-request-files] argument.}
   #:changed "1.6" @elem{Added the @racket[#:max-request-file-length] argument.}
+  #:changed "1.6" @elem{Added the @racket[#:max-request-file-memory-threshold] argument.}
   #:changed "1.6" @elem{Added the @racket[#:response-timeout] argument.}
   #:changed "1.6" @elem{Added the @racket[#:response-send-timeout] argument.}
   #:changed "1.1" @elem{Added the @racket[#:dispatch-server-connect@] argument.}]}
@@ -162,6 +162,7 @@ from a given path:
                       [#:max-request-body-length max-request-body-length exact-positive-integer? (* 1 1024 1024)]
                       [#:max-request-files max-request-files exact-positive-integer? 100]
                       [#:max-request-file-length max-request-file-length exact-positive-integer? (* 10 1024 1024)]
+                      [#:max-request-file-memory-threshold max-request-file-memory-threshold exact-positive-integer? (* 1 1024 1024)]
                       [#:response-timeout response-timeout exact-positive-integer? 60]
                       [#:response-send-timeout response-send-timeout exact-positive-integer? 60])
          (-> void)]{
@@ -176,6 +177,7 @@ from a given path:
   #:changed "1.6" @elem{Added the @racket[#:max-request-body-length] argument.}
   #:changed "1.6" @elem{Added the @racket[#:max-request-files] argument.}
   #:changed "1.6" @elem{Added the @racket[#:max-request-file-length] argument.}
+  #:changed "1.6" @elem{Added the @racket[#:max-request-file-memory-threshold] argument.}
   #:changed "1.6" @elem{Added the @racket[#:response-timeout] argument.}
   #:changed "1.6" @elem{Added the @racket[#:response-send-timeout] argument.}
   #:changed "1.1" @elem{Added the @racket[#:dispatch-server-connect@] argument.}]}
@@ -199,6 +201,7 @@ from a given path:
                           [#:max-request-body-length max-request-body-length exact-positive-integer? (* 1 1024 1024)]
                           [#:max-request-files max-request-files exact-positive-integer? 100]
                           [#:max-request-file-length max-request-file-length exact-positive-integer? (* 10 1024 1024)]
+                          [#:max-request-file-memory-threshold max-request-file-memory-threshold exact-positive-integer? (* 1 1024 1024)]
                           [#:response-timeout response-timeout exact-positive-integer? 60]
                           [#:response-send-timeout response-send-timeout exact-positive-integer? 60])
          (-> void)]{
@@ -213,6 +216,7 @@ from a given path:
   #:changed "1.6" @elem{Added the @racket[#:max-request-body-length] argument.}
   #:changed "1.6" @elem{Added the @racket[#:max-request-files] argument.}
   #:changed "1.6" @elem{Added the @racket[#:max-request-file-length] argument.}
+  #:changed "1.6" @elem{Added the @racket[#:max-request-file-memory-threshold] argument.}
   #:changed "1.6" @elem{Added the @racket[#:response-timeout] argument.}
   #:changed "1.6" @elem{Added the @racket[#:response-send-timeout] argument.}
   #:changed "1.1" @elem{Added the @racket[#:dispatch-server-connect@] argument.}]}
