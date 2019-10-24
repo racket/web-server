@@ -44,29 +44,44 @@
   (value)
   #:transparent)
 
-(define-serializable-struct/versions (binding:file binding)
-  1 (filename headers in)
-  ([0
-    (lambda (filename headers content)
-      (binding:file filename headers (open-input-bytes content)))
-    (lambda ()
-      (define b0 (binding:file #f #f #f))
-      (values b0
-              (lambda (b)
-                (set-binding:file-filename! b0 (binding:file-filename b))
-                (set-binding:file-headers! b0 (binding:file-headers b))
-                (set-binding:file-in! b0 (open-input-bytes (binding:file-headers b))))))])
-  #:mutable
+(define-serializable-struct (binding:file binding)
+  (filename headers [content #:mutable])
+  #:constructor-name -binding:file
   #:transparent)
 
-(define binding:file-content
-  (let ([mem (make-weak-hasheq)]
-        [sem (make-semaphore 1)])
-    (lambda (b)
-      (force
+(define-serializable-struct (binding:file/port binding:file)
+  (in)
+  #:constructor-name -binding:file/port
+  #:transparent)
+
+;; File uploads were changed in version 1.6 so that they can be
+;; offloaded to a real file on disk if they are large enough. To
+;; preserve backwards-compatibility with `binding:file', we added
+;; the new `binding:file/port' struct and this contstructor.
+;;
+;; Every `binding:file/port' struct is backed by an input port and it
+;; impersonates `binding:file' such that when `binding:file-content' is
+;; called on the impersonator, the port content is read, memoized and
+;; returned.
+(define (make-binding:file/port id filename headers content-or-in)
+  (impersonate-struct
+   (-binding:file/port id filename headers
+                       (and (bytes? content-or-in) content-or-in)
+                       (if (bytes? content-or-in)
+                           (open-input-bytes content-or-in)
+                           content-or-in))
+   struct:binding:file/port
+   binding:file-content
+   (let ([sem (make-semaphore 1)])
+     (lambda (b c)
        (call-with-semaphore sem
          (lambda _
-           (hash-ref! mem b (delay (port->bytes (binding:file-in b))))))))))
+           (cond
+             [c c]
+             [else
+              (define content (port->bytes (binding:file/port-in b)))
+              (set-binding:file-content! b content)
+              content])))))))
 
 (define (bindings-assq ti bs)
   (match bs
@@ -91,8 +106,16 @@
  [struct (binding:file binding) ([id bytes?]
                                  [filename bytes?]
                                  [headers (listof header?)]
-                                 [in input-port?])]
- [binding:file-content (-> binding:file? bytes?)])
+                                 [content bytes?])]
+ [struct (binding:file/port binding:file) ([id bytes?]
+                                           [filename bytes?]
+                                           [headers (listof header?)]
+                                           [content bytes?]
+                                           [in input-port?])]
+ [make-binding:file/port (-> bytes? bytes? (listof header?) input-port? binding:file/port?)]
+ [rename make-binding:file/port
+         make-binding:file
+         (-> bytes? bytes? (listof header?) bytes? binding:file?)])
 
 (define-serializable-struct
   request

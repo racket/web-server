@@ -535,7 +535,13 @@
 
      (test-equal?
       "Simple (File)"
-      (let ([binds (list (make-binding:file #"key" #"name" empty (open-input-bytes #"val")))])
+      (let ([binds (list (make-binding:file #"key" #"name" empty #"val"))])
+        (binding:file-content (bindings-assq #"key" binds)))
+      #"val")
+
+     (test-equal?
+      "Simple (File/port)"
+      (let ([binds (list (make-binding:file/port #"key" #"name" empty (open-input-bytes #"val")))])
         (binding:file-content (bindings-assq #"key" binds)))
       #"val")
 

@@ -38,11 +38,20 @@
                                                                                   "host" 80 "client"))
                    '((key . "val")
                      (key2 . "val"))))
+
     (test-case
      "File"
      (check-equal? (request-bindings
                     (make-request #"GET" (string->url "http://test.com/foo")
-                                  empty (delay (list (make-binding:file #"key" #"file" empty (open-input-bytes #"val")))) #f
+                                  empty (delay (list (make-binding:file #"key" #"file" empty #"val"))) #f
+                                  "host" 80 "client"))
+                   '((key . #"val"))))
+
+    (test-case
+     "File/port"
+     (check-equal? (request-bindings
+                    (make-request #"GET" (string->url "http://test.com/foo")
+                                  empty (delay (list (make-binding:file/port #"key" #"file" empty (open-input-bytes #"val")))) #f
                                   "host" 80 "client"))
                    '((key . #"val")))))
 
