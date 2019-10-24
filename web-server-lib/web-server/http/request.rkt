@@ -4,7 +4,6 @@
          net/url
          racket/contract
          racket/file
-         racket/generator
          racket/list
          racket/match
          racket/port
@@ -45,7 +44,8 @@
                #:max-request-field-length exact-positive-integer?
                #:max-request-body-length exact-positive-integer?
                #:max-request-files exact-positive-integer?
-               #:max-request-file-length exact-positive-integer?)
+               #:max-request-file-length exact-positive-integer?
+               #:max-request-file-memory-threshold exact-positive-integer?)
               read-request/c)]
  [rename ext:read-request
          read-request
@@ -64,7 +64,8 @@
           #:max-request-field-length [max-request-field-length (* 8 1024)]
           #:max-request-body-length [max-request-body-length (* 1 1024 1024)]
           #:max-request-files [max-request-files 100]
-          #:max-request-file-length [max-request-file-length (* 10 1024 1024)])
+          #:max-request-file-length [max-request-file-length (* 10 1024 1024)]
+          #:max-request-file-memory-threshold [max-request-file-memory-threshold (* 1 1024 1024)])
          conn host-port port-addresses)
 
   (reset-connection-timeout! conn read-timeout)
@@ -84,14 +85,14 @@
   (define-values (host-ip client-ip)
     (port-addresses ip))
   (define-values (bindings/raw-promise raw-post-data)
-    (read-bindings&post-data/raw data-ip
-                                 method
-                                 uri
-                                 headers
-                                 max-request-body-length
-                                 max-request-files
-                                 max-request-file-length
-                                 max-request-field-length))
+    (read-bindings&post-data/raw data-ip method uri headers
+                                 #:max-body-length max-request-body-length
+                                 #:multipart-reader (lambda (in boundary)
+                                                      (read-mime-multipart in boundary
+                                                                           #:max-files max-request-files
+                                                                           #:max-file-length max-request-file-length
+                                                                           #:max-file-memory-threshold max-request-file-memory-threshold
+                                                                           #:max-field-length max-request-field-length))))
   (define request
     (make-request method uri headers bindings/raw-promise raw-post-data
                   host-ip host-port client-ip))
@@ -366,8 +367,10 @@
     (lambda (t)
       (and t (regexp-match rx t)))))
 
-;; read-bindings&post-data/raw: input-port symbol url (listof header?) number number number -> (values (or/c (listof binding?) string?) (or/c bytes? false/c?))
-(define (read-bindings&post-data/raw in meth uri headers max-body-length max-files max-file-length max-field-length)
+(define (read-bindings&post-data/raw in meth uri headers
+                                     #:max-body-length [max-body-length +inf.0]
+                                     #:multipart-reader [multipart-reader (lambda _
+                                                                            (raise-user-error 'read-request "multipart reader not set up"))])
   (define bindings-GET
     (delay
       (filter-map
@@ -418,18 +421,8 @@
     [(match-multipart content-type)
      => (match-lambda
           [(list _ content-boundary)
-           (define content-length
-             (cond
-               [(headers-assq* #"Content-Length" headers)
-                => (lambda (h)
-                     (string->number (bytes->string/utf-8 (header-value h))))]
-               [else #f]))
-
-           (unless content-length
-             (network-error 'read-bindings "multipart data without Content-Length is not allowed"))
-
            (define bindings
-             (for/list ([part (in-list (read-mime-multipart in content-boundary content-length max-files max-file-length max-field-length))])
+             (for/list ([part (in-list (multipart-reader in content-boundary))])
                (match part
                  [(struct mime-part (headers contents))
                   (define rhs
@@ -528,57 +521,15 @@
 (struct mime-part (headers contents)
   #:transparent)
 
-; in-http-lines : inp number -> sequence-of bytes
-(define (in-http-lines in limit [bufsize (* 16 1024)])
-  (in-generator
-   (let loop ([buff #""]
-              [remaining limit])
-     (define data (read-bytes (inexact->exact (min remaining bufsize)) in))
-     (cond
-       ;; the port was closed prematurely so yield whatever we buffered
-       ;; up so far
-       [(eof-object? data)
-        (yield buff)]
-
-       [else
-        (define bytes-read (bytes-length data))
-        (define remaining* (- remaining bytes-read))
-        (define (yield-lines buff)
-          (let loop ([buff buff])
-            (cond
-              [(bytes-find-crlf buff (bytes-length buff))
-               => (lambda (pos)
-                    (yield (subbytes buff 0 pos))
-                    (loop (subbytes buff (+ pos 2))))]
-
-              [else buff])))
-
-        (cond
-          ;; we've managed to read past the limit so split the lines
-          ;; up to that point and then discard the rest
-          [(< remaining* 0)
-           (define data* (subbytes data 0 (+ bytes-read remaining*)))
-           (define buff* (yield-lines (bytes-append buff data*)))
-           (yield buff*)]
-
-          ;; we haven't hit the limit yet so we can split whatever
-          ;; lines we've got and then recur
-          [(> remaining* 0)
-           (define buff* (yield-lines (bytes-append buff data)))
-           (loop buff* remaining*)]
-
-          ;; we've hit the limit exactly so yield what we've got
-          [else
-           (define buff* (yield-lines (bytes-append buff data)))
-           (yield buff*)])]))))
-
-(module+ internal-test
-  (provide in-http-lines))
-
 ; make-spooled-temporary-file : number -> inp outp
-; Like make-pipe, but data is written to a real file if the total amount
-; of data starts to excceed `max-length'.
+; Like `make-pipe', but data is written to a real file if the total amount
+; of data starts to excceed `max-length'.  This data type is *not
+; safe* against data races!
 (define (make-spooled-temporary-file max-length)
+  ; Create the file up-front so that we always have a file path to
+  ; refer to. This is also used as the name of the custom ports so that
+  ; application authors can access the path of the underlying file to
+  ; operate directly on it if they need to.
   (define filename (make-temporary-file))
   (define-values (in out)
     (make-pipe))
@@ -636,98 +587,137 @@
 ;; field in practice.
 (define MAX-HEADERS/FIELD 20)
 
-(define CRLF #"\r\n")
+; Find the starting position of `needle' within `haystack'.
+(define (bytes-find haystack needle)
+  (define haystack-len (bytes-length haystack))
+  (define needle-len (bytes-length needle))
+  (and (<= needle-len haystack-len)
+       (or (and (bytes=? (subbytes haystack 0 haystack-len) needle) 0)
+           (for*/first ([pos (in-range (add1 (- haystack-len needle-len)))]
+                        [haystack* (in-value (subbytes haystack pos (+ pos needle-len)))]
+                        #:when (bytes=? haystack* needle))
+             pos))))
 
-; read-mime-multipart : inp string number number number -> list-of mime-part
 (define (read-mime-multipart in boundary
-                             [max-length +inf.0]
-                             [max-files 100]
-                             [max-file-length (* 1 1024 1024)]
-                             [max-field-length (* 8 1024)])
+                             #:max-files [max-files 100]
+                             #:max-file-length [max-file-length (* 10 1024 1024)]
+                             #:max-file-memory-threshold [max-file-memory-threshold (* 1 1024 1024)]
+                             #:max-fields [max-fields 100]
+                             #:max-field-length [max-field-length (* 8 1024)])
   (define start-boundary (bytes-append #"--" boundary))
-  (define end-boundary (bytes-append start-boundary #"--"))
-  (define-values (more? next-line)
-    (sequence-generate (in-http-lines in max-length)))
+  (define start-boundary-len (bytes-length start-boundary))
+
+  (define bufsize (max start-boundary-len (* 64 1024)))
+  (define buf (make-bytes bufsize))
+
+  (define (find-boundary haystack)
+    (bytes-find haystack start-boundary))
+
+  (define (subport in n)
+    (make-limited-input-port in n #f))
 
   (define (collect-part-headers)
-    (define-values (in out)
-      (make-pipe))
-
-    (let loop ([line (next-line)])
-      (cond
-        [(bytes=? line #"")
-         (display CRLF out)]
-
-        [else
-         (display line out)
-         (display CRLF out)
-         (loop (next-line))]))
-
-    (close-output-port out)
     (read-headers in MAX-HEADERS/FIELD (current-http-line-limit)))
 
   (define (collect-part-content file?)
-    (define-values (in out)
-      (make-spooled-temporary-file (* 1 1024 1024)))
+    (define-values (content-in content-out)
+      (make-spooled-temporary-file max-file-memory-threshold))
 
-    (define-values (len more-parts?)
-      (let loop ([len 0])
-        (define line (next-line))
-        (cond
-          [(bytes=? line start-boundary)
-           (values len #t)]
+    (with-handlers ([(lambda (e) #t)
+                     (lambda (e)
+                       (delete-file/safe (object-name content-in))
+                       (raise e))])
 
-          [(or (bytes=? line #"")
-               (bytes=? line end-boundary))
-           (values len #f)]
+      ;; Increase `len' by `n', raising an exception if the limit is exceeded.
+      (define (increase-length len n)
+        (define len* (+ len n))
+        (begin0 len*
+          (when (> len* (if file? max-file-length max-field-length))
+            (define who (if file? "file" "field"))
+            (network-error 'read-mime-multipart "~a exceeds max length" who))))
 
-          [else
-           (define len* (+ len (bytes-length line) 2))
-           (when (> len* (if file? max-file-length max-field-length))
-             (define who (if file? "file" "field"))
-             (network-error 'read-mime-multipart "~a exceeds max length" who))
+      ;; Read unitl the position before the CRLF that precedes the
+      ;; boundary and then skip over the boundary in the input.
+      (define (copy-until-boundary! len pos)
+        (define pos* (max 0 (- pos 2)))
+        (increase-length len pos*)
+        (copy-port (subport in pos*) content-out)
 
-           (display line out)
-           (display CRLF out)
-           (loop len*)])))
+        (define line
+          (begin
+            ;; Skip the CRLF and then read the boundary line.
+            (read-http-line/limited in)
+            (read-http-line/limited in)))
 
-    ;; Strip the final CRLF from the contents.
-    (define limited-in (make-limited-input-port in (max 0 (- len 2))))
-    (close-output-port out)
-    (values limited-in more-parts?))
+        (when (eof-object? line)
+          (network-error 'read-mime-multipart "port closed prematurely"))
 
-  (define (read-parts [parts null])
-    (cond
-      [(more?)
-       (when (= (length parts) max-files)
-         (network-error 'read-mime-multipart "too many fields"))
+        (bytes=? line start-boundary))
 
-       (define headers (collect-part-headers))
-       (define-values (content more-parts?)
-         (collect-part-content (file-part? headers)))
-       (define part (mime-part headers content))
-       (define parts* (cons part parts))
-       (if more-parts?
-           (read-parts parts*)
-           (reverse parts*))]
+      (define more-parts?
+        (let loop ([len 0]
+                   [prev #""])
+          (define n (peek-bytes-avail! buf 0 #f in))
+          (cond
+            [(eof-object? n)
+             (network-error 'read-mime-multipart "port closed prematurely")]
 
-      [else
-       (reverse parts)]))
+            [else
+             (define bs (subbytes buf 0 n))
+             (cond
+               [(find-boundary bs)
+                => (lambda (pos)
+                     (copy-until-boundary! len pos))]
 
-  (with-handlers ([(lambda (e)
-                     (and (exn:fail:contract? e)
-                          (regexp-match #"sequence has no more values" (exn-message e))))
-                   (lambda _
-                     (network-error 'read-mime-multipart "port closed prematurely"))])
-    (let skip-preamble ()
-      (if (bytes=? (next-line) start-boundary)
-          (read-parts)
-          (skip-preamble)))))
+               [(find-boundary (bytes-append prev bs))
+                => (lambda (pos)
+                     (copy-until-boundary! len (- pos (bytes-length prev))))]
+
+               [else
+                (define new-len (increase-length len n))
+                (define new-prev (subbytes bs (max 0 (- n start-boundary-len))))
+                (copy-port (subport in n) content-out)
+                (loop new-len new-prev)])])))
+
+      (close-output-port content-out)
+      (values content-in more-parts?)))
+
+  (define (read-parts [parts null]
+                      [total-files 0]
+                      [total-fields 0])
+
+    (when (= total-files max-files)
+      (network-error 'read-mime-multipart "too many files"))
+
+    (when (= total-fields max-fields)
+      (network-error 'read-mime-multipart "too many fields"))
+
+    (define headers (collect-part-headers))
+    (define file? (file-part? headers))
+    (define-values (content more-parts?)
+      (collect-part-content file?))
+    (define part (mime-part headers content))
+    (define parts* (cons part parts))
+    (if more-parts?
+        (read-parts parts*
+                    (if file? (add1 total-files) total-files)
+                    (if file? total-fields (add1 total-fields)))
+        (reverse parts*)))
+
+  (let skip-preamble ()
+    (define line (read-http-line/limited in))
+    (if (bytes=? line start-boundary)
+        (read-parts)
+        (skip-preamble))))
 
 (define (file-part? headers)
   (match (headers-assq* #"Content-Disposition" headers)
     [(header _ (regexp #rx"filename=")) #t]
     [_ #f]))
+
+(define (delete-file/safe p)
+  (with-handlers ([exn:fail:filesystem? void])
+    (delete-file p)))
 
 (module+ internal-test
   (provide (struct-out mime-part)
