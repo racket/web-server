@@ -353,7 +353,58 @@
         (and (exn:fail:network? e)
              (regexp-match #"port closed prematurely" (exn-message e))))
       (lambda _
-        (read-mime-multipart (fixture/ip "multipart-body-without-end-boundary") #"abc")))))
+        (read-mime-multipart (fixture/ip "multipart-body-without-end-boundary") #"abc")))
+
+     (test-multipart/fixture
+      "multipart-body-with-mixture-of-fields-and-files"
+      #"abc"
+      (list
+       (mime-part (list (header #"Content-Disposition" #"multipart/form-data; name=\"f\"; filename=\"a.txt\""))
+                  (open-input-bytes #"a"))
+       (mime-part (list (header #"Content-Disposition" #"multipart/form-data; name=\"x\""))
+                  (open-input-bytes #"x"))
+       (mime-part (list (header #"Content-Disposition" #"multipart/form-data; name=\"f\"; filename=\"b.txt\""))
+                  (open-input-bytes #"b"))
+       (mime-part (list (header #"Content-Disposition" #"multipart/form-data; name=\"y\""))
+                  (open-input-bytes #"y"))
+       (mime-part (list (header #"Content-Disposition" #"multipart/form-data; name=\"f\"; filename=\"c.txt\""))
+                  (open-input-bytes #"c"))
+       (mime-part (list (header #"Content-Disposition" #"multipart/form-data; name=\"z\""))
+                  (open-input-bytes #"z"))))
+
+     (test-not-exn
+      "multipart-body-with-mixture-of-fields-and-files, fields within limit"
+      (lambda _
+        (read-mime-multipart (fixture/ip "multipart-body-with-mixture-of-fields-and-files")
+                             #"abc"
+                             #:max-fields 3)))
+
+     (test-not-exn
+      "multipart-body-with-mixture-of-fields-and-files, files within limit"
+      (lambda _
+        (read-mime-multipart (fixture/ip "multipart-body-with-mixture-of-fields-and-files")
+                             #"abc"
+                             #:max-files 3)))
+
+     (test-exn
+      "multipart-body-with-mixture-of-fields-and-files, fields above limit"
+      (lambda (e)
+        (and (exn:fail:network? e)
+             (regexp-match #"too many fields" (exn-message e))))
+      (lambda _
+        (read-mime-multipart (fixture/ip "multipart-body-with-mixture-of-fields-and-files")
+                             #"abc"
+                             #:max-fields 2)))
+
+     (test-exn
+      "multipart-body-with-mixture-of-fields-and-files, files above limit"
+      (lambda (e)
+        (and (exn:fail:network? e)
+             (regexp-match #"too many files" (exn-message e))))
+      (lambda _
+        (read-mime-multipart (fixture/ip "multipart-body-with-mixture-of-fields-and-files")
+                             #"abc"
+                             #:max-files 2)))))
 
    (test-suite
     "Headers"

@@ -686,23 +686,25 @@
                       [total-files 0]
                       [total-fields 0])
 
-    (when (= total-files max-files)
-      (network-error 'read-mime-multipart "too many files"))
-
-    (when (= total-fields max-fields)
-      (network-error 'read-mime-multipart "too many fields"))
-
     (define headers (collect-part-headers))
     (define file? (file-part? headers))
+    (define field? (not file?))
+    (define total-files* (if file? (add1 total-files) total-files))
+    (define total-fields* (if file? total-fields (add1 total-fields)))
+    (cond
+      [(and file? (> total-files* max-files))
+       (network-error 'read-mime-multipart "too many files")]
+
+      [(and field? (> total-fields* max-fields))
+       (network-error 'read-mime-multipart "too many fields")])
+
     (define-values (content more-parts?)
       (collect-part-content file?))
     (define part (mime-part headers content))
     (define parts* (cons part parts))
     (if more-parts?
-        (read-parts parts*
-                    (if file? (add1 total-files) total-files)
-                    (if file? total-fields (add1 total-fields)))
-        (reverse parts*)))
+      (read-parts parts* total-files* total-fields*)
+      (reverse parts*)))
 
   (let skip-preamble ()
     (define line (read-http-line/limited in))
