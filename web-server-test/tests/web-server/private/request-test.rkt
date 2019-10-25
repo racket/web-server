@@ -37,13 +37,10 @@
                              ip op (make-custodian) #f)
             headers)))
 
-(define (get-bindings post-data
-                      [max-body-length 1024]
-                      [max-files 100]
-                      [max-file-length (* 10 1024 1024)]
-                      [max-field-length (* 8 1024)])
+(define (get-bindings post-data)
   (define-values (conn headers)
     (make-mock-connection&headers post-data))
+
   (call-with-values
    (lambda ()
      (read-bindings&post-data/raw (connection-i-port conn)
@@ -52,21 +49,23 @@
                                   (cons (make-header #"content-type"
                                                      #"application/x-www-form-urlencoded")
                                         headers)))
-   (lambda (f s) f)))
 
-(define (get-post-data/raw post-data
-                           [max-body-length 1024]
-                           [max-files 100]
-                           [max-file-length (* 10 1024 1024)]
-                           [max-field-length (* 8 1024)])
-  (define-values (conn headers) (make-mock-connection&headers post-data))
+   (lambda (fields data)
+     fields)))
+
+(define (get-post-data/raw post-data)
+  (define-values (conn headers)
+    (make-mock-connection&headers post-data))
+
   (call-with-values
    (lambda ()
      (read-bindings&post-data/raw (connection-i-port conn)
                                   #"POST"
                                   (string->url "http://localhost")
                                   headers))
-   (lambda (f s) s)))
+
+   (lambda (fields data)
+     data)))
 
 (define tm (start-timer-manager))
 
@@ -211,21 +210,32 @@
     (test-suite
      "make-spooled-temporary-file"
 
-     (test-equal?
-      "doesn't spill"
-      (let-values ([(in out) (make-spooled-temporary-file 4096)])
-        (display "hello, world!" out)
-        (close-output-port out)
-        (port->bytes in))
-      #"hello, world!")
+     (let-values ([(in out) (make-spooled-temporary-file 4096)])
+       (display "hello, world!" out)
+       (close-output-port out)
 
-     (test-equal?
-      "spills"
-      (let-values ([(in out) (make-spooled-temporary-file 5)])
-        (display "hello, world!" out)
-        (close-output-port out)
-        (port->bytes in))
-      #"hello, world!"))
+       (test-equal?
+        "doesn't spill"
+        (port->bytes in)
+        #"hello, world!"))
+
+     (let-values ([(in out) (make-spooled-temporary-file 5)])
+       (display "hello, world!" out)
+       (close-output-port out)
+
+       (test-equal?
+        "its input port contains all data written to it"
+        (port->bytes in)
+        #"hello, world!")
+
+       (test-true
+        "it creates a temporary file"
+        (file-exists? (object-name in)))
+
+       (test-equal?
+        "the temporary file contains all the data written to the output port"
+        (file->bytes (object-name in))
+        #"hello, world!")))
 
     (test-suite
      "read-mime-multipart"
@@ -274,7 +284,7 @@
       (lambda (e)
         (and (exn:fail:network? e)
              (regexp-match #"port closed prematurely" (exn-message e))))
-            (lambda _
+      (lambda _
         (read-mime-multipart (fixture/ip "multipart-body-field-without-data") #"abc")))
 
      (test-multipart/fixture
@@ -404,7 +414,14 @@
       (lambda _
         (read-mime-multipart (fixture/ip "multipart-body-with-mixture-of-fields-and-files")
                              #"abc"
-                             #:max-files 2)))))
+                             #:max-files 2)))
+
+     (test-multipart/fixture
+      "multipart-body-with-long-preamble"
+      #"abc"
+      (list
+       (mime-part (list (header #"Content-Disposition" #"multipart/form-data; name=\"x\""))
+                  (open-input-bytes #"42"))))))
 
    (test-suite
     "Headers"
@@ -594,7 +611,7 @@
      "Headers"
 
      (test-request
-      "multi-line header values"
+      "line-folded header values"
       (fixture "post-with-multi-line-header")
       (hasheq
        'method #"POST"
@@ -603,6 +620,19 @@
                       (header #"Content-Type" #"text/plain")
                       (header #"Content-Length" #"42")
                       (header #"X-Multi-Line" #"hello there")
+                      (header #"X-Forty-Two" #"42"))
+       'body #"abcdefghijklmnopqrstuvwxyz1234567890abcdef"))
+
+     (test-request
+      "line-folded header values (tabbed)"
+      (fixture "post-with-multi-line-header-tabbed")
+      (hasheq
+       'method #"POST"
+       'uri #"/"
+       'headers (list (header #"Date" #"Fri, 31 Dec 1999 23:59:59 GMT")
+                      (header #"Content-Type" #"text/plain")
+                      (header #"Content-Length" #"42")
+                      (header #"X-Multi-Line" #"hello	there,	how are you?")
                       (header #"X-Forty-Two" #"42"))
        'body #"abcdefghijklmnopqrstuvwxyz1234567890abcdef"))
 
@@ -717,7 +747,15 @@
        (check-equal? (length (hash-ref r 'bindings)) 1)
        (check-equal? (binding-id (car (hash-ref r 'bindings))) #"somename")
        (check-equal? (binding:file-filename (car (hash-ref r 'bindings))) #"racket-logo.svg")
-       (check-equal? (bytes-length (binding:file-content (car (hash-ref r 'bindings)))) 1321))))))
+       (check-equal? (bytes-length (binding:file-content (car (hash-ref r 'bindings)))) 1321))
+
+     (test-exn
+      "post-with-multipart-data-without-disposition"
+      (lambda (e)
+        (and (exn:fail:network? e)
+             (regexp-match #"Couldn't extract form field name for file upload" (exn-message e))))
+      (lambda _
+        (test-read-request (fixture "post-with-multipart-data-without-disposition"))))))))
 
 (module+ test
   (require rackunit/text-ui)
