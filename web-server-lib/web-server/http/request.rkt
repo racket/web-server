@@ -188,10 +188,6 @@
 ;; **************************************************
 ;; safe reading
 
-; read-http-line/limited : inp number -> bytes
-; read-bytes-line against untrusted input is not safe since the client
-; could just feed us bytes until we run out of memory. This function will
-; attempt to read a line from the input port up to a hard limit.
 (define current-http-line-limit
   (make-parameter (* 8 1024)))
 
@@ -204,6 +200,10 @@
                           (LF? (bytes-ref bs (add1 i)))))
     i))
 
+; read-http-line/limited : inp number -> bytes
+; `read-bytes-line' against untrusted input is not safe since the client
+; could just feed us bytes until we run out of memory. This function
+; will attempt to read a line from the input port up to a hard limit.
 (define (read-http-line/limited [in (current-input-port)]
                                 [limit (current-http-line-limit)]
                                 [bufsize 128])
@@ -426,8 +426,9 @@
                (match part
                  [(struct mime-part (headers contents))
                   (define rhs
-                    (header-value
-                     (headers-assq* #"Content-Disposition" headers)))
+                    (cond
+                      [(headers-assq* #"Content-Disposition" headers) => header-value]
+                      [else #""]))
 
                   (match* ((regexp-match #"filename=(\"([^\"]*)\"|([^ ;]*))" rhs)
                            (regexp-match #"[^e]name=(\"([^\"]*)\"|([^ ;]*))" rhs))
