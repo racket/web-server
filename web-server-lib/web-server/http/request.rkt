@@ -150,7 +150,7 @@
            [else
             (define new-size (+ total-size size-in-bytes))
             (when (> new-size max-body-length)
-              (network-error 'complete-request "content (~a) exceeds max length (~a)" new-size max-body-length))
+              (network-error 'complete-request "chunked content exceeds max body length"))
 
             ;; This is safe because of the preceding guard on new-size,
             (define limited-input (make-limited-input-port real-ip size-in-bytes #f))
@@ -293,19 +293,12 @@
 (define (read-request-line ip [max-length 1024])
   (define line (read-http-line/limited ip max-length))
   (if (eof-object? line)
-      (network-error 'read-request "http input closed abruptly")
+      (network-error 'read-request "http input closed prematurely")
       (match (match-method line)
-        [#f (network-error 'read-request "malformed request ~a" line)]
+        [#f (network-error 'read-request "malformed request ~e" line)]
         [(list _ method url major minor)
-         (define us (bytes->string/utf-8 url))
-         (define u1 (string->url us))
-
          (values method
-                 (cond
-                   [(and (url-host u1) (not (url-scheme u1)))
-                    (string->url (format "//~a" us))]
-                   [else
-                    u1])
+                 (string->url (bytes->string/utf-8 url))
                  (string->number (bytes->string/utf-8 major))
                  (string->number (bytes->string/utf-8 minor)))])))
 
@@ -389,15 +382,16 @@
          [(string->number (bytes->string/utf-8 value))
           => (lambda (len)
                (when (> len max-body-length)
-                 (network-error 'read-bindings "body length exceeds limit of ~a" max-body-length))
+                 (network-error 'read-bindings "body length exceeds limit"))
 
                ;; this is safe because of the preceding guard on the length.
                (define data (read-bytes/lazy len in))
                (cond
-                 [(eof-object? data)
+                 [(or (eof-object? data)
+                      (< (bytes-length data) len))
                   (network-error
                    'read-bindings
-                   "Post data ended pre-maturely")]
+                   "port closed prematurely")]
 
                  [else (proc data)]))]
          [else
@@ -709,9 +703,10 @@
 
   (let skip-preamble ()
     (define line (read-http-line/limited in))
-    (if (bytes=? line start-boundary)
-        (read-parts)
-        (skip-preamble))))
+    (cond
+      [(eof-object? line) (network-error 'read-mime-multipart "port closed prematurely")]
+      [(bytes=? line start-boundary) (read-parts)]
+      [else (skip-preamble)])))
 
 (define (file-part? headers)
   (match (headers-assq* #"Content-Disposition" headers)
