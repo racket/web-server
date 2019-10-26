@@ -4,10 +4,10 @@
          net/url
          racket/runtime-path
          rackunit
-         web-server/http/request
          web-server/private/timer
          (submod web-server/http/request internal-test)
          web-server/http
+         web-server/http/request
          web-server/private/connection-manager)
 
 (provide request-tests)
@@ -150,13 +150,27 @@
       (read-http-line/limited (open-input-string "\r\n"))
       #"")
 
+     (test-equal?
+      "CRLF at boundary between chunks"
+      ;; the first chunk should contain #"hello\r" and the second #"\nworld"
+      (read-http-line/limited (open-input-string "hello\r\nworld") 100 6)
+      #"hello")
+
      (test-exn
       "input too long"
       (lambda (e)
         (and (exn:fail:network? e)
              (equal? (exn-message e) "read-http-line/limited: line exceeds limit of 5")))
       (lambda _
-        (read-http-line/limited (open-input-string "hello world\r\n") 5))))
+        (read-http-line/limited (open-input-string "hello world\r\n") 5)))
+
+     (test-exn
+      "input too long with minimal bufsize"
+      (lambda (e)
+        (and (exn:fail:network? e)
+             (equal? (exn-message e) "read-http-line/limited: line exceeds limit of 5")))
+      (lambda _
+        (read-http-line/limited (open-input-string "hello world\r\n") 5 1))))
 
     (test-suite
      "read-bytes/lazy"
@@ -236,6 +250,49 @@
         "the temporary file contains all the data written to the output port"
         (file->bytes (object-name in))
         #"hello, world!")))
+
+    (test-suite
+     "read-request-line"
+
+     (test-exn
+      "empty input"
+      (lambda (e)
+        (and (exn:fail:network? e)
+             (regexp-match #"http input closed prematurely" (exn-message e))))
+      (lambda _
+        (read-request-line (open-input-string ""))))
+
+     (test-exn
+      "malformed syntax"
+      (lambda (e)
+        (and (exn:fail:network? e)
+             (regexp-match #"malformed request" (exn-message e))))
+      (lambda _
+        (read-request-line (open-input-string "HTTP/1.1 GET /"))))
+
+     (let ([parse-request-uri (lambda (line)
+                                (define-values (method uri major minor)
+                                  (read-request-line (open-input-string line)))
+                                uri)])
+       (test-equal?
+        "absolute URI"
+        (parse-request-uri "GET http://example.com/foo HTTP/1.1")
+        (string->url "http://example.com/foo"))
+
+       (test-equal?
+        "absolute schemaless URI"
+        (parse-request-uri "GET //example.com/foo HTTP/1.1")
+        (string->url "//example.com/foo"))
+
+       (test-equal?
+        "absolute path"
+        (parse-request-uri "GET / HTTP/1.1")
+        (string->url "/"))
+
+       (test-equal?
+        "asterisk"
+        (path->string (url->path (parse-request-uri "GET * HTTP/1.1")))
+        "*")))
 
     (test-suite
      "read-mime-multipart"
@@ -530,6 +587,13 @@
             (make-binding:form #"d" #"4")))
 
      (test-equal?
+      "value-less at the beginning"
+      (parse-bindings #"a&b=1&c=2")
+      (list (make-binding:form #"a" #"")
+            (make-binding:form #"b" #"1")
+            (make-binding:form #"c" #"2")))
+
+     (test-equal?
       "value-less at the end"
       (parse-bindings #"a=1&a=2&b=3&c=&d=")
       (list (make-binding:form #"a" #"1")
@@ -690,7 +754,17 @@
       (lambda _
         (test-read-request
          (fixture "post-with-chunked-transfer-encoding")
-         (make-read-request #:max-request-fields 3)))))
+         (make-read-request #:max-request-fields 3))))
+
+     (test-exn
+      "chunked request too large"
+      (lambda (e)
+        (and (exn:fail:network? e)
+             (regexp-match #rx"chunked content exceeds max body length" (exn-message e))))
+      (lambda _
+        (test-read-request
+         (fixture "post-with-chunked-transfer-encoding")
+         (make-read-request #:max-request-body-length 10)))))
 
     (test-suite
      "JSON data"
@@ -714,7 +788,26 @@
                       (header #"Content-Type" #"application/json; charset=utf-8")
                       (header #"Content-Length" #"35"))
        'bindings (list (binding:form #"upsert" #"1"))
-       'body #"{\"title\": \"How to Design Programs\"}")))
+       'body #"{\"title\": \"How to Design Programs\"}"))
+
+     (test-exn
+      "post-with-json-body, exceeding size limit"
+      (lambda (e)
+        (and (exn:fail:network? e)
+             (regexp-match #"body length exceeds limit" (exn-message e))))
+      (lambda _
+        (test-read-request (fixture "post-with-json-body")
+                           (make-read-request #:max-request-body-length 10)))))
+
+    (test-suite
+     "GET bindings"
+
+     (test-request/fixture
+      "get-with-query-params"
+      (hasheq 'bindings (list (binding:form #"b" #"1")
+                              (binding:form #"c" #"2")
+                              (binding:form #"x" #"&encoded=")
+                              (binding:form #"y" #"1")))))
 
     (test-suite
      "POST Bindings"
@@ -732,7 +825,29 @@
      (test-equal?
       "simple test 3"
       (binding:form-value (bindings-assq #"hello" (force (get-bindings "hello=world"))))
-      #"world"))
+      #"world")
+
+     (test-request/fixture
+      "post-with-body-params-and-query-params"
+      (hasheq 'bindings (list (binding:form #"a" #"1")
+                              (binding:form #"b" #"2")
+                              (binding:form #"c" #"3"))))
+
+     (test-exn
+      "post-with-invalid-content-length"
+      (lambda (e)
+        (and (exn:fail:network? e)
+             (regexp-match #rx"POST request contained a non-numeric content-length" (exn-message e))))
+      (lambda _
+        (test-read-request (fixture "post-with-invalid-content-length"))))
+
+     (test-exn
+      "post-with-body-shorter-than-content-length"
+      (lambda (e)
+        (and (exn:fail:network? e)
+             (regexp-match #rx"port closed prematurely" (exn-message e))))
+      (lambda _
+        (test-read-request (fixture "post-with-body-shorter-than-content-length")))))
 
     (test-suite
      "File Uploads"
@@ -755,7 +870,15 @@
         (and (exn:fail:network? e)
              (regexp-match #"Couldn't extract form field name for file upload" (exn-message e))))
       (lambda _
-        (test-read-request (fixture "post-with-multipart-data-without-disposition"))))))))
+        (test-read-request (fixture "post-with-multipart-data-without-disposition"))))
+
+     (test-exn
+      "post-with-multipart-data-without-body"
+      (lambda (e)
+        (and (exn:fail:network? e)
+             (regexp-match #"port closed prematurely" (exn-message e))))
+      (lambda _
+        (test-read-request (fixture "post-with-multipart-data-without-body"))))))))
 
 (module+ test
   (require rackunit/text-ui)
