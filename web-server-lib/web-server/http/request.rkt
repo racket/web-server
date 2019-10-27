@@ -259,23 +259,26 @@
 ; Like `read-bytes', but waits until the expected number of bytes is
 ; available within the input port before allocating the final buffer.
 (define (read-bytes/lazy n in [bufsize 4096])
-  (define buf (make-bytes (min n bufsize)))
-  (define offset
-    (let loop ([offset 0])
-      (define len
-        (peek-bytes-avail! buf offset #f in))
-
-      (cond
-        [(eof-object? len) offset]
-        [else
-         (define offset* (+ offset len))
-         (cond
-           [(>= offset* n) offset*]
-           [else (loop offset*)])])))
-
   (cond
-    [(zero? offset) eof]
-    [else (read-bytes (min offset n) in)]))
+    [(zero? n) #""]
+    [else
+     (define buf (make-bytes (min n bufsize)))
+     (define offset
+       (let loop ([offset 0])
+         (define len
+           (peek-bytes-avail! buf offset #f in))
+
+         (cond
+           [(eof-object? len) offset]
+           [else
+            (define offset* (+ offset len))
+            (cond
+              [(>= offset* n) offset*]
+              [else (loop offset*)])])))
+
+     (cond
+       [(zero? offset) eof]
+       [else (read-bytes (min offset n) in)])]))
 
 (module+ internal-test
   (provide read-bytes/lazy))
@@ -384,16 +387,13 @@
                (when (> len max-body-length)
                  (network-error 'read-bindings "body length exceeds limit"))
 
-               ;; this is safe because of the preceding guard on the length.
                (define data (read-bytes/lazy len in))
-               (cond
-                 [(or (eof-object? data)
-                      (< (bytes-length data) len))
-                  (network-error
-                   'read-bindings
-                   "port closed prematurely")]
+               (when (or (eof-object? data) (< (bytes-length data) len))
+                 (network-error
+                  'read-bindings
+                  "port closed prematurely"))
 
-                 [else (proc data)]))]
+               (proc data))]
          [else
           (network-error
            'read-bindings
@@ -601,6 +601,7 @@
                              #:max-field-length [max-field-length (* 8 1024)])
   (define start-boundary (bytes-append #"--" boundary))
   (define start-boundary-len (bytes-length start-boundary))
+  (define end-boundary (bytes-append start-boundary #"--"))
 
   (define bufsize (max start-boundary-len (* 64 1024)))
   (define buf (make-bytes bufsize))
@@ -706,6 +707,7 @@
     (cond
       [(eof-object? line) (network-error 'read-mime-multipart "port closed prematurely")]
       [(bytes=? line start-boundary) (read-parts)]
+      [(bytes=? line end-boundary) null]
       [else (skip-preamble)])))
 
 (define (file-part? headers)
