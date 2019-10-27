@@ -181,6 +181,11 @@
       (read-bytes 10 (open-input-string "")))
 
      (test-equal?
+      "empty input, read zero bytes"
+      (read-bytes/lazy 0 (open-input-string ""))
+      (read-bytes 0 (open-input-string "")))
+
+     (test-equal?
       "short input"
       (read-bytes/lazy 10 (open-input-string "hi"))
       (read-bytes 10 (open-input-string "hi")))
@@ -833,6 +838,10 @@
                               (binding:form #"b" #"2")
                               (binding:form #"c" #"3"))))
 
+     (test-request/fixture
+      "post-with-empty-body"
+      (hasheq 'bindings null))
+
      (test-exn
       "post-with-invalid-content-length"
       (lambda (e)
@@ -863,6 +872,10 @@
        (check-equal? (binding-id (car (hash-ref r 'bindings))) #"somename")
        (check-equal? (binding:file-filename (car (hash-ref r 'bindings))) #"racket-logo.svg")
        (check-equal? (bytes-length (binding:file-content (car (hash-ref r 'bindings)))) 1321))
+
+     (test-request/fixture
+      "post-with-empty-multipart-body"
+      (hasheq 'bindings null))
 
      (test-exn
       "post-with-multipart-data-without-disposition"
