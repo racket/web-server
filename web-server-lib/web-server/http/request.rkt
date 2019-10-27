@@ -270,7 +270,7 @@
         [else
          (define offset* (+ offset len))
          (cond
-           [(> offset* n) offset*]
+           [(>= offset* n) offset*]
            [else (loop offset*)])])))
 
   (cond

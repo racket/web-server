@@ -1,7 +1,8 @@
 #lang racket/base
 (require rackunit
          "configuration/all-configuration-tests.rkt"
-         "dispatchers/all-dispatchers-tests.rkt"           
+         "dispatchers/all-dispatchers-tests.rkt"
+         "e2e/all-e2e-tests.rkt"
          "lang/all-lang-tests.rkt"
          "lang-test.rkt"
          "managers/all-managers-tests.rkt"
@@ -15,7 +16,7 @@
          "test-tests.rkt")
 (provide all-web-server-tests)
 
-(define all-web-server-tests  
+(define all-web-server-tests
   (test-suite
    "Web Server"
    all-http-tests
@@ -30,4 +31,5 @@
    all-private-tests
    all-servlet-tests
    servlet-env-tests
-   test-tests))
+   test-tests
+   all-e2e-tests))
