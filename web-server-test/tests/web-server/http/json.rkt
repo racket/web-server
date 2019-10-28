@@ -53,8 +53,11 @@
                                       #:seconds 0)
                   #f))
  =>
- (bytes-sort
+ (if (eq? (system-type 'os) 'macosx)
+   (bytes-sort
   #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: Thu, 01 Jan 1970 00:00:00 GMT\r\nServer: Racket\r\nContent-Type: application/json; charset=utf-8\r\nConnection: close\r\n\r\n[\"whoop\",{\"there\":[\"it\",\"is\"]}]")
+   (bytes-sort
+    #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: Wed, 31 Dec 1969 23:00:00 GMT\r\nServer: Racket\r\nContent-Type: application/json; charset=utf-8\r\nConnection: close\r\n\r\n[\"whoop\",{\"there\":[\"it\",\"is\"]}]"))
 
  ; The default MIME type ("application/json; charset=utf-8")
  ; can be overridden:
