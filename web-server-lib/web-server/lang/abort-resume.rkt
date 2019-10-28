@@ -241,7 +241,7 @@
  [safe-call? mark-key?]
  [the-undef undef?]
  [activation-record-list (-> saved-context?)]
- [with-current-saved-continuation-marks-and (any/c any/c (-> any/c) . -> . any/c)]
+ [with-current-saved-continuation-marks-and (any/c any/c (-> any) . -> . any)]
  [kont-append-fun (kont? procedure? . -> . kont?)]
  
  ;; "CLIENT" INTERFACE
