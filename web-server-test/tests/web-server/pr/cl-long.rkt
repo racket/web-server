@@ -10,5 +10,5 @@
 
 (define-values (conn ip op)
   (make-mock-connection request-bs))
-(check-exn (λ (x) (regexp-match #rx"Post data" (exn-message x)))
+(check-exn (λ (x) (regexp-match #rx"read-bindings: port closed prematurely" (exn-message x)))
            (λ () (read-request conn 80 (λ _ (values "to" "from")))))
