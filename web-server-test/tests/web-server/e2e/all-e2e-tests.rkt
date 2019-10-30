@@ -15,7 +15,8 @@
    "e2e"
 
    (for/list ([test-path (in-list (directory-list here))]
-              #:when (directory-exists? test-path))
+              #:when (directory-exists? test-path)
+              #:unless (equal? #"compiled" (path->bytes test-path)))
      (define server-mod-path (build-path test-path "server.rkt"))
      (define tests-mod-path (build-path test-path "tests.rkt"))
      (define stopper #f)
