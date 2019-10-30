@@ -4,6 +4,7 @@
          web-server/private/connection-manager
          web-server/http/response
          web-server/http
+         (submod web-server/http/response testing)
          "../util.rkt"
          (file "util.rkt"))
 
@@ -46,11 +47,11 @@
                                      #:seconds 0)
                   #f))
  =>
- (if (eq? (system-type 'os) 'macosx)
-   (bytes-sort
-    #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: Thu, 01 Jan 1970 00:00:00 GMT\r\nServer: Racket\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\n\r\n<a href=\"#\">link</a>")
-   (bytes-sort
-    #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: Wed, 31 Dec 1969 23:00:00 GMT\r\nServer: Racket\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\n\r\n<a href=\"#\">link</a>"))
+ (bytes-sort
+  (bytes-append
+   #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: "
+   (string->bytes/utf-8 (seconds->gmt-string 0))
+   #"\r\nServer: Racket\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\n\r\n<a href=\"#\">link</a>"))
  
 
  (write-response tm (response/xexpr '(a ([href "#"]) "link")

@@ -156,6 +156,8 @@
 
 ; seconds->gmt-string : Nat -> String
 ; format is rfc1123 compliant according to rfc2068 (http/1.1)
+(module+ testing
+  (provide seconds->gmt-string))
 (define (seconds->gmt-string s)
   (let* ([local-date (seconds->date s)]
          [date (seconds->date (- s (date-time-zone-offset local-date)))])
