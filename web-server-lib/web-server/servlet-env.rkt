@@ -49,6 +49,17 @@
                   #:listen-ip (or/c false/c string?)
                   #:port listen-port-number?
                   #:max-waiting exact-nonnegative-integer?
+                  #:initial-connection-timeout number?
+                  #:request-read-timeout number?
+                  #:max-request-line-length exact-positive-integer?
+                  #:max-request-fields exact-positive-integer?
+                  #:max-request-field-length exact-positive-integer?
+                  #:max-request-body-length exact-positive-integer?
+                  #:max-request-files exact-positive-integer?
+                  #:max-request-file-length exact-positive-integer?
+                  #:max-request-file-memory-threshold exact-positive-integer?
+                  #:response-timeout exact-positive-integer?
+                  #:response-send-timeout exact-positive-integer?
                   #:ssl? boolean?
                   #:ssl-cert (or/c false/c path-string?)
                   #:ssl-key (or/c false/c path-string?)
@@ -95,9 +106,20 @@
          #:listen-ip
          [listen-ip "127.0.0.1"]
          #:port
-         [the-port 8000]         
+         [the-port 8000]
          #:max-waiting
          [max-waiting 511]
+         #:initial-connection-timeout [initial-connection-timeout 60]
+         #:request-read-timeout [request-read-timeout 60]
+         #:max-request-line-length [max-request-line-length (* 8 1024)]
+         #:max-request-fields [max-request-fields 100]
+         #:max-request-field-length [max-request-field-length (* 8 1024)]
+         #:max-request-body-length [max-request-body-length (* 1 1024 1024)]
+         #:max-request-files [max-request-files 100]
+         #:max-request-file-length [max-request-file-length (* 10 1024 1024)]
+         #:max-request-file-memory-threshold [max-request-file-memory-threshold (* 1 1024 1024)]
+         #:response-timeout [response-timeout 60]
+         #:response-send-timeout [response-send-timeout 60]
 
          #:manager
          [manager
@@ -133,7 +155,7 @@
            (build-path server-root-path "conf" "not-found.html"))]
          #:servlet-loading-responder
          [responders-servlet-loading servlet-loading-responder]
-         #:servlet-responder 
+         #:servlet-responder
          [responders-servlet servlet-error-responder]
 
          #:mime-types-path
@@ -141,7 +163,7 @@
                             (if (file-exists? p)
                               p
                               (build-path default-web-root "mime.types")))]
-         
+
          #:ssl?
          [ssl? #f]
          #:ssl-cert
@@ -155,13 +177,13 @@
          [log-format 'apache-default])
   (define (dispatcher sema)
     (dispatcher-sequence
-     (and log-file (log:make #:format 
+     (and log-file (log:make #:format
                              (if (symbol? log-format)
-                                 (log:log-format->format log-format)
-                                 log-format)
+                               (log:log-format->format log-format)
+                               log-format)
                              #:log-path log-file))
      (and quit? (filter:make #rx"^/quit$" (quit-server sema)))
-     (dispatch/servlet 
+     (dispatch/servlet
       start
       #:regexp servlet-regexp
       #:stateless? stateless?
@@ -170,7 +192,7 @@
       #:manager manager
       #:responders-servlet-loading
       responders-servlet-loading
-      #:responders-servlet 
+      #:responders-servlet
       responders-servlet)
      (let-values ([(clear-cache! url->servlet)
                    (servlets:make-cached-url->servlet
@@ -179,7 +201,7 @@
                      (fsmap:make-url->valid-path
                       (fsmap:make-url->path servlets-root)))
                     (make-default-path->servlet
-                     #:make-servlet-namespace 
+                     #:make-servlet-namespace
                      (make-make-servlet-namespace #:to-be-copied-module-specs servlet-namespace)))])
        (servlets:make url->servlet))
      (map (lambda (extra-files-path)
@@ -194,12 +216,23 @@
       #:indices (list "index.html" "index.htm"))
      (lift:make (compose any->response file-not-found-responder))))
   (serve/launch/wait
-   dispatcher  
+   dispatcher
    #:connection-close? connection-close?
-   #:launch-path (if launch-browser? servlet-path #f) 
-   #:banner? banner?   
+   #:launch-path (if launch-browser? servlet-path #f)
+   #:banner? banner?
    #:listen-ip listen-ip
    #:port the-port
    #:max-waiting max-waiting
+   #:initial-connection-timeout initial-connection-timeout
+   #:request-read-timeout request-read-timeout
+   #:max-request-line-length max-request-line-length
+   #:max-request-fields max-request-fields
+   #:max-request-field-length max-request-field-length
+   #:max-request-body-length max-request-body-length
+   #:max-request-files max-request-files
+   #:max-request-file-length max-request-file-length
+   #:max-request-file-memory-threshold max-request-file-memory-threshold
+   #:response-timeout response-timeout
+   #:response-send-timeout response-send-timeout
    #:ssl-cert ssl-cert
    #:ssl-key ssl-key))

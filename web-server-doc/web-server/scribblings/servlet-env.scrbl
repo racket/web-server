@@ -140,6 +140,17 @@ Like always, you don't even need to save the file.
                         [#:listen-ip listen-ip (or/c false/c string?) "127.0.0.1"]
                         [#:port port listen-port-number? 8000]
                         [#:max-waiting max-waiting exact-nonnegative-integer? 511]
+                        [#:initial-connection-timeout initial-connection-timeout integer? 60]
+                        [#:request-read-timeout request-read-timeout integer? 60]
+                        [#:max-request-line-length max-request-line-length exact-positive-integer? (* 8 1024)]
+                        [#:max-request-fields max-request-fields exact-positive-integer? 100]
+                        [#:max-request-field-length max-request-field-length exact-positive-integer? (* 8 1024)]
+                        [#:max-request-body-length max-request-body-length exact-positive-integer? (* 1 1024 1024)]
+                        [#:max-request-files max-request-files exact-positive-integer? 100]
+                        [#:max-request-file-length max-request-file-length exact-positive-integer? (* 10 1024 1024)]
+                        [#:max-request-file-memory-threshold max-request-file-memory-threshold exact-positive-integer? (* 1 1024 1024)]
+                        [#:response-timeout response-timeout exact-positive-integer? 60]
+                        [#:response-send-timeout response-send-timeout exact-positive-integer? 60]
                         [#:servlet-path servlet-path string?
                                         "/servlets/standalone.rkt"]
                         [#:servlet-regexp servlet-regexp regexp?

@@ -29,39 +29,50 @@
 (provide/contract
  [dispatch/servlet (((request? . -> . can-be-response?))
                     (#:regexp regexp?
-                              #:current-directory path-string?
-                              #:stateless? boolean?
-                              #:stuffer (stuffer/c serializable? bytes?)
-                              #:manager manager?
-                              #:responders-servlet-loading (url? any/c . -> . can-be-response?)
-                              #:responders-servlet (url? any/c . -> . can-be-response?))
+                     #:current-directory path-string?
+                     #:stateless? boolean?
+                     #:stuffer (stuffer/c serializable? bytes?)
+                     #:manager manager?
+                     #:responders-servlet-loading (url? any/c . -> . can-be-response?)
+                     #:responders-servlet (url? any/c . -> . can-be-response?))
                     . ->* .
                     dispatcher/c)]
  [serve/launch/wait (((semaphore? . -> . dispatcher/c))
                      (#:launch-path (or/c false/c string?)
-                                    #:connection-close? boolean?
-                                    #:banner? boolean?
-                                    #:listen-ip (or/c false/c string?)
-                                    #:port listen-port-number?
-                                    #:max-waiting exact-nonnegative-integer?
-                                    #:ssl-cert (or/c false/c path-string?)
-                                    #:ssl-key (or/c false/c path-string?))
+                      #:connection-close? boolean?
+                      #:banner? boolean?
+                      #:listen-ip (or/c false/c string?)
+                      #:port listen-port-number?
+                      #:max-waiting exact-nonnegative-integer?
+                      #:initial-connection-timeout number?
+                      #:request-read-timeout number?
+                      #:max-request-line-length exact-positive-integer?
+                      #:max-request-fields exact-positive-integer?
+                      #:max-request-field-length exact-positive-integer?
+                      #:max-request-body-length exact-positive-integer?
+                      #:max-request-files exact-positive-integer?
+                      #:max-request-file-length exact-positive-integer?
+                      #:max-request-file-memory-threshold exact-positive-integer?
+                      #:response-timeout exact-positive-integer?
+                      #:response-send-timeout exact-positive-integer?
+                      #:ssl-cert (or/c false/c path-string?)
+                      #:ssl-key (or/c false/c path-string?))
                      . ->* .
                      void)])
 
-(define (dispatch/servlet 
+(define (dispatch/servlet
          start
          #:regexp
          [servlet-regexp #rx""]
-         #:current-directory 
-         [servlet-current-directory (current-directory)]              
-         #:stateless? 
+         #:current-directory
+         [servlet-current-directory (current-directory)]
+         #:stateless?
          [stateless? #f]
          #:stuffer
          [stuffer default-stuffer]
          #:responders-servlet-loading
          [responders-servlet-loading servlet-loading-responder]
-         #:responders-servlet 
+         #:responders-servlet
          [responders-servlet servlet-error-responder]
          #:manager
          [manager
@@ -84,27 +95,38 @@
                  (parameterize ([current-custodian (make-custodian)]
                                 [current-namespace namespace-now])
                    (if stateless?
-                       (make-stateless.servlet servlet-current-directory stuffer manager start)
-                       (make-v2.servlet servlet-current-directory manager start)))])
+                     (make-stateless.servlet servlet-current-directory stuffer manager start)
+                     (make-v2.servlet servlet-current-directory manager start)))])
             (set-box! servlet-box servlet)
             servlet))))))
 
 (define (serve/launch/wait
          dispatcher
-         
+
          #:connection-close?
          [connection-close? #f]
          #:launch-path
-         [launch-path #f]          
+         [launch-path #f]
          #:banner?
          [banner? #t]
-         
+
          #:listen-ip
          [listen-ip "127.0.0.1"]
          #:port
          [port-arg 8000]
          #:max-waiting
          [max-waiting 511]
+         #:initial-connection-timeout [initial-connection-timeout 60]
+         #:request-read-timeout [request-read-timeout 60]
+         #:max-request-line-length [max-request-line-length (* 8 1024)]
+         #:max-request-fields [max-request-fields 100]
+         #:max-request-field-length [max-request-field-length (* 8 1024)]
+         #:max-request-body-length [max-request-body-length (* 1 1024 1024)]
+         #:max-request-files [max-request-files 100]
+         #:max-request-file-length [max-request-file-length (* 10 1024 1024)]
+         #:max-request-file-memory-threshold [max-request-file-memory-threshold (* 1 1024 1024)]
+         #:response-timeout [response-timeout 60]
+         #:response-send-timeout [response-send-timeout 60]
          #:ssl-cert
          [ssl-cert #f]
          #:ssl-key
@@ -119,39 +141,50 @@
            #:listen-ip listen-ip
            #:port port-arg
            #:max-waiting max-waiting
+           #:initial-connection-timeout initial-connection-timeout
+           #:request-read-timeout request-read-timeout
+           #:max-request-line-length max-request-line-length
+           #:max-request-fields max-request-fields
+           #:max-request-field-length max-request-field-length
+           #:max-request-body-length max-request-body-length
+           #:max-request-files max-request-files
+           #:max-request-file-length max-request-file-length
+           #:max-request-file-memory-threshold max-request-file-memory-threshold
+           #:response-timeout response-timeout
+           #:response-send-timeout response-send-timeout
            #:dispatch-server-connect@ (if ssl?
-                                          (make-ssl-connect@ ssl-cert ssl-key)
-                                          raw:dispatch-server-connect@)))
+                                        (make-ssl-connect@ ssl-cert ssl-key)
+                                        raw:dispatch-server-connect@)))
   (define serve-res (async-channel-get confirm-ch))
   (if (exn? serve-res)
-      (begin
-        (when banner? (eprintf "There was an error starting the Web server.\n"))
-        (match serve-res
-          [(app exn-message (regexp "tcp-listen: listen on .+ failed \\(Address already in use; errno=.+\\)" (list _)))
-           (when banner? (eprintf "\tThe TCP port (~a) is already in use.\n" port-arg))]
-          [_
-           (void)]))
-      (local [(define port serve-res)
-              (define server-url
-                (string-append (if ssl? "https" "http")
-                               "://localhost"
-                               (if (and (not ssl?) (= port 80))
-                                   "" (format ":~a" port))))]
-        (when launch-path
-          ((send-url) (string-append server-url launch-path) #t))
-        (when banner?
-          (printf "Your Web application is running at ~a.\n" 
-                  (if launch-path 
-                      (string-append server-url launch-path)
-                      server-url))
-          (printf "Stop this program at any time to terminate the Web Server.\n")
-          (flush-output))
-        (let ([bye (lambda ()
-                     (when banner? (printf "\nWeb Server stopped.\n"))
-                     (shutdown-server))])
-          (with-handlers ([exn:break? (lambda (exn) (bye))])
-            (semaphore-wait/enable-break sema)
-            ; Give the final response time to get there
-            (sleep 2)
-            ;; We can get here if a /quit url is visited
-            (bye))))))
+    (begin
+      (when banner? (eprintf "There was an error starting the Web server.\n"))
+      (match serve-res
+        [(app exn-message (regexp "tcp-listen: listen on .+ failed \\(Address already in use; errno=.+\\)" (list _)))
+         (when banner? (eprintf "\tThe TCP port (~a) is already in use.\n" port-arg))]
+        [_
+         (void)]))
+    (local [(define port serve-res)
+            (define server-url
+              (string-append (if ssl? "https" "http")
+                             "://localhost"
+                             (if (and (not ssl?) (= port 80))
+                               "" (format ":~a" port))))]
+      (when launch-path
+        ((send-url) (string-append server-url launch-path) #t))
+      (when banner?
+        (printf "Your Web application is running at ~a.\n"
+                (if launch-path
+                  (string-append server-url launch-path)
+                  server-url))
+        (printf "Stop this program at any time to terminate the Web Server.\n")
+        (flush-output))
+      (let ([bye (lambda ()
+                   (when banner? (printf "\nWeb Server stopped.\n"))
+                   (shutdown-server))])
+        (with-handlers ([exn:break? (lambda (exn) (bye))])
+          (semaphore-wait/enable-break sema)
+          ; Give the final response time to get there
+          (sleep 2)
+          ;; We can get here if a /quit url is visited
+          (bye))))))

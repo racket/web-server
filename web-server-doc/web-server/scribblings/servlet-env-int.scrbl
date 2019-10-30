@@ -63,6 +63,17 @@ These functions optimize the construction of dispatchers and launching of server
           [#:listen-ip listen-ip (or/c false/c string?) "127.0.0.1"]
           [#:port port number? 8000]
           [#:max-waiting max-waiting exact-nonnegative-integer? 511]
+          [#:initial-connection-timeout initial-connection-timeout integer? 60]
+          [#:request-read-timeout request-read-timeout integer? 60]
+          [#:max-request-line-length max-request-line-length exact-positive-integer? (* 8 1024)]
+          [#:max-request-fields max-request-fields exact-positive-integer? 100]
+          [#:max-request-field-length max-request-field-length exact-positive-integer? (* 8 1024)]
+          [#:max-request-body-length max-request-body-length exact-positive-integer? (* 1 1024 1024)]
+          [#:max-request-files max-request-files exact-positive-integer? 100]
+          [#:max-request-file-length max-request-file-length exact-positive-integer? (* 10 1024 1024)]
+          [#:max-request-file-memory-threshold max-request-file-memory-threshold exact-positive-integer? (* 1 1024 1024)]
+          [#:response-timeout response-timeout exact-positive-integer? 60]
+          [#:response-send-timeout response-send-timeout exact-positive-integer? 60]
           [#:ssl-cert ssl-cert (or/c false/c path-string?) #f]
           [#:ssl-key ssl-key (or/c false/c path-string?) #f])
          void]{
@@ -80,7 +91,7 @@ These functions optimize the construction of dispatchers and launching of server
  connections to all of the listening machine's addresses. Otherwise, the server accepts connections only at the interface(s) associated with the given string.
  For example, providing @racket["127.0.0.1"] (the default) as @racket[listen-ip] creates a server that accepts only connections to @racket["127.0.0.1"] (the loopback interface) from the local machine.
 
-@racket[max-waiting] is passed to @racket[serve] to control the TCP backlog.
+Other parameters are passed to @racket[serve] to control the TCP backlog and connection handling parameters.
  
  If @racket[ssl-key] and @racket[ssl-cert] are not false, then the server runs in HTTPS mode with @racket[ssl-cert]
  and @racket[ssl-key] as paths to the certificate and private key.    
