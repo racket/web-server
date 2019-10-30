@@ -209,17 +209,8 @@ from a given path:
  a function that shuts down all of the server instances.
 
 @history[
-  #:changed "1.6" @elem{Added the @racket[#:request-read-timeout] argument.}
-  #:changed "1.6" @elem{Added the @racket[#:max-request-line-length] argument.}
-  #:changed "1.6" @elem{Added the @racket[#:max-request-fields] argument.}
-  #:changed "1.6" @elem{Added the @racket[#:max-request-field-length] argument.}
-  #:changed "1.6" @elem{Added the @racket[#:max-request-body-length] argument.}
-  #:changed "1.6" @elem{Added the @racket[#:max-request-files] argument.}
-  #:changed "1.6" @elem{Added the @racket[#:max-request-file-length] argument.}
-  #:changed "1.6" @elem{Added the @racket[#:max-request-file-memory-threshold] argument.}
-  #:changed "1.6" @elem{Added the @racket[#:response-timeout] argument.}
-  #:changed "1.6" @elem{Added the @racket[#:response-send-timeout] argument.}
-  #:changed "1.1" @elem{Added the @racket[#:dispatch-server-connect@] argument.}]}
+#:changed "1.6" @elem{Added the @racket[#:request-read-timeout], @racket[#:max-request-line-length], @racket[#:max-request-fields], @racket[#:max-request-field-length], @racket[#:max-request-body-length], @racket[#:max-request-files], @racket[#:max-request-file-length], @racket[#:max-request-file-memory-threshold], @racket[#:response-timeout], and @racket[#:response-send-timeout] arguments.}
+#:changed "1.1" @elem{Added the @racket[#:dispatch-server-connect@] argument.}]}
 
 @defproc[(serve/web-config@ [config@ (unit/c (import) (export web-config^))]
                             [#:dispatch-server-connect@ dispatch-server-connect@

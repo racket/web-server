@@ -252,6 +252,9 @@ order they appear in the list.
  If @racket[connection-close?] is @racket[#t], then every connection is closed after one
  request. Otherwise, the client decides based on what HTTP version it uses.
 
- @history[#:changed "1.3"
+ @history[
+          #:changed "1.6"
+          @elem{Added the @racket[#:request-read-timeout], @racket[#:max-request-line-length], @racket[#:max-request-fields], @racket[#:max-request-field-length], @racket[#:max-request-body-length], @racket[#:max-request-files], @racket[#:max-request-file-length], @racket[#:max-request-file-memory-threshold], @racket[#:response-timeout], and @racket[#:response-send-timeout] arguments.}
+          #:changed "1.3"
           @elem{Added support for providing @racket[log-file] as an output port.}]
 }
