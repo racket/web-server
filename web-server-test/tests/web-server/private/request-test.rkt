@@ -287,7 +287,8 @@
        (test-equal?
         "absolute schemaless URI"
         (parse-request-uri "GET //example.com/foo HTTP/1.1")
-        (string->url "//example.com/foo"))
+        (url #f #f "" #f #t (list (path/param "" '()) (path/param
+"example.com" '()) (path/param "foo" '())) '() #f))
 
        (test-equal?
         "absolute path"
