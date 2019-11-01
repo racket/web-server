@@ -20,7 +20,7 @@
       "hello world"
       (port->string
        (post-pure-port
-        (string->url "http://127.0.0.1:9111")
+        (string->url "http://127.0.0.1:9114")
         #"hello world"))))
 
    (test-exn
@@ -28,7 +28,7 @@
     broken-pipe?
     (lambda _
       (define-values (in out)
-        (tcp-connect "127.0.0.1" 9111))
+        (tcp-connect "127.0.0.1" 9114))
 
       (parameterize ([current-output-port out])
         (for ([c (in-string "POST / HTTP/1.1\r\n")])

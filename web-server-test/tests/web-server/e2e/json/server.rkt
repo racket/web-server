@@ -54,7 +54,7 @@
   ;; logged to stderr. This swallows that logging to avoid failing drdr.
   (parameterize ([current-error-port (open-output-nowhere)])
     (serve
-     #:port 9111
+     #:port 9113
      #:dispatch (dispatch/servlet go)
      #:max-request-body-length 255)))
 

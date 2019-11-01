@@ -8,11 +8,11 @@
 (provide tests)
 
 (define (get-books)
-  (read-json (get-pure-port (string->url "http://127.0.0.1:9111/books"))))
+  (read-json (get-pure-port (string->url "http://127.0.0.1:9113/books"))))
 
 (define (post-book e)
   (post-impure-port
-   (string->url "http://127.0.0.1:9111/books")
+   (string->url "http://127.0.0.1:9113/books")
    (call-with-output-bytes
     (lambda (out)
       (write-json e out)))))
@@ -49,7 +49,7 @@
      (check-regexp-match "500 Internal Server Error"
                          (port->string
                           (post-impure-port
-                           (string->url "http://127.0.0.1:9111/books")
+                           (string->url "http://127.0.0.1:9113/books")
                            #"invalid"))))
 
    (test-exn
@@ -59,5 +59,5 @@
            (regexp-match #rx"Connection ended early" (exn-message e))))
     (lambda _
       (post-impure-port
-       (string->url "http://127.0.0.1:9111/books")
+       (string->url "http://127.0.0.1:9113/books")
        (make-bytes 512))))))

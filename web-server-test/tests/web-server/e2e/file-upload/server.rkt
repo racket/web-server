@@ -23,7 +23,7 @@
   ;; need to drop those messages in order for drdr not to fail.
   (parameterize ([current-error-port (open-output-nowhere)])
     (serve
-     #:port 9111
+     #:port 9112
      #:dispatch (dispatch/servlet file-upload)
      #:max-request-files 2
      #:max-request-file-length 500
