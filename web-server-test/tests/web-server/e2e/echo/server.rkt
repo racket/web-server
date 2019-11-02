@@ -15,7 +15,7 @@
    (lambda (out)
      (display msg out))))
 
-(define (start)
+(define (start port)
   (serve
-   #:port 9111
+   #:port port
    #:dispatch (dispatch/servlet echo)))

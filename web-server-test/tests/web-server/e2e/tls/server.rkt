@@ -1,6 +1,7 @@
 #lang racket/base
 
-(require web-server/servlet
+(require racket/port
+         web-server/servlet
          web-server/servlet-dispatch
          web-server/web-server)
 
@@ -15,12 +16,10 @@
    (lambda (out)
      (display "success!" out))))
 
-(define (start)
-  (serve
-   #:port 9115
-   #:dispatch (dispatch/servlet hello)
-   #:dispatch-server-connect@ (make-ssl-connect@ (build-path here "cert.pem")
-                                                 (build-path here "key.pem"))))
-
-(module+ main
-  (start))
+(define (start port)
+  (parameterize ([current-error-port (open-output-nowhere)])
+    (serve
+     #:port port
+     #:dispatch (dispatch/servlet hello)
+     #:dispatch-server-connect@ (make-ssl-connect@ (build-path here "cert.pem")
+                                                   (build-path here "key.pem")))))

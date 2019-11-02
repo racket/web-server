@@ -2,6 +2,7 @@
 
 (require racket/path
          racket/port
+         racket/tcp
          rackunit)
 
 (provide all-e2e-tests)
@@ -10,11 +11,25 @@
   (simplify-path
    (build-path (syntax-source #'here) 'up)))
 
+(define (wait-for-local-port port)
+  (let loop ([attempts 1])
+    (sync (system-idle-evt))
+    (with-handlers ([exn:fail?
+                     (lambda (e)
+                       (if (> attempts 99)
+                           (raise e)
+                           (loop (add1 attempts))))])
+      (define-values (in out)
+        (tcp-connect "127.0.0.1" port))
+      (close-output-port out)
+      (close-input-port in))))
+
 (define all-e2e-tests
   (make-test-suite
    "e2e"
 
    (for/list ([test-path (in-list (directory-list here))]
+              [port (in-naturals 9111)]
               #:when (directory-exists? test-path)
               #:unless (equal? #"compiled" (path->bytes test-path)))
      (define server-mod-path (build-path test-path "server.rkt"))
@@ -27,14 +42,14 @@
         (define start
           (dynamic-require server-mod-path 'start))
 
-        (set! stopper (start))
-        (sync (system-idle-evt)))
+        (set! stopper (start port))
+        (wait-for-local-port port))
       #:after
       (lambda _
         (stopper))
 
-      (list
-       (dynamic-require tests-mod-path 'tests))))))
+      (let ([make-tests (dynamic-require tests-mod-path 'make-tests)])
+        (list (make-tests port)))))))
 
 (module+ test
   (require rackunit/text-ui)

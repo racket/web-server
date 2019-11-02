@@ -4,31 +4,34 @@
          racket/port
          rackunit)
 
-(provide tests)
+(provide make-tests)
 
 (define get-response
   (compose1 port->string get-pure-port string->url))
 
-(define tests
+(define (make-tests port)
+  (define (make-uri [path "/"])
+    (format "http://127.0.0.1:~a/~a" port path))
+
   (test-suite
    "echo"
 
    (test-equal?
     "no query param"
-    (get-response "http://127.0.0.1:9111")
+    (get-response (make-uri))
     "nothing")
 
    (test-equal?
     "with empty query param"
-    (get-response "http://127.0.0.1:9111?message=")
+    (get-response (make-uri "?message="))
     "")
 
    (test-equal?
     "with query param"
-    (get-response "http://127.0.0.1:9111?message=hello")
+    (get-response (make-uri "?message=hello"))
     "hello")
 
    (test-equal?
     "with encoded param"
-    (get-response "http://127.0.0.1:9111?message=hello%3D%26")
+    (get-response (make-uri "?message=hello%3D%26"))
     "hello=&")))

@@ -5,8 +5,8 @@ system works end-to-end.  Each subfolder is expected to contain two
 files: `server.rkt` and `tests.rkt`.
 
 Each `server.rkt` module must provide a function called `start` that
-starts a web server and returns a function that can be used to stop
-that server.
+takes a port, starts a web server on that port and returns a function
+that can be used to stop the server.
 
-Each `tests.rkt` module must provide a rackunit `test-suite` called
-`tests`.
+Each `tests.rkt` module must provide a function called `make-tests`
+that takes a port and returns a rackunit `test-suite`.

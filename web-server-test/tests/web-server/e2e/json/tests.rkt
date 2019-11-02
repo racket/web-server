@@ -5,19 +5,22 @@
          racket/port
          rackunit)
 
-(provide tests)
+(provide make-tests)
 
-(define (get-books)
-  (read-json (get-pure-port (string->url "http://127.0.0.1:9113/books"))))
+(define (make-tests port)
+  (define (make-url [path "/"])
+    (string->url (format "http://127.0.0.1:~a/~a" port path)))
 
-(define (post-book e)
-  (post-impure-port
-   (string->url "http://127.0.0.1:9113/books")
-   (call-with-output-bytes
-    (lambda (out)
-      (write-json e out)))))
+  (define (get-books)
+    (read-json (get-pure-port (make-url "books"))))
 
-(define tests
+  (define (post-book e)
+    (post-impure-port
+     (make-url "books")
+     (call-with-output-bytes
+      (lambda (out)
+        (write-json e out)))))
+
   (test-suite
    "json"
 
@@ -49,7 +52,7 @@
      (check-regexp-match "500 Internal Server Error"
                          (port->string
                           (post-impure-port
-                           (string->url "http://127.0.0.1:9113/books")
+                           (make-url "books")
                            #"invalid"))))
 
    (test-exn
@@ -59,5 +62,5 @@
            (regexp-match #rx"Connection ended early" (exn-message e))))
     (lambda _
       (post-impure-port
-       (string->url "http://127.0.0.1:9113/books")
+       (make-url "books")
        (make-bytes 512))))))

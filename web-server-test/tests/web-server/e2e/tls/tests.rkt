@@ -4,13 +4,13 @@
          racket/port
          rackunit)
 
-(provide tests)
+(provide make-tests)
 
-(define tests
+(define (make-tests port)
   (test-suite
    "tls"
 
    (test-equal?
     "can get data"
-    (port->string (get-pure-port (string->url "https://127.0.0.1:9115")))
+    (port->string (get-pure-port (string->url (format "https://127.0.0.1:~a" port))))
     "success!")))

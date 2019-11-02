@@ -9,41 +9,41 @@
          racket/random
          rackunit)
 
-(provide tests)
+(provide make-tests)
 
-(define (upload-files . ins)
-  (define-values (in out)
-    (tcp-connect "127.0.0.1" 9112))
+(define (make-tests port)
+  (define (upload-files . ins)
+    (define-values (in out)
+      (tcp-connect "127.0.0.1" port))
 
-  (define boundary
-    (sha1-bytes (open-input-bytes (crypto-random-bytes 32))))
+    (define boundary
+      (sha1-bytes (open-input-bytes (crypto-random-bytes 32))))
 
-  (with-handlers ([exn:fail:network? (lambda _
-                                       (values 'reset null ""))])
-    (parameterize ([current-output-port out])
-      (printf "POST / HTTP/1.1\r\n")
-      (printf "Content-Type: multipart/form-data; boundary=~a\r\n" boundary)
-      (printf "Connection: close\r\n")
-      (printf "\r\n")
-      (for ([in (in-list ins)])
-        (printf "--~a\r\n" boundary)
-        (printf "Content-Disposition: application/octet-stream; filename=\"data\"; name=\"file\"\r\n")
+    (with-handlers ([exn:fail:network? (lambda _
+                                         (values 'reset null ""))])
+      (parameterize ([current-output-port out])
+        (printf "POST / HTTP/1.1\r\n")
+        (printf "Content-Type: multipart/form-data; boundary=~a\r\n" boundary)
+        (printf "Connection: close\r\n")
         (printf "\r\n")
-        (copy-port in out)
-        (printf "\r\n"))
-      (printf "--~a--\r\n" boundary))
+        (for ([in (in-list ins)])
+          (printf "--~a\r\n" boundary)
+          (printf "Content-Disposition: application/octet-stream; filename=\"data\"; name=\"file\"\r\n")
+          (printf "\r\n")
+          (copy-port in out)
+          (printf "\r\n"))
+        (printf "--~a--\r\n" boundary))
 
-    (close-output-port out)
-    (values (read-line in 'return-linefeed)
-            (let loop ([heads null])
-              (define line (read-line in 'return-linefeed))
-              (cond
-                [(eof-object? line) (reverse heads)]
-                [(string=? line "") (reverse heads)]
-                [else (loop (cons line heads))]))
-            (port->string in))))
+      (close-output-port out)
+      (values (read-line in 'return-linefeed)
+              (let loop ([heads null])
+                (define line (read-line in 'return-linefeed))
+                (cond
+                  [(eof-object? line) (reverse heads)]
+                  [(string=? line "") (reverse heads)]
+                  [else (loop (cons line heads))]))
+              (port->string in))))
 
-(define tests
   (test-suite
    "file-upload"
 
