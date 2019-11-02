@@ -12,13 +12,10 @@
    (lambda (out)
      (display (request-post-data/raw req) out))))
 
-(define (start)
+(define (start port)
   (parameterize ([current-error-port (open-output-nowhere)])
     (serve
-     #:port 9114
-     #:dispatch (dispatch/servlet read-write)
-     #:request-read-timeout 1
-     #:response-send-timeout 1)))
-
-(module+ main
-  (start))
+      #:port port
+      #:dispatch (dispatch/servlet read-write)
+      #:request-read-timeout 1
+      #:response-send-timeout 1)))

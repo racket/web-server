@@ -48,15 +48,12 @@
    [("books") #:method "post" add-book]
    [("books") all-books]))
 
-(define (start)
+(define (start port)
   ;; One of the tests tries to send invalid JSON, which causes the
   ;; request handler to throw an exception, which would normally get
   ;; logged to stderr. This swallows that logging to avoid failing drdr.
   (parameterize ([current-error-port (open-output-nowhere)])
     (serve
-     #:port 9113
+     #:port port
      #:dispatch (dispatch/servlet go)
      #:max-request-body-length 255)))
-
-(module+ main
-  (start))

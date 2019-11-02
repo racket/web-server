@@ -5,13 +5,13 @@
          racket/tcp
          rackunit)
 
-(provide tests)
+(provide make-tests)
 
 (define (broken-pipe? e)
   (and (exn:fail:network? e)
        (equal? (exn:fail:network:errno-errno e) '(32 . posix))))
 
-(define tests
+(define (make-tests port)
   (test-suite
    "read-write"
 
@@ -20,7 +20,7 @@
       "hello world"
       (port->string
        (post-pure-port
-        (string->url "http://127.0.0.1:9114")
+        (string->url (format "http://127.0.0.1:~a" port))
         #"hello world"))))
 
    (test-exn
@@ -28,7 +28,7 @@
     broken-pipe?
     (lambda _
       (define-values (in out)
-        (tcp-connect "127.0.0.1" 9114))
+        (tcp-connect "127.0.0.1" port))
 
       (parameterize ([current-output-port out])
         (for ([c (in-string "POST / HTTP/1.1\r\n")])
