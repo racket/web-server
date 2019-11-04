@@ -1,5 +1,7 @@
 # Racket web-server
 
+This the source for the Racket packages: "web-server", "web-server-doc", "web-server-lib", "web-server-test".
+
 <p align="left">
   <a href="https://github.com/racket/web-server">
     <img alt="GitHub Actions status" src="https://github.com/racket/web-server/workflows/CI/badge.svg">
@@ -16,3 +18,15 @@ There is also a [good tutorial](https://docs.racket-lang.org/continue/) on makin
 ## How to contribute
 
 Check this tutorial: [Contributing to Racket](https://blog.racket-lang.org/2017/09/tutorial-contributing-to-racket.html)
+
+### License
+
+Racket, including these packages, is free software, see [LICENSE]
+for more details.
+
+By making a contribution, you are agreeing that your contribution
+is licensed under the [Apache 2.0] license and the [MIT] license.
+
+[MIT]: https://github.com/racket/racket/blob/master/racket/src/LICENSE-MIT.txt
+[Apache 2.0]: https://www.apache.org/licenses/LICENSE-2.0.txt
+[LICENSE]: LICENSE
