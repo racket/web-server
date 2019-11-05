@@ -3,7 +3,7 @@
 This the source for the Racket packages: "web-server", "web-server-doc", "web-server-lib", "web-server-test".
 
 <p align="left">
-  <a href="https://github.com/racket/web-server">
+  <a href="https://github.com/racket/web-server/actions?query=workflow%3A%22CI%22">
     <img alt="GitHub Actions status" src="https://github.com/racket/web-server/workflows/CI/badge.svg">
   </a>
 </p>
