@@ -2,15 +2,20 @@ on: [push, pull_request]
 name: CI
 jobs:
   build:
+    name: "Build on Racket '${{ matrix.racket-version }}' (${{ matrix.racket-variant }})"
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        racket-version: ["7.4", "current"]
+        racket-variant: ["regular", "CS"]
     steps:
       - uses: actions/checkout@master
-      - uses: Bogdanp/setup-racket@v0.1
+      - uses: Bogdanp/setup-racket@v0.2
         with:
           architecture: x64
           distribution: full
-          variant: regular
-          version: 7.4
+          variant: ${{ matrix.racket-variant }}
+          version: ${{ matrix.racket-version }}
       - run: sudo raco pkg update --name web-server-lib --link --batch --auto web-server-lib/
       - run: sudo raco pkg install --batch --auto web-server-test/
       - run: raco test --drdr web-server-test/
