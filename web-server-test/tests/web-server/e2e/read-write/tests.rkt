@@ -27,11 +27,15 @@
     "sending data too slowly"
     broken-pipe?
     (lambda _
-      (define-values (in out)
-        (tcp-connect "127.0.0.1" port))
+      ;; On Racket CS 7.4 the default plumber writes an error to
+      ;; standard out when it tries to close the socket. Creating a
+      ;; custom plumber seems to fix that problem.
+      (parameterize ([current-plumber (make-plumber)])
+        (define-values (in out)
+          (tcp-connect "127.0.0.1" port))
 
-      (parameterize ([current-output-port out])
-        (for ([c (in-string "POST / HTTP/1.1\r\n")])
-          (display c)
-          (flush-output)
-          (sleep 0.25)))))))
+        (parameterize ([current-output-port out])
+          (for ([c (in-string "POST / HTTP/1.1\r\n")])
+            (display c)
+            (flush-output)
+            (sleep 0.25))))))))
