@@ -26,6 +26,9 @@
 ;; Happy hacking!
 ;;
 
+(define positive-real/c
+  (and/c real? positive?))
+
 (define read-request/c
   (connection?
    listen-port-number?
@@ -34,6 +37,12 @@
    (values request? boolean?)))
 
 (provide/contract
+ [parse-bindings (-> bytes? (listof binding?))]
+ [read-headers (->* (input-port?)
+                    (positive-real/c
+                     positive-real/c)
+                    (listof header?))]
+
  [rename make-ext:read-request
          make-read-request
          (->* ()
@@ -322,7 +331,7 @@
     (lambda (a) (regexp-match rx a))))
 
 ; read-headers : iport number number -> (listof header?)
-(define (read-headers in max-heads max-head-length)
+(define (read-headers in [max-heads +inf.0] [max-head-length +inf.0])
   (parameterize ([current-http-line-limit max-head-length])
     (reverse
      (let loop ([heads null])
@@ -339,9 +348,6 @@
                 (define head (make-header field (read-folded-head in value max-head-length)))
                 (loop (cons head heads))])]
          [else (network-error 'read-headers "malformed header: ~e" l)])))))
-
-(module+ internal-test
-  (provide read-headers))
 
 ; read-folded-head : iport bytes number -> bytes
 ; reads the next line of input for headers that are line-folded
@@ -510,9 +516,6 @@
           ;; #<eof>
           [#f
            (reverse bindings)])))))
-
-(module+ internal-test
-  (provide parse-bindings))
 
 
 ;; **************************************************
