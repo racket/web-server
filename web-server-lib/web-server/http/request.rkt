@@ -26,8 +26,8 @@
 ;; Happy hacking!
 ;;
 
-(define positive-real/c
-  (and/c real? positive?))
+(define nonnegative-length/c
+  (or/c exact-nonnegative-integer? +inf.0))
 
 (define read-request/c
   (connection?
@@ -39,8 +39,8 @@
 (provide/contract
  [parse-bindings (-> bytes? (listof binding?))]
  [read-headers (->* (input-port?)
-                    (positive-real/c
-                     positive-real/c)
+                    (nonnegative-length/c
+                     nonnegative-length/c)
                     (listof header?))]
 
  [rename make-ext:read-request
