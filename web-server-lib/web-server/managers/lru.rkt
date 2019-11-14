@@ -183,9 +183,7 @@
              (hash-remove! instances instance-id))]))
        (when (or just-go?
                  (not (zero? (unbox removed))))
-         (inform-p (unbox removed))
-         (collect-garbage)
-         (collect-garbage)))))
+         (inform-p (unbox removed))))))
   
   (define manager-thread
     (thread
