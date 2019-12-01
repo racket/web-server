@@ -1,27 +1,30 @@
 #lang racket/base
-(require mzlib/unit
-         racket/contract)
-(require web-server/private/util
+
+(require racket/unit
+         racket/contract
+         web-server/private/util
          web-server/private/cache-table
          web-server/configuration/configuration-table-structs
          web-server/configuration/configuration-table
          web-server/configuration/namespace
          web-server/configuration/responders
          web-server/web-config-sig)
-(provide/contract
- [configuration-table->web-config@
-  (->* (path-string?)
-       (#:port (or/c false/c number?)
-               #:listen-ip (or/c false/c string?)
-               #:make-servlet-namespace make-servlet-namespace/c)
-       (unit/c (import) (export web-config^)))]
- [configuration-table-sexpr->web-config@
-  (->* (configuration-table-sexpr?)
-       (#:web-server-root path-string?
-                          #:port (or/c false/c number?)
-                          #:listen-ip (or/c false/c string?)
-                          #:make-servlet-namespace make-servlet-namespace/c)
-       (unit/c (import) (export web-config^)))])
+
+(provide
+ (contract-out
+  [configuration-table->web-config@
+   (->* (path-string?)
+        (#:port (or/c #f number?)
+         #:listen-ip (or/c #f string?)
+         #:make-servlet-namespace make-servlet-namespace/c)
+        (unit/c (import) (export web-config^)))]
+  [configuration-table-sexpr->web-config@
+   (->* (configuration-table-sexpr?)
+        (#:web-server-root path-string?
+         #:port (or/c #f number?)
+         #:listen-ip (or/c #f string?)
+         #:make-servlet-namespace make-servlet-namespace/c)
+        (unit/c (import) (export web-config^)))]))
 
 ; configuration-table->web-config@ : path -> configuration
 (define (configuration-table->web-config@
@@ -87,8 +90,6 @@
     (define max-waiting (configuration-table-max-waiting table))
     (define listen-ip the-listen-ip)
     (define initial-connection-timeout (configuration-table-initial-connection-timeout table))
-    (define response-timeout (configuration-table-response-timeout table))
-    (define response-send-timeout (configuration-table-response-send-timeout table))
     (define virtual-hosts the-virtual-hosts)
     (define make-servlet-namespace the-make-servlet-namespace)))
 

@@ -1,6 +1,6 @@
 #lang racket/base
 (require rackunit
-         (only-in mzlib/file
+         (only-in racket/file
                   make-temporary-file)
          web-server/configuration/configuration-table)
 (provide configuration-table-tests)
@@ -25,8 +25,6 @@
            `((port 80)
              (max-waiting 40)
              (initial-connection-timeout 30)
-             (response-timeout 60)
-             (response-send-timeout 60)
              (default-host-table
                (host-table
                 (default-indices "index.html" "index.htm")

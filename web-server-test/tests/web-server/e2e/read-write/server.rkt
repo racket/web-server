@@ -3,6 +3,7 @@
 (require racket/port
          web-server/servlet
          web-server/servlet-dispatch
+         web-server/safety-limits
          web-server/web-server)
 
 (provide start)
@@ -17,5 +18,6 @@
     (serve
       #:port port
       #:dispatch (dispatch/servlet read-write)
-      #:request-read-timeout 1
-      #:response-send-timeout 1)))
+      #:safety-limits (make-safety-limits
+                       #:request-read-timeout 1
+                       #:response-send-timeout 1))))
