@@ -12,7 +12,7 @@
          dispatch-server-with-connect@)
 
 (define-compound-unit/infer dispatch-server@
-  (import tcp^ dispatch-server-config^)
+  (import tcp^ dispatch-server-config*^)
   (export dispatch-server^)
   (link [([ws : web-server^]) dispatch-server-with-connect@]
         [([dsp : dispatch-server-connect^]) raw:dispatch-server-connect@]))

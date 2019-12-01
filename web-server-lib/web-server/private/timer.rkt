@@ -110,9 +110,9 @@
  [struct timer ([tm timer-manager?]
                 [evt evt?]
                 [expire-seconds number?]
-                [action (-> void)])]
+                [action (-> any/c)])]
  [start-timer-manager (-> timer-manager?)]
- [start-timer (timer-manager? number? (-> void) . -> . timer?)]
- [reset-timer! (timer? number? . -> . void)]
- [increment-timer! (timer? number? . -> . void)]
- [cancel-timer! (timer? . -> . void)])
+ [start-timer (timer-manager? number? (-> any/c) . -> . timer?)]
+ [reset-timer! (timer? number? . -> . any/c)]
+ [increment-timer! (timer? number? . -> . any/c)]
+ [cancel-timer! (timer? . -> . any/c)])

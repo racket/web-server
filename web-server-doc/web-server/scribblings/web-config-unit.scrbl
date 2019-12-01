@@ -8,6 +8,7 @@
                      web-server/configuration/configuration-table-structs
                      web-server/private/util
                      web-server/servlet/setup
+                     web-server/safety-limits
                      racket/tcp
                      (prefix-in servlets: web-server/dispatchers/dispatch-servlets)
                      web-server/web-config-sig))
@@ -16,34 +17,55 @@
 
 @defmodule[web-server/web-config-sig]{
 
-@defsignature[web-config^ ()]{
+@defsignature[web-config*^ ()]{
 
-@signature-desc{
-Provides contains the following identifiers.
-}
+  Contains the following identifiers.
 
-@defthing[max-waiting exact-nonnegative-integer?]{
- Passed to @racket[tcp-accept].
-}
+  @history[#:added "1.6"]
 
+@defthing[safety-limits safety-limits?]{
+   A @tech{safety limits} value specifying the policies to be used
+   while reading and handling requests.
+  }
+ 
 @defthing[virtual-hosts (string? . -> . host?)]{
  Contains the configuration of individual virtual hosts.
-}
-
-@defthing[initial-connection-timeout integer?]{
- Specifies the initial timeout given to a connection.
 }
 
 @defthing[port port-number?]{
  Specifies the port to serve HTTP on.
 }
 
-@defthing[listen-ip (or/c false/c string?)]{
+@defthing[listen-ip (or/c #f string?)]{
  Passed to @racket[tcp-listen].
 }
 
 @defthing[make-servlet-namespace make-servlet-namespace/c]{
  Passed to @racket[servlets:make] through @racket[make-default-path->servlet].
+}
+ }
+                                      
+@defsignature[web-config^ (web-config*^)]{
+  @signature-desc[@deprecated[#:what "signature" @racket[web-config*^]]]
+  
+  For backwards compatability, @racket[web-config^] @racket[extends] @racket[web-config*^] and
+  uses @racket[define-values-for-export] to define @sigelem[web-config*^ safety-limits] as:
+  @racketblock[
+ (make-safety-limits
+  #:max-waiting #,(sigelem web-config^ max-waiting)
+  #:request-read-timeout #,(sigelem web-config^ initial-connection-timeout))]
+  
+  @history[#:changed "1.6"
+           @elem{Deprecated in favor of @racket[web-config*^].
+              See @elemref["safety-limits-porting"]{compatability note}.}]
+
+@defthing[max-waiting exact-nonnegative-integer?]{
+ Passed to @racket[make-safety-limits].
+}
+@defthing[initial-connection-timeout timeout/c]{
+  Passed to @racket[make-safety-limits] as its @racket[#:request-read-timeout] argument.
+  @history[#:changed "1.6"
+           @elem{Loosened contract for consistency with @racket[make-safety-limits].}]
 }
 }
              

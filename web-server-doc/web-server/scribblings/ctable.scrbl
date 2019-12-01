@@ -33,15 +33,12 @@ The configuration table format is:
 
 @index{port} @index{max-waiting}
 @index{initial-connection-timeout}
-@index{response-timeout} @index{response-send-timeout}
 @index{default-host-table} @index{virtual-host-table}
 
 @racketblock[
 `((port ,integer?)
   (max-waiting ,exact-integer?)
   (initial-connection-timeout ,integer?)
-  (response-timeout ,exact-positive-integer?)
-  (response-send-timeout ,exact-positive-integer?)
   (default-host-table
     ,host-table-sexpr?)
   (virtual-host-table

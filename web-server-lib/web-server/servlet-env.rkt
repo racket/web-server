@@ -14,6 +14,7 @@
          web-server/http
          web-server/stuffers
          web-server/configuration/responders
+         web-server/safety-limits
          web-server/private/mime-types
          web-server/servlet/setup
          web-server/servlet/servlet-structs
@@ -46,23 +47,13 @@
                   #:launch-browser? boolean?
                   #:quit? boolean?
                   #:banner? boolean?
-                  #:listen-ip (or/c false/c string?)
+                  #:listen-ip (or/c #f string?)
                   #:port listen-port-number?
-                  #:max-waiting exact-nonnegative-integer?
-                  #:initial-connection-timeout number?
-                  #:request-read-timeout number?
-                  #:max-request-line-length exact-positive-integer?
-                  #:max-request-fields exact-positive-integer?
-                  #:max-request-field-length exact-positive-integer?
-                  #:max-request-body-length exact-positive-integer?
-                  #:max-request-files exact-positive-integer?
-                  #:max-request-file-length exact-positive-integer?
-                  #:max-request-file-memory-threshold exact-positive-integer?
-                  #:response-timeout exact-positive-integer?
-                  #:response-send-timeout exact-positive-integer?
+                  #:max-waiting timeout/c
+                  #:safety-limits safety-limits?
                   #:ssl? boolean?
-                  #:ssl-cert (or/c false/c path-string?)
-                  #:ssl-key (or/c false/c path-string?)
+                  #:ssl-cert (or/c #f path-string?)
+                  #:ssl-key (or/c #f path-string?)
                   #:manager manager?
                   #:servlet-namespace (listof module-path?)
                   #:server-root-path path-string?
@@ -77,10 +68,10 @@
                   #:mime-types-path path-string?
                   #:servlet-path string?
                   #:servlet-regexp regexp?
-                  #:log-file (or/c false/c path-string? output-port?)
+                  #:log-file (or/c #f path-string? output-port?)
                   #:log-format (or/c log:log-format/c log:format-req/c))
                  . ->* .
-                 void)])
+                 any)])
 
 ;; utility for conveniently chaining dispatchers
 (define (dispatcher-sequence . dispatchers)
@@ -107,19 +98,9 @@
          [listen-ip "127.0.0.1"]
          #:port
          [the-port 8000]
-         #:max-waiting
-         [max-waiting 511]
-         #:initial-connection-timeout [initial-connection-timeout 60]
-         #:request-read-timeout [request-read-timeout 60]
-         #:max-request-line-length [max-request-line-length (* 8 1024)]
-         #:max-request-fields [max-request-fields 100]
-         #:max-request-field-length [max-request-field-length (* 8 1024)]
-         #:max-request-body-length [max-request-body-length (* 1 1024 1024)]
-         #:max-request-files [max-request-files 100]
-         #:max-request-file-length [max-request-file-length (* 10 1024 1024)]
-         #:max-request-file-memory-threshold [max-request-file-memory-threshold (* 1 1024 1024)]
-         #:response-timeout [response-timeout 60]
-         #:response-send-timeout [response-send-timeout 60]
+
+         #:max-waiting [_max-waiting 511]
+         #:safety-limits [limits (make-safety-limits #:max-waiting _max-waiting)]
 
          #:manager
          [manager
@@ -222,17 +203,6 @@
    #:banner? banner?
    #:listen-ip listen-ip
    #:port the-port
-   #:max-waiting max-waiting
-   #:initial-connection-timeout initial-connection-timeout
-   #:request-read-timeout request-read-timeout
-   #:max-request-line-length max-request-line-length
-   #:max-request-fields max-request-fields
-   #:max-request-field-length max-request-field-length
-   #:max-request-body-length max-request-body-length
-   #:max-request-files max-request-files
-   #:max-request-file-length max-request-file-length
-   #:max-request-file-memory-threshold max-request-file-memory-threshold
-   #:response-timeout response-timeout
-   #:response-send-timeout response-send-timeout
+   #:safety-limits limits
    #:ssl-cert ssl-cert
    #:ssl-key ssl-key))

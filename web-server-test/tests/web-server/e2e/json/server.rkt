@@ -4,6 +4,7 @@
          racket/port
          web-server/servlet
          web-server/servlet-dispatch
+         web-server/safety-limits
          web-server/web-server)
 
 (provide start)
@@ -56,4 +57,5 @@
     (serve
      #:port port
      #:dispatch (dispatch/servlet go)
-     #:max-request-body-length 255)))
+     #:safety-limits (make-safety-limits
+                      #:max-request-body-length 255))))

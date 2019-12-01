@@ -4,6 +4,7 @@
          racket/port
          web-server/servlet
          web-server/servlet-dispatch
+         web-server/safety-limits
          web-server/web-server)
 
 (provide start)
@@ -25,6 +26,7 @@
     (serve
      #:port port
      #:dispatch (dispatch/servlet file-upload)
-     #:max-request-files 2
-     #:max-request-file-length 500
-     #:max-request-file-memory-threshold 250)))
+     #:safety-limits (make-safety-limits
+                      #:max-form-data-files 2
+                      #:max-form-data-file-length 500
+                      #:form-data-file-memory-threshold 250))))

@@ -9,6 +9,8 @@
          (only-in racket/tcp listen-port-number?)
          openssl
          web-server/dispatchers/dispatch
+         web-server/safety-limits
+         (submod web-server/safety-limits private)
          web-server/private/dispatch-server-sig
          web-server/private/dispatch-server-unit
          web-server/private/raw-dispatch-server-connect-unit
@@ -18,83 +20,54 @@
          (prefix-in http: web-server/http/request)
          (prefix-in http: web-server/http/response))
 
-(define-syntax-rule (unit/c . _) any/c)
-
 (provide/contract
  [serve
   (->* (#:dispatch dispatcher/c)
-       (#:confirmation-channel (or/c false/c async-channel?)
+       (#:confirmation-channel (or/c #f async-channel?)
         #:connection-close? boolean?
         #:dispatch-server-connect@ (unit/c (import) (export dispatch-server-connect^))
         #:tcp@ (unit/c (import) (export tcp^))
         #:port listen-port-number?
-        #:listen-ip (or/c false/c string?)
-        #:max-waiting exact-nonnegative-integer?
-        #:initial-connection-timeout number?
-        #:request-read-timeout number?
-        #:max-request-line-length exact-positive-integer?
-        #:max-request-fields exact-positive-integer?
-        #:max-request-field-length exact-positive-integer?
-        #:max-request-body-length exact-positive-integer?
-        #:max-request-files exact-positive-integer?
-        #:max-request-file-length exact-positive-integer?
-        #:max-request-file-memory-threshold exact-positive-integer?
-        #:response-timeout exact-positive-integer?
-        #:response-send-timeout exact-positive-integer?)
-       (-> void))]
+        #:listen-ip (or/c #f string?)
+        #:max-waiting timeout/c
+        #:initial-connection-timeout timeout/c
+        #:safety-limits safety-limits?)
+       (-> any/c))]
  [serve/ports
   (->* (#:dispatch dispatcher/c)
-       (#:confirmation-channel (or/c false/c async-channel?)
+       (#:confirmation-channel (or/c #f async-channel?)
         #:connection-close? boolean?
         #:dispatch-server-connect@ (unit/c (import) (export dispatch-server-connect^))
         #:tcp@ (unit/c (import) (export tcp^))
         #:ports (listof listen-port-number?)
-        #:listen-ip (or/c false/c string?)
-        #:max-waiting exact-nonnegative-integer?
-        #:initial-connection-timeout number?
-        #:request-read-timeout number?
-        #:max-request-line-length exact-positive-integer?
-        #:max-request-fields exact-positive-integer?
-        #:max-request-field-length exact-positive-integer?
-        #:max-request-body-length exact-positive-integer?
-        #:max-request-files exact-positive-integer?
-        #:max-request-file-length exact-positive-integer?
-        #:max-request-file-memory-threshold exact-positive-integer?
-        #:response-timeout exact-positive-integer?
-        #:response-send-timeout exact-positive-integer?)
-       (-> void))]
+        #:listen-ip (or/c #f string?)
+        #:max-waiting timeout/c
+        #:initial-connection-timeout timeout/c
+        #:safety-limits safety-limits?)
+       (-> any/c))]
  [serve/ips+ports
   (->* (#:dispatch dispatcher/c)
-       (#:confirmation-channel (or/c false/c async-channel?)
+       (#:confirmation-channel (or/c #f async-channel?)
         #:connection-close? boolean?
         #:dispatch-server-connect@ (unit/c (import) (export dispatch-server-connect^))
         #:tcp@ (unit/c (import) (export tcp^))
-        #:ips+ports (listof (cons/c (or/c false/c string?)
+        #:ips+ports (listof (cons/c (or/c #f string?)
                                     (listof listen-port-number?)))
-        #:max-waiting exact-nonnegative-integer?
-        #:initial-connection-timeout number?
-        #:request-read-timeout number?
-        #:max-request-line-length exact-positive-integer?
-        #:max-request-fields exact-positive-integer?
-        #:max-request-field-length exact-positive-integer?
-        #:max-request-body-length exact-positive-integer?
-        #:max-request-files exact-positive-integer?
-        #:max-request-file-length exact-positive-integer?
-        #:max-request-file-memory-threshold exact-positive-integer?
-        #:response-timeout exact-positive-integer?
-        #:response-send-timeout exact-positive-integer?)
-       (-> void))]
+        #:max-waiting timeout/c
+        #:initial-connection-timeout timeout/c
+        #:safety-limits safety-limits?)
+       (-> any/c))]
  [raw:dispatch-server-connect@ (unit/c (import) (export dispatch-server-connect^))]
  [make-ssl-connect@
   (-> path-string? path-string?
       (unit/c (import) (export dispatch-server-connect^)))]
- [do-not-return (-> void)]
+ [do-not-return (-> none/c)]
  [serve/web-config@
   (->*
-   ((unit/c (import) (export web-config^)))
+   ((unit/c (import) (export web-config*^)))
    (#:dispatch-server-connect@ (unit/c (import) (export dispatch-server-connect^))
     #:tcp@ (unit/c (import) (export tcp^)))
-   (-> void?))])
+   (-> any/c))])
 
 (define (make-ssl-connect@ server-cert-file server-key-file)
   (define the-ctxt
@@ -110,7 +83,7 @@
   ssl:dispatch-server-connect@)
 
 (define (do-not-return)
-  (semaphore-wait (make-semaphore 0)))
+  (sync never-evt))
 
 (define (serve
          #:dispatch dispatch
@@ -120,44 +93,28 @@
          #:tcp@ [tcp@ raw:tcp@]
          #:port [port 80]
          #:listen-ip [listen-ip #f]
-         #:max-waiting [max-waiting 511]
-         #:initial-connection-timeout [initial-connection-timeout 60]
-         #:request-read-timeout [request-read-timeout 60]
-         #:max-request-line-length [max-request-line-length (* 8 1024)]
-         #:max-request-fields [max-request-fields 100]
-         #:max-request-field-length [max-request-field-length (* 8 1024)]
-         #:max-request-body-length [max-request-body-length (* 1 1024 1024)]
-         #:max-request-files [max-request-files 100]
-         #:max-request-file-length [max-request-file-length (* 10 1024 1024)]
-         #:max-request-file-memory-threshold [max-request-file-memory-threshold (* 1 1024 1024)]
-         #:response-timeout [response-timeout 60]
-         #:response-send-timeout [response-send-timeout 60])
+         #:max-waiting [_max-waiting 511]
+         #:initial-connection-timeout [_timeout 60]
+         #:safety-limits [safety-limits (make-safety-limits
+                                         #:max-waiting _max-waiting
+                                         #:request-read-timeout _timeout)])
   (define read-request
     (http:make-read-request
      #:connection-close? connection-close?
-     #:read-timeout request-read-timeout
-     #:max-request-line-length max-request-line-length
-     #:max-request-fields max-request-fields
-     #:max-request-field-length max-request-field-length
-     #:max-request-body-length max-request-body-length
-     #:max-request-files max-request-files
-     #:max-request-file-length max-request-file-length
-     #:max-request-file-memory-threshold max-request-file-memory-threshold))
+     #:safety-limits safety-limits))
   (define-unit-binding a-dispatch-server-connect@
     dispatch-server-connect@ (import) (export dispatch-server-connect^))
   (define-unit-binding a-tcp@
     tcp@ (import) (export tcp^))
   (define-compound-unit/infer dispatch-server@/tcp@
-    (import dispatch-server-config^)
+    (import dispatch-server-config*^)
     (link a-dispatch-server-connect@ a-tcp@ dispatch-server-with-connect@)
     (export dispatch-server^))
   (define-values/invoke-unit
     dispatch-server@/tcp@
-    (import dispatch-server-config^)
+    (import dispatch-server-config*^)
     (export dispatch-server^))
-
-  (parameterize ([http:current-send-timeout response-send-timeout])
-    (serve #:confirmation-channel confirmation-channel)))
+  (serve #:confirmation-channel confirmation-channel))
 
 (define (serve/ports
          #:dispatch dispatch
@@ -167,18 +124,11 @@
          #:tcp@ [tcp@ raw:tcp@]
          #:ports [ports (list 80)]
          #:listen-ip [listen-ip #f]
-         #:max-waiting [max-waiting 511]
-         #:initial-connection-timeout [initial-connection-timeout 60]
-         #:request-read-timeout [request-read-timeout 60]
-         #:max-request-line-length [max-request-line-length (* 8 1024)]
-         #:max-request-fields [max-request-fields 100]
-         #:max-request-field-length [max-request-field-length (* 8 1024)]
-         #:max-request-body-length [max-request-body-length (* 1 1024 1024)]
-         #:max-request-files [max-request-files 100]
-         #:max-request-file-length [max-request-file-length (* 10 1024 1024)]
-         #:max-request-file-memory-threshold [max-request-file-memory-threshold (* 1 1024 1024)]
-         #:response-timeout [response-timeout 60]
-         #:response-send-timeout [response-send-timeout 60])
+         #:max-waiting [_max-waiting 511]
+         #:initial-connection-timeout [_timeout 60]
+         #:safety-limits [limits (make-safety-limits
+                                  #:max-waiting _max-waiting
+                                  #:request-read-timeout _timeout)])
   (define shutdowns
     (map (lambda (port)
            (serve
@@ -189,18 +139,7 @@
             #:tcp@ tcp@
             #:port port
             #:listen-ip listen-ip
-            #:max-waiting max-waiting
-            #:initial-connection-timeout initial-connection-timeout
-            #:request-read-timeout request-read-timeout
-            #:max-request-line-length max-request-line-length
-            #:max-request-fields max-request-fields
-            #:max-request-field-length max-request-field-length
-            #:max-request-body-length max-request-body-length
-            #:max-request-files max-request-files
-            #:max-request-file-length max-request-file-length
-            #:max-request-file-memory-threshold max-request-file-memory-threshold
-            #:response-timeout response-timeout
-            #:response-send-timeout response-send-timeout))
+            #:safety-limits limits))
          ports))
   (lambda ()
     (for-each apply shutdowns)))
@@ -212,18 +151,11 @@
          #:dispatch-server-connect@ [dispatch-server-connect@ raw:dispatch-server-connect@]
          #:tcp@ [tcp@ raw:tcp@]
          #:ips+ports [ips+ports (list (cons #f (list 80)))]
-         #:max-waiting [max-waiting 511]
-         #:initial-connection-timeout [initial-connection-timeout 60]
-         #:request-read-timeout [request-read-timeout 60]
-         #:max-request-line-length [max-request-line-length (* 8 1024)]
-         #:max-request-field-length [max-request-field-length (* 8 1024)]
-         #:max-request-fields [max-request-fields 100]
-         #:max-request-body-length [max-request-body-length (* 1 1024 1024)]
-         #:max-request-files [max-request-files 100]
-         #:max-request-file-length [max-request-file-length (* 10 1024 1024)]
-         #:max-request-file-memory-threshold [max-request-file-memory-threshold (* 1 1024 1024)]
-         #:response-timeout [response-timeout 60]
-         #:response-send-timeout [response-send-timeout 60])
+         #:max-waiting [_max-waiting 511]
+         #:initial-connection-timeout [_timeout 60]
+         #:safety-limits [limits (make-safety-limits
+                                  #:max-waiting _max-waiting
+                                  #:request-read-timeout _timeout)])
   (define shutdowns
     (map (match-lambda
            [(list-rest listen-ip ports)
@@ -235,18 +167,7 @@
              #:tcp@ tcp@
              #:ports ports
              #:listen-ip listen-ip
-             #:max-waiting max-waiting
-             #:initial-connection-timeout initial-connection-timeout
-             #:request-read-timeout request-read-timeout
-             #:max-request-line-length max-request-line-length
-             #:max-request-fields max-request-fields
-             #:max-request-field-length max-request-field-length
-             #:max-request-body-length max-request-body-length
-             #:max-request-files max-request-files
-             #:max-request-file-length max-request-file-length
-             #:max-request-file-memory-threshold max-request-file-memory-threshold
-             #:response-timeout response-timeout
-             #:response-send-timeout response-send-timeout)])
+             #:safety-limits limits)])
          ips+ports))
   (lambda ()
     (for-each apply shutdowns)))
@@ -264,7 +185,7 @@
   (define-unit m@ (import web-server^) (export)
     (init-depend web-server^)
     (serve))
-  (define-unit-binding c@ config@ (import) (export web-config^))
+  (define-unit-binding c@ config@ (import) (export web-config*^))
   (invoke-unit
    (compound-unit/infer
     (import)

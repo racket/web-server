@@ -1,8 +1,11 @@
 #lang racket/base
+
 (require racket/unit
-         net/tcp-sig)
-(require web-server/web-server-sig
+         net/tcp-sig
+         web-server/web-server-sig
          web-server/web-config-sig
+         web-server/safety-limits
+         (submod web-server/safety-limits private)
          web-server/private/dispatch-server-with-connect-unit
          web-server/private/dispatch-server-sig
          web-server/private/web-server-structs
@@ -10,8 +13,8 @@
          web-server/configuration/configuration-table-structs
          web-server/private/cache-table
          web-server/private/raw-dispatch-server-connect-unit
-         (prefix-in http: web-server/http/request))
-(require web-server/dispatchers/dispatch
+         (prefix-in http: web-server/http/request)
+         web-server/dispatchers/dispatch
          web-server/servlet/setup
          (prefix-in fsmap: web-server/dispatchers/filesystem-map)
          (prefix-in sequencer: web-server/dispatchers/dispatch-sequencer)
@@ -28,18 +31,18 @@
 (provide web-server-with-connect@
          web-server@)
 
-(define-unit web-config@->dispatch-server-config@
-  (import (prefix config: web-config^))
-  (export dispatch-server-config^)
-  (init-depend web-config^)
-  (define read-request http:read-request)
+(define-unit web-config*@->dispatch-server-config*@
+  (import (prefix config: web-config*^))
+  (export dispatch-server-config*^)
+  (init-depend web-config*^)
+
+  (define safety-limits config:safety-limits)
+  
+  (define read-request
+    (http:make-read-request #:safety-limits safety-limits))
 
   (define port config:port)
   (define listen-ip config:listen-ip)
-  (define max-waiting config:max-waiting)
-  (define initial-connection-timeout config:initial-connection-timeout)
-  (define response-timeout config:response-timeout)
-  (define response-send-timeout config:response-send-timeout)
 
   ;; dispatch : connection request -> void
   (define dispatch-cache (make-cache-table))
@@ -56,7 +59,7 @@
   ;; host-info->dispatcher : host-info -> conn request -> void
   (define (host-info->dispatcher host-info)
     (sequencer:make
-     (timeout:make initial-connection-timeout)
+     (timeout:make (safety-limits-request-read-timeout safety-limits)) ;; ????
      (if (and (host-log-format host-info)
               (host-log-path host-info))
          (log:make #:format (log:log-format->format (host-log-format host-info))
@@ -104,13 +107,16 @@
                  #:indices (host-indices host-info))
      (lift:make (responders-file-not-found (host-responders host-info))))))
 
+
+
 (define-compound-unit/infer web-server-with-connect@
-  (import tcp^ dispatch-server-connect^ web-config^)
+  (import tcp^ dispatch-server-connect^ web-config*^)
   (export web-server^)
-  (link web-config@->dispatch-server-config@ dispatch-server-with-connect@))
+  (link web-config*@->dispatch-server-config*@ dispatch-server-with-connect@))
+
 
 (define-compound-unit/infer web-server@
-  (import tcp^ web-config^)
+  (import tcp^ web-config*^)
   (export web-server^)
   (link [([ws : web-server^]) web-server-with-connect@]
         [([dsp : dispatch-server-connect^]) raw:dispatch-server-connect@]))

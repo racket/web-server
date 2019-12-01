@@ -21,6 +21,7 @@
          web-server/servlet/setup
          web-server/servlet/servlet-structs
          web-server/dispatchers/dispatch
+         web-server/safety-limits
          (prefix-in filter: web-server/dispatchers/dispatch-filter)
          (prefix-in servlets: web-server/dispatchers/dispatch-servlets))
 
@@ -38,27 +39,17 @@
                     . ->* .
                     dispatcher/c)]
  [serve/launch/wait (((semaphore? . -> . dispatcher/c))
-                     (#:launch-path (or/c false/c string?)
+                     (#:launch-path (or/c #f string?)
                       #:connection-close? boolean?
                       #:banner? boolean?
-                      #:listen-ip (or/c false/c string?)
+                      #:listen-ip (or/c #f string?)
                       #:port listen-port-number?
-                      #:max-waiting exact-nonnegative-integer?
-                      #:initial-connection-timeout number?
-                      #:request-read-timeout number?
-                      #:max-request-line-length exact-positive-integer?
-                      #:max-request-fields exact-positive-integer?
-                      #:max-request-field-length exact-positive-integer?
-                      #:max-request-body-length exact-positive-integer?
-                      #:max-request-files exact-positive-integer?
-                      #:max-request-file-length exact-positive-integer?
-                      #:max-request-file-memory-threshold exact-positive-integer?
-                      #:response-timeout exact-positive-integer?
-                      #:response-send-timeout exact-positive-integer?
-                      #:ssl-cert (or/c false/c path-string?)
-                      #:ssl-key (or/c false/c path-string?))
+                      #:max-waiting timeout/c
+                      #:safety-limits safety-limits?
+                      #:ssl-cert (or/c #f path-string?)
+                      #:ssl-key (or/c #f path-string?))
                      . ->* .
-                     void)])
+                     any)])
 
 (define (dispatch/servlet
          start
@@ -114,19 +105,10 @@
          [listen-ip "127.0.0.1"]
          #:port
          [port-arg 8000]
-         #:max-waiting
-         [max-waiting 511]
-         #:initial-connection-timeout [initial-connection-timeout 60]
-         #:request-read-timeout [request-read-timeout 60]
-         #:max-request-line-length [max-request-line-length (* 8 1024)]
-         #:max-request-fields [max-request-fields 100]
-         #:max-request-field-length [max-request-field-length (* 8 1024)]
-         #:max-request-body-length [max-request-body-length (* 1 1024 1024)]
-         #:max-request-files [max-request-files 100]
-         #:max-request-file-length [max-request-file-length (* 10 1024 1024)]
-         #:max-request-file-memory-threshold [max-request-file-memory-threshold (* 1 1024 1024)]
-         #:response-timeout [response-timeout 60]
-         #:response-send-timeout [response-send-timeout 60]
+         
+         #:max-waiting [_max-waiting 511]
+         #:safety-limits [limits (make-safety-limits #:max-waiting _max-waiting)]
+         
          #:ssl-cert
          [ssl-cert #f]
          #:ssl-key
@@ -140,18 +122,7 @@
            #:dispatch (dispatcher sema)
            #:listen-ip listen-ip
            #:port port-arg
-           #:max-waiting max-waiting
-           #:initial-connection-timeout initial-connection-timeout
-           #:request-read-timeout request-read-timeout
-           #:max-request-line-length max-request-line-length
-           #:max-request-fields max-request-fields
-           #:max-request-field-length max-request-field-length
-           #:max-request-body-length max-request-body-length
-           #:max-request-files max-request-files
-           #:max-request-file-length max-request-file-length
-           #:max-request-file-memory-threshold max-request-file-memory-threshold
-           #:response-timeout response-timeout
-           #:response-send-timeout response-send-timeout
+           #:safety-limits limits
            #:dispatch-server-connect@ (if ssl?
                                         (make-ssl-connect@ ssl-cert ssl-key)
                                         raw:dispatch-server-connect@)))

@@ -1,13 +1,15 @@
 #lang racket/base
+
 (require racket/contract
          net/url)
+
 (require web-server/http/response-structs
          web-server/http/request-structs
          "../private/util.rkt")
 
 ; configuration-table = (make-configuration-table nat nat num host-table (listof (cons str host-table)))
 (define-struct configuration-table
-  (port max-waiting initial-connection-timeout response-timeout response-send-timeout default-host virtual-hosts))
+  (port max-waiting initial-connection-timeout default-host virtual-hosts))
 
 ; host-table = (make-host-table (listof str) sym messages timeouts paths)
 (define-struct host-table (indices log-format messages timeouts paths))
@@ -32,8 +34,6 @@
          ([port port-number?]
           [max-waiting exact-nonnegative-integer?]
           [initial-connection-timeout natural-number/c]
-          [response-timeout exact-positive-integer?]
-          [response-send-timeout exact-positive-integer?]
           [default-host host-table?]
           [virtual-hosts (listof (cons/c string? host-table?))])]
  [struct host-table
@@ -45,8 +45,8 @@
  [struct host
          ([indices (listof string?)]
           [log-format symbol?]
-          [log-path (or/c false/c path-string?)]
-          [passwords (or/c false/c path-string?)]
+          [log-path (or/c #f path-string?)]
+          [passwords (or/c #f path-string?)]
           [responders responders?]
           [timeouts timeouts?]
           [paths paths?])]
@@ -74,10 +74,10 @@
           [file-per-byte number?]
           [file-base number?])]
  [struct paths
-         ([conf (or/c false/c path-string?)]
-          [host-base (or/c false/c path-string?)]
-          [log (or/c false/c path-string?)]
-          [htdocs (or/c false/c path-string?)]
-          [servlet (or/c false/c path-string?)]
-          [mime-types (or/c false/c path-string?)]
-          [passwords (or/c false/c path-string?)])])
+         ([conf (or/c #f path-string?)]
+          [host-base (or/c #f path-string?)]
+          [log (or/c #f path-string?)]
+          [htdocs (or/c #f path-string?)]
+          [servlet (or/c #f path-string?)]
+          [mime-types (or/c #f path-string?)]
+          [passwords (or/c #f path-string?)])])

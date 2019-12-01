@@ -1,4 +1,5 @@
 #lang racket/base
+
 (require racket/contract
          racket/list
          (for-syntax racket/base)
@@ -6,6 +7,7 @@
          racket/runtime-path
          "configuration-table-structs.rkt"
          web-server/http/bindings)
+
 (define configuration-table-sexpr? list?)
 
 (provide/contract
@@ -34,16 +36,12 @@
   (define port (get-binding 'port t 80))
   (define max-waiting (get-binding 'max-waiting t 511))
   (define initial-connection-timeout (get-binding 'initial-connection-timeout t 30))
-  (define response-timeout (get-binding 'response-timeout t 60))
-  (define response-send-timeout (get-binding 'response-send-timeout t 60))
   (define default-host-table (get-binding* 'default-host-table t `()))
   (define virtual-host-table (get-binding* 'virtual-host-table t `()))
   (make-configuration-table
    port
    max-waiting
    initial-connection-timeout
-   response-timeout
-   response-send-timeout
    (parse-host default-host-table)
    (map (lambda (h)
           (cons (car h) (parse-host (cdr h))))
@@ -102,8 +100,6 @@
   `((port ,(configuration-table-port new))
     (max-waiting ,(configuration-table-max-waiting new))
     (initial-connection-timeout ,(configuration-table-initial-connection-timeout new))
-    (response-timeout ,(configuration-table-response-timeout new))
-    (response-send-timeout ,(configuration-table-response-send-timeout new))
     (default-host-table
       ,(host-table->sexpr (configuration-table-default-host new)))
     (virtual-host-table

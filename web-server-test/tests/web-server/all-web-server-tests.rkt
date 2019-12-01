@@ -8,6 +8,7 @@
          "managers/all-managers-tests.rkt"
          "http/all-http-tests.rkt"
          "private/all-private-tests.rkt"
+         "signatures-test.rkt"
          "servlet/all-servlet-tests.rkt"
          "stuffers-test.rkt"
          "formlets-test.rkt"
@@ -29,6 +30,7 @@
    lang-tests
    all-managers-tests
    all-private-tests
+   signatures-tests
    all-servlet-tests
    servlet-env-tests
    test-tests

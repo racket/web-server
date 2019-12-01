@@ -17,6 +17,7 @@
                      web-server/stuffers
                      web-server/servlet/servlet-structs
                      web-server/servlet-dispatch
+                     web-server/safety-limits
                      racket/list))
 
 @defmodule[web-server/servlet-env]
@@ -137,27 +138,16 @@ Like always, you don't even need to save the file.
                         [#:launch-browser? launch-browser? boolean? (not command-line?)]
                         [#:quit? quit? boolean? (not command-line?)]
                         [#:banner? banner? boolean? (not command-line?)]
-                        [#:listen-ip listen-ip (or/c false/c string?) "127.0.0.1"]
+                        [#:listen-ip listen-ip (or/c #f string?) "127.0.0.1"]
                         [#:port port listen-port-number? 8000]
                         [#:max-waiting max-waiting exact-nonnegative-integer? 511]
-                        [#:initial-connection-timeout initial-connection-timeout integer? 60]
-                        [#:request-read-timeout request-read-timeout integer? 60]
-                        [#:max-request-line-length max-request-line-length exact-positive-integer? (* 8 1024)]
-                        [#:max-request-fields max-request-fields exact-positive-integer? 100]
-                        [#:max-request-field-length max-request-field-length exact-positive-integer? (* 8 1024)]
-                        [#:max-request-body-length max-request-body-length exact-positive-integer? (* 1 1024 1024)]
-                        [#:max-request-files max-request-files exact-positive-integer? 100]
-                        [#:max-request-file-length max-request-file-length exact-positive-integer? (* 10 1024 1024)]
-                        [#:max-request-file-memory-threshold max-request-file-memory-threshold exact-positive-integer? (* 1 1024 1024)]
-                        [#:response-timeout response-timeout exact-positive-integer? 60]
-                        [#:response-send-timeout response-send-timeout exact-positive-integer? 60]
+                        [#:safety-limits safety-limits safety-limits?
+                         (make-safety-limits #:max-waiting max-waiting)]
                         [#:servlet-path servlet-path string?
                                         "/servlets/standalone.rkt"]
                         [#:servlet-regexp servlet-regexp regexp?
                                           (regexp 
-                                           (format 
-                                            "^~a$"
-                                            (regexp-quote servlet-path)))]
+                                           (format "^~a$" (regexp-quote servlet-path)))]
                         [#:stateless? stateless? boolean? #f]
                         [#:stuffer stuffer (stuffer/c serializable? bytes?) default-stuffer]
                         [#:manager manager manager? (make-threshold-LRU-manager #f (* 128 1024 1024))]
@@ -184,12 +174,12 @@ Like always, you don't even need to save the file.
                         [#:mime-types-path mime-types-path path-string?
                                            ....]
                         [#:ssl? ssl? boolean? #f]
-                        [#:ssl-cert ssl-cert (or/c false/c path-string?) (and ssl? (build-path server-root-path "server-cert.pem"))]
-                        [#:ssl-key ssl-key (or/c false/c path-string?) (and ssl? (build-path server-root-path "private-key.pem"))]
+                        [#:ssl-cert ssl-cert (or/c #f path-string?) (and ssl? (build-path server-root-path "server-cert.pem"))]
+                        [#:ssl-key ssl-key (or/c #f path-string?) (and ssl? (build-path server-root-path "private-key.pem"))]
 
-                        [#:log-file log-file (or/c false/c path-string? output-port?) #f]
+                        [#:log-file log-file (or/c #f path-string? output-port?) #f]
                         [#:log-format log-format (or/c log-format/c format-req/c) 'apache-default])
-                       void]{
+                       any]{
  This sets up and starts a fairly default server instance.
       
  @racket[start] is loaded as a servlet and responds to requests that match @racket[servlet-regexp]. The current directory
@@ -206,7 +196,7 @@ Like always, you don't even need to save the file.
 @racket[serve/launch/wait], @racket[dispatch/servlet], and a few of
 the standard @secref["dispatchers" #:doc
 '(lib "web-server/scribblings/web-server-internal.scrbl")]. Some
-options, like @racket[port] and @racket[max-waiting] are transparently
+options, like @racket[port] and @racket[safety-limits] are transparently
 passed to @racket[serve/launch/wait]. Some advanced customization
 requires using these underlying pieces of the
 @racketmodname[web-server] directly. However, many simpler
@@ -252,9 +242,9 @@ order they appear in the list.
  If @racket[connection-close?] is @racket[#t], then every connection is closed after one
  request. Otherwise, the client decides based on what HTTP version it uses.
 
- @history[
-          #:changed "1.6"
-          @elem{Added the @racket[#:request-read-timeout], @racket[#:max-request-line-length], @racket[#:max-request-fields], @racket[#:max-request-field-length], @racket[#:max-request-body-length], @racket[#:max-request-files], @racket[#:max-request-file-length], @racket[#:max-request-file-memory-threshold], @racket[#:response-timeout], and @racket[#:response-send-timeout] arguments.}
+ @history[#:changed "1.6"
+          @elem{Added the @racket[safety-limits] argument as with @racket[serve/launch/wait]:
+            see @elemref["safety-limits-porting"]{compatability note}.}
           #:changed "1.3"
           @elem{Added support for providing @racket[log-file] as an output port.}]
 }
