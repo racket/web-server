@@ -1,22 +1,25 @@
 #lang racket
 
-(require (for-syntax racket/base)
+(require rackunit
          net/url
          racket/runtime-path
-         rackunit
          web-server/private/timer
          (submod web-server/http/request internal-test)
          web-server/http
          web-server/http/request
-         web-server/private/connection-manager)
+         web-server/private/connection-manager
+         web-server/safety-limits
+         syntax/parse/define
+         (for-syntax racket/base))
 
 (provide request-tests)
 
-(require/expose web-server/http/request
-                (read-bindings&post-data/raw))
+(module+ test
+  (require rackunit/text-ui)
+  (run-tests request-tests))
 
 (define-runtime-path fixtures
-  (build-path "fixtures"))
+  "fixtures/")
 
 (define (fixture/ip filename)
   (open-input-file (build-path fixtures filename)))
@@ -24,59 +27,85 @@
 (define (fixture filename)
   (file->bytes (build-path fixtures filename)))
 
-;; mock connection object for test on post body parsing
-(define (make-mock-connection&headers post-body)
-  (let* ([b (string->bytes/utf-8 post-body)]
-         [headers (list (make-header
-                         #"Content-Length"
-                         (string->bytes/utf-8
-                          (number->string (bytes-length b)))))]
-         [ip (open-input-bytes b)]
-         [op (open-output-bytes)])
-    (values (make-connection 0 (make-timer tm ip +inf.0 (lambda () (void)))
-                             ip op (make-custodian) #f)
-            headers)))
 
-(define (get-bindings post-data)
-  (define-values (conn headers)
-    (make-mock-connection&headers post-data))
 
-  (call-with-values
-   (lambda ()
-     (read-bindings&post-data/raw (connection-i-port conn)
-                                  #"POST"
-                                  (string->url "http://localhost")
-                                  (cons (make-header #"content-type"
-                                                     #"application/x-www-form-urlencoded")
-                                        headers)))
+(define/contract (exn:fail:network/c cf)
+  (-> (or/c string? regexp?) (-> any/c boolean?))
+  (match-lambda
+    [(exn:fail:network msg _)
+     (if (string? cf)
+         (equal? cf msg)
+         (regexp-match? cf msg))]
+    [_
+     #f]))
 
-   (lambda (fields data)
-     fields)))
+(define-check (check-exn:fail:network cf thunk)
+  (define pred (exn:fail:network/c cf))
+  (with-check-info*
+   (list (make-check-expected cf))
+   (λ ()
+     (check-exn pred thunk))))
 
-(define (get-post-data/raw post-data)
-  (define-values (conn headers)
-    (make-mock-connection&headers post-data))
+(define-syntax-parser test-exn:fail:network
+  [(_ name:expr cf:expr thunk:expr)
+   (quasisyntax/loc this-syntax
+     (test-case name #,(syntax/loc this-syntax
+                         (check-exn:fail:network cf thunk))))])
 
-  (call-with-values
-   (lambda ()
-     (read-bindings&post-data/raw (connection-i-port conn)
-                                  #"POST"
-                                  (string->url "http://localhost")
-                                  headers))
 
-   (lambda (fields data)
-     data)))
 
+;; helpers to setup tests on post body parsing
+(define-values [get-bindings get-post-data/raw]
+  (let ()
+    (define ((make-get-bindings/post-data transform-hs receive) post-body)
+      (define body-bs
+        (string->bytes/utf-8 post-body))
+      (define hs
+        (transform-hs
+         (list (make-header
+               #"Content-Length"
+               (string->bytes/utf-8
+                (number->string (bytes-length body-bs)))))))
+      (call-with-values
+       (λ ()
+         (read-bindings&post-data/raw (open-input-bytes body-bs)
+                                      #"POST"
+                                      (string->url "http://localhost")
+                                      hs))
+       receive))
+    (define get-bindings
+      (make-get-bindings/post-data
+       (λ (hs)
+         (cons (header #"content-type"
+                       #"application/x-www-form-urlencoded")
+               hs))
+       (λ (fields data)
+         fields)))
+    (define get-post-data/raw
+      (make-get-bindings/post-data
+       values
+       (λ (fields data)
+         data)))
+    (values get-bindings get-post-data/raw)))
+
+
+
+
+;; Currently the only safety issues addressed by
+;; `start-connection-manager` and `new-connection`
+;; are for responses, which we don't excercise in this file,
+;; so it's ok to keep using `make-connection` and
+;; a shared timer manager here.
 (define tm (start-timer-manager))
 
-(define (test-read-request b [read-request read-request])
+(define (test-read-request b [read-request standard-read-request])
   (define custodian (make-custodian))
   (parameterize ([current-custodian custodian])
     (define ip (open-input-bytes b))
     (define op (open-output-bytes))
     (define timer (make-timer tm ip +inf.0 void))
     (define conn
-      (make-connection 0 timer ip op custodian #f))
+      (connection 0 timer ip op custodian #f))
 
     (define-values (req close?)
       (read-request conn 80 (lambda _ (values "to" "from"))))
@@ -92,28 +121,107 @@
      'client-ip (request-client-ip req)
      'close? close?)))
 
-(define-syntax-rule (test-request name data e)
-  (let* ([e* e]
-         [r (for/hasheq ([(k v) (in-hash (test-read-request data))]
-                         #:when (hash-has-key? e* k))
-              (values k v))])
-    (test-equal? name r e*)))
 
-(define-syntax-rule (test-request/fixture filename e)
-  (test-request filename (fixture filename) e))
+(define (do-test-read-request/limits b limits)
+  (test-read-request b (make-read-request #:safety-limits limits)))
 
-(define-syntax-rule (test-multipart name data boundary ps)
-  (let ([r (read-mime-multipart data boundary)])
-    (test-equal? name (length r) (length ps))
-    (for ([rp (in-list r)]
-          [ep (in-list ps)])
-      (test-equal? name (mime-part-headers rp) (mime-part-headers ep))
-      (test-equal? name
-                   (port->bytes (mime-part-contents rp))
-                   (port->bytes (mime-part-contents ep))))))
 
-(define-syntax-rule (test-multipart/fixture filename boundary ps)
-  (test-multipart filename (fixture/ip filename) boundary ps))
+(define-check (check-request data expected)
+  (define actual
+    (test-read-request data))
+  (define diffs
+    ;; Iterating over `expected` ensures all expected keys
+    ;; are present, preventing typos from leading to skipped tests.
+    (for*/hasheq ([(k v-e) (in-immutable-hash expected)]
+                  [v-a (in-value (hash-ref actual k (λ () (string-info "<absent>"))))]
+                  #:unless (equal? v-e v-a))
+      (define nstd
+        (nested-info (list (make-check-actual v-a)
+                           (make-check-expected v-e))))
+      (values k (check-info k nstd))))
+  (unless (hash-empty? diffs)
+    (define sames
+      (for/hasheq ([(k v-e) (in-immutable-hash expected)]
+                   #:unless (hash-has-key? diffs k))
+        (values k (check-info k v-e))))
+    (define (hash-values/ordered hsh)
+      (hash-map hsh (λ (k v) v) #t))
+    (with-check-info
+        (['problems (nested-info (hash-values/ordered diffs))]
+         ['|other fields|
+          (if (hash-empty? sames)
+              (string-info "none")
+              (nested-info (hash-values/ordered sames)))])
+      (fail-check))))
+
+
+
+(define-syntax-parser test-request
+  [(_ name:expr data:expr expected:expr)
+   (quasisyntax/loc this-syntax
+     (test-case name #,(syntax/loc this-syntax
+                         (check-request data expected))))])
+
+(define-syntax-parser test-request/fixture
+  [(_ filename:expr expected:expr)
+   (syntax/loc this-syntax
+     (test-request filename (fixture filename) expected))])
+
+
+
+
+(define-check (check-multipart data boundary expected-parts)
+  (define (check msg #:e e #:a a)
+    (unless (equal? e a)
+      (with-check-info*
+       (list (check-info 'problem (string-info msg))
+             (make-check-actual a)
+             (make-check-expected e))
+       fail-check)))
+  (define actual-parts
+    (read-mime-multipart data boundary #:safety-limits (make-safety-limits)))
+  (check #:e (length expected-parts) #:a (length actual-parts)
+         "wrong number of parts")
+  (for ([n (in-naturals)]
+        [e (in-list expected-parts)]
+        [a (in-list actual-parts)])
+    (with-check-info (['|part index| n])
+      (match-define (mime-part e-hs (app port->bytes e-bs)) e)
+      (match-define (mime-part a-hs (app port->bytes a-bs)) a)
+      (check #:e e-hs #:a a-hs "wrong headers")
+      (check #:e e-bs #:a a-bs "wrong contents"))))
+
+
+
+(define-syntax-parser test-multipart
+  [(_ name:expr data:expr boundary:expr expected:expr)
+   (quasisyntax/loc this-syntax
+     (test-case name #,(syntax/loc this-syntax
+                         (check-multipart data boundary expected))))])
+
+(define-syntax-parser test-multipart/fixture
+  [(_ filename:expr boundary:expr expected:expr)
+   (syntax/loc this-syntax
+     (test-multipart filename (fixture/ip filename) boundary expected))])
+
+
+;                                                  
+;                                                  
+;                                                  
+;                                                  
+;   ;;             ;;                  ;; ;;       
+;   ;;             ;;                     ;;       
+;  ;;;;; ;;    ;; ;;;;;     ;; ;;; ;;  ;;;;;;; ;;  
+;   ;;  ;  ; ;;  ; ;;     ;;  ; ;; ;;  ;; ;;  ;  ; 
+;   ;;  ;  ;  ;    ;;      ;    ;; ;;  ;; ;;  ;  ; 
+;   ;; ;;;;;;  ;;  ;;  ;;;  ;;  ;; ;;  ;; ;; ;;;;;;
+;   ;;  ;        ;;;;         ;;;; ;;  ;; ;;  ;    
+;    ;  ;    ;   ;  ;     ;   ;  ; ;;  ;;  ;  ;    
+;    ;;; ;;;  ;;;   ;;;    ;;;   ;;;;  ;;  ;;; ;;; 
+;                                                  
+;                                                  
+;                                                  
+;                                                  
 
 (define request-tests
   (test-suite
@@ -127,50 +235,47 @@
 
      (test-equal?
       "empty input"
-      (read-http-line/limited (open-input-string ""))
+      (read-http-line/limited (open-input-string "") #:limit (* 8 1024))
       (read-bytes-line (open-input-string "")))
 
      (test-equal?
       "input without line endings"
-      (read-http-line/limited (open-input-string "hello world"))
+      (read-http-line/limited (open-input-string "hello world") #:limit (* 8 1024))
       (read-bytes-line (open-input-string "hello world") 'return-linefeed))
 
      (test-equal?
       "input with other line endings"
-      (read-http-line/limited (open-input-string "hello world\n how's it going?"))
+      (read-http-line/limited (open-input-string "hello world\n how's it going?")
+                               #:limit (* 8 1024))
       (read-bytes-line (open-input-string "hello world\n how's it going?") 'return-linefeed))
 
      (test-equal?
       "input with proper line endings"
-      (read-http-line/limited (open-input-string "hello world\r\n"))
+      (read-http-line/limited (open-input-string "hello world\r\n") #:limit (* 8 1024))
       (read-bytes-line (open-input-string "hello world\r\n") 'return-linefeed))
 
      (test-equal?
       "empty line with line endings"
-      (read-http-line/limited (open-input-string "\r\n"))
+      (read-http-line/limited (open-input-string "\r\n") #:limit (* 8 1024))
       #"")
 
      (test-equal?
       "CRLF at boundary between chunks"
       ;; the first chunk should contain #"hello\r" and the second #"\nworld"
-      (read-http-line/limited (open-input-string "hello\r\nworld") 100 6)
+      (read-http-line/limited (open-input-string "hello\r\nworld") 6 #:limit 100)
       #"hello")
 
-     (test-exn
+     (test-exn:fail:network
       "input too long"
-      (lambda (e)
-        (and (exn:fail:network? e)
-             (equal? (exn-message e) "read-http-line/limited: line exceeds limit of 5")))
-      (lambda _
-        (read-http-line/limited (open-input-string "hello world\r\n") 5)))
+      "read-http-line/limited: line exceeds limit of 5"
+      (lambda ()
+        (read-http-line/limited (open-input-string "hello world\r\n") #:limit 5)))
 
-     (test-exn
+     (test-exn:fail:network
       "input too long with minimal bufsize"
-      (lambda (e)
-        (and (exn:fail:network? e)
-             (equal? (exn-message e) "read-http-line/limited: line exceeds limit of 5")))
-      (lambda _
-        (read-http-line/limited (open-input-string "hello world\r\n") 5 1))))
+      "read-http-line/limited: line exceeds limit of 5"
+      (lambda ()
+        (read-http-line/limited (open-input-string "hello world\r\n") 1 #:limit 5))))
 
     (test-suite
      "read-bytes/lazy"
@@ -259,26 +364,24 @@
     (test-suite
      "read-request-line"
 
-     (test-exn
+     (test-exn:fail:network
       "empty input"
-      (lambda (e)
-        (and (exn:fail:network? e)
-             (regexp-match #"http input closed prematurely" (exn-message e))))
-      (lambda _
-        (read-request-line (open-input-string ""))))
+      #rx"http input closed prematurely"
+      (lambda ()
+        (read-request-line (open-input-string "") 1024)))
 
-     (test-exn
+     (test-exn:fail:network
       "malformed syntax"
-      (lambda (e)
-        (and (exn:fail:network? e)
-             (regexp-match #"malformed request" (exn-message e))))
-      (lambda _
-        (read-request-line (open-input-string "HTTP/1.1 GET /"))))
+      #rx"malformed request"
+      (lambda ()
+        (read-request-line (open-input-string "HTTP/1.1 GET /") 1024)))
 
-     (let ([parse-request-uri (lambda (line)
-                                (define-values (method uri major minor)
-                                  (read-request-line (open-input-string line)))
-                                uri)])
+     (let ()
+       (define (parse-request-uri line)
+         (define-values (method uri major minor)
+           (read-request-line (open-input-string line) 1024))
+         uri)
+       
        (test-equal?
         "absolute URI"
         (parse-request-uri "GET http://example.com/foo HTTP/1.1")
@@ -303,12 +406,10 @@
     (test-suite
      "read-mime-multipart"
 
-     (test-exn
+     (test-exn:fail:network
       "multipart-body-empty"
-      (lambda (e)
-        (and (exn:fail:network? e)
-             (regexp-match #"malformed header" (exn-message e))))
-      (lambda _
+      #rx"malformed header"
+      (lambda ()
         (read-mime-multipart (fixture/ip "multipart-body-empty") #"abc")))
 
      (test-multipart/fixture
@@ -320,12 +421,10 @@
        (mime-part (list (header #"Content-Disposition" #"multipart/form-data; name=\"y\""))
                   (open-input-bytes #"20"))))
 
-     (test-exn
+     (test-exn:fail:network
       "multipart-body-field-with-many-headers"
-      (lambda (e)
-        (and (exn:fail:network? e)
-             (regexp-match #"header count exceeds limit of 20" (exn-message e))))
-      (lambda _
+      #rx"header count exceeds limit of 20"
+      (lambda ()
         (read-mime-multipart (fixture/ip "multipart-body-field-with-many-headers") #"abc")))
 
      (test-multipart/fixture
@@ -342,12 +441,10 @@
        (mime-part (list (header #"Content-Disposition" #"multipart/form-data; name=\"a\""))
                   (open-input-bytes #""))))
 
-     (test-exn
+     (test-exn:fail:network
       "multipart-body-field-without-data"
-      (lambda (e)
-        (and (exn:fail:network? e)
-             (regexp-match #"port closed prematurely" (exn-message e))))
-      (lambda _
+      #rx"malformed part \\(no data\\)"
+      (lambda ()
         (read-mime-multipart (fixture/ip "multipart-body-field-without-data") #"abc")))
 
      (test-multipart/fixture
@@ -364,43 +461,41 @@
        (mime-part (list (header #"Content-Disposition" #"multipart/form-data; name=\"a\""))
                   (open-input-bytes (make-bytes 1000 97)))))
 
-     (test-exn
+     (test-exn:fail:network
       "multipart-body-with-long-field, short field limit"
-      (lambda (e)
-        (and (exn:fail:network? e)
-             (regexp-match #"field exceeds max length" (exn-message e))))
-      (lambda _
+      #rx"field exceeds max length"
+      (lambda ()
         (read-mime-multipart (fixture/ip "multipart-body-with-long-field")
                              #"------------------------4cb1363b48c1c499"
-                             #:max-field-length 10)))
+                             #:safety-limits (make-safety-limits
+                                              #:max-form-data-field-length 10))))
 
-     (test-exn
+     (test-exn:fail:network
       "multipart-body-with-long-files, small file limit"
-      (lambda (e)
-        (and (exn:fail:network? e)
-             (regexp-match #"too many files" (exn-message e))))
-      (lambda _
+      #rx"too many files"
+      (lambda ()
         (read-mime-multipart (fixture/ip "multipart-body-with-long-files")
                              #"------------------------4cb1363b48c1c499"
-                             #:max-files 2)))
+                             #:safety-limits (make-safety-limits
+                                              #:max-form-data-files 2))))
 
      (test-not-exn
       "multipart-body-with-long-files, small field limit"
-      (lambda _
+      (lambda ()
         (read-mime-multipart (fixture/ip "multipart-body-with-long-files")
                              #"------------------------4cb1363b48c1c499"
-                             #:max-fields 2)))
+                             #:safety-limits (make-safety-limits
+                                              #:max-form-data-fields 2))))
 
-     (test-exn
+     (test-exn:fail:network
       "multipart-body-with-long-files, small file length limit"
-      (lambda (e)
-        (and (exn:fail:network? e)
-             (regexp-match #"file exceeds max length" (exn-message e))))
-      (lambda _
+      #rx"file exceeds max length"
+      (lambda ()
         (read-mime-multipart (fixture/ip "multipart-body-with-long-files")
                              #"------------------------4cb1363b48c1c499"
-                             #:max-files 100
-                             #:max-file-length 100)))
+                             #:safety-limits (make-safety-limits
+                                              #:max-form-data-files 100
+                                              #:max-form-data-file-length 100))))
 
      (test-multipart/fixture
       "multipart-body-with-multiple-files"
@@ -420,12 +515,10 @@
        (mime-part (list)
                   (open-input-bytes #"42"))))
 
-     (test-exn
+     (test-exn:fail:network
       "multipart-body-without-end-boundary"
-      (lambda (e)
-        (and (exn:fail:network? e)
-             (regexp-match #"port closed prematurely" (exn-message e))))
-      (lambda _
+      #rx"port closed prematurely"
+      (lambda ()
         (read-mime-multipart (fixture/ip "multipart-body-without-end-boundary") #"abc")))
 
      (test-multipart/fixture
@@ -447,44 +540,52 @@
 
      (test-not-exn
       "multipart-body-with-mixture-of-fields-and-files, fields within limit"
-      (lambda _
+      (lambda ()
         (read-mime-multipart (fixture/ip "multipart-body-with-mixture-of-fields-and-files")
                              #"abc"
-                             #:max-fields 3)))
+                             #:safety-limits (make-safety-limits 
+                                              #:max-form-data-fields 3))))
 
      (test-not-exn
       "multipart-body-with-mixture-of-fields-and-files, files within limit"
-      (lambda _
+      (lambda ()
         (read-mime-multipart (fixture/ip "multipart-body-with-mixture-of-fields-and-files")
                              #"abc"
-                             #:max-files 3)))
+                             #:safety-limits (make-safety-limits
+                                              #:max-form-data-files 3))))
 
-     (test-exn
+     (test-exn:fail:network
       "multipart-body-with-mixture-of-fields-and-files, fields above limit"
-      (lambda (e)
-        (and (exn:fail:network? e)
-             (regexp-match #"too many fields" (exn-message e))))
-      (lambda _
+      #rx"too many fields"
+      (lambda ()
         (read-mime-multipart (fixture/ip "multipart-body-with-mixture-of-fields-and-files")
                              #"abc"
-                             #:max-fields 2)))
+                             #:safety-limits (make-safety-limits
+                                              #:max-form-data-fields 2))))
 
-     (test-exn
+     (test-exn:fail:network
       "multipart-body-with-mixture-of-fields-and-files, files above limit"
-      (lambda (e)
-        (and (exn:fail:network? e)
-             (regexp-match #"too many files" (exn-message e))))
-      (lambda _
+      #rx"too many files"
+      (lambda ()
         (read-mime-multipart (fixture/ip "multipart-body-with-mixture-of-fields-and-files")
                              #"abc"
-                             #:max-files 2)))
+                             #:safety-limits (make-safety-limits
+                                              #:max-form-data-files 2))))
 
      (test-multipart/fixture
       "multipart-body-with-long-preamble"
       #"abc"
       (list
        (mime-part (list (header #"Content-Disposition" #"multipart/form-data; name=\"x\""))
-                  (open-input-bytes #"42"))))))
+                  (open-input-bytes #"42"))))
+
+     (test-exn:fail:network
+      "multipart-body-with-too-long-preamble, preamble too long"
+      #rx"too many \"preamble\" lines"
+      (λ ()
+        (read-mime-multipart (fixture/ip "multipart-body-with-too-long-preamble")
+                             #"abc"
+                             #:safety-limits (make-safety-limits))))))
 
    (test-suite
     "Headers"
@@ -494,7 +595,10 @@
 
      (test-equal?
       "real-world 1"
-      (read-headers (fixture/ip "headers-to-github-dot-com") 100 4096)
+      (read-headers (fixture/ip "headers-to-github-dot-com")
+                    #:safety-limits
+                    (make-safety-limits #:max-request-headers 100
+                                        #:max-request-header-length 4096))
       (list
        (header #"Host" #"github.com")
        (header #"User-Agent"
@@ -510,7 +614,10 @@
 
      (test-equal?
       "real-world 1"
-      (read-headers (fixture/ip "headers-to-reddit-dot-com") 100 4096)
+      (read-headers (fixture/ip "headers-to-reddit-dot-com")
+                    #:safety-limits
+                    (make-safety-limits #:max-request-headers 100
+                                        #:max-request-header-length 4096))
       (list
        (header #"Host" #"www.reddit.com")
        (header #"User-Agent" #"Mozilla/5.0 (Macintosh; Intel Mac OS X 10.14; rv:69.0) Gecko/20100101 Firefox/69.0")
@@ -668,14 +775,12 @@
        'method #"OPTIONS"
        'uri #"*"))
 
-     (test-exn
+     (test-exn:fail:network
       "request line too short"
-      (lambda (e)
-        (and (exn:fail:network? e)
-             (regexp-match? #rx"line exceeds limit of 5" (exn-message e))))
-      (lambda _
-        (test-read-request #"OPTIONS /some/path HTTP/1.1\r\n\r\n"
-                           (make-read-request #:max-request-line-length 5)))))
+      #rx"line exceeds limit of 5"
+      (lambda ()
+        (do-test-read-request/limits #"OPTIONS /some/path HTTP/1.1\r\n\r\n"
+                                     (make-safety-limits #:max-request-line-length 5)))))
 
     (test-suite
      "Headers"
@@ -706,35 +811,29 @@
                       (header #"X-Forty-Two" #"42"))
        'body #"abcdefghijklmnopqrstuvwxyz1234567890abcdef"))
 
-     (test-exn
+     (test-exn:fail:network
       "too many headers"
-      (lambda (e)
-        (and (exn:fail:network? e)
-             (regexp-match? #rx"header count exceeds limit" (exn-message e))))
-      (lambda _
-        (test-read-request
+      #rx"header count exceeds limit"
+      (lambda ()
+        (do-test-read-request/limits
          (fixture "get-with-many-headers")
-         (make-read-request #:max-request-fields 10))))
+         (make-safety-limits #:max-request-headers 10))))
 
-     (test-exn
+     (test-exn:fail:network
       "header too long"
-      (lambda (e)
-        (and (exn:fail:network? e)
-             (regexp-match? #rx"line exceeds limit of 10" (exn-message e))))
-      (lambda _
-        (test-read-request
+      #rx"line exceeds limit of 10"
+      (lambda ()
+        (do-test-read-request/limits
          (fixture "get-with-long-single-line-header")
-         (make-read-request #:max-request-field-length 10))))
+         (make-safety-limits #:max-request-header-length 10))))
 
-     (test-exn
+     (test-exn:fail:network
       "folded header too long"
-      (lambda (e)
-        (and (exn:fail:network? e)
-             (regexp-match? #rx"header too long" (exn-message e))))
-      (lambda _
-        (test-read-request
+      #rx"header too long"
+      (lambda ()
+        (do-test-read-request/limits
          (fixture "get-with-long-multi-line-header")
-         (make-read-request #:max-request-field-length 10)))))
+         (make-safety-limits #:max-request-header-length 10)))))
 
     (test-suite
      "Chunked transfer-encoding"
@@ -752,25 +851,21 @@
                       (header #"Another-Footer" #"another-value"))
        'body #"abcdefghijklmnopqrstuvwxyz1234567890abcdef"))
 
-     (test-exn
+     (test-exn:fail:network
       "too many headers after chunked body"
-      (lambda (e)
-        (and (exn:fail:network? e)
-             (regexp-match #rx"header count exceeds limit" (exn-message e))))
-      (lambda _
-        (test-read-request
+      #rx"header count exceeds limit"
+      (lambda ()
+        (do-test-read-request/limits
          (fixture "post-with-chunked-transfer-encoding")
-         (make-read-request #:max-request-fields 3))))
+         (make-safety-limits #:max-request-headers 3))))
 
-     (test-exn
+     (test-exn:fail:network
       "chunked request too large"
-      (lambda (e)
-        (and (exn:fail:network? e)
-             (regexp-match #rx"chunked content exceeds max body length" (exn-message e))))
-      (lambda _
-        (test-read-request
+      #rx"chunked content exceeds max body length"
+      (lambda ()
+        (do-test-read-request/limits
          (fixture "post-with-chunked-transfer-encoding")
-         (make-read-request #:max-request-body-length 10)))))
+         (make-safety-limits #:max-request-body-length 10)))))
 
     (test-suite
      "JSON data"
@@ -796,14 +891,12 @@
        'bindings (list (binding:form #"upsert" #"1"))
        'body #"{\"title\": \"How to Design Programs\"}"))
 
-     (test-exn
+     (test-exn:fail:network
       "post-with-json-body, exceeding size limit"
-      (lambda (e)
-        (and (exn:fail:network? e)
-             (regexp-match #"body length exceeds limit" (exn-message e))))
-      (lambda _
-        (test-read-request (fixture "post-with-json-body")
-                           (make-read-request #:max-request-body-length 10)))))
+      #rx"body length exceeds limit"
+      (lambda ()
+        (do-test-read-request/limits (fixture "post-with-json-body")
+                                  (make-safety-limits #:max-request-body-length 10)))))
 
     (test-suite
      "GET bindings"
@@ -843,20 +936,16 @@
       "post-with-empty-body"
       (hasheq 'bindings null))
 
-     (test-exn
+     (test-exn:fail:network
       "post-with-invalid-content-length"
-      (lambda (e)
-        (and (exn:fail:network? e)
-             (regexp-match #rx"POST request contained a non-numeric content-length" (exn-message e))))
-      (lambda _
+      #rx"POST request contained a non-numeric content-length"
+      (lambda ()
         (test-read-request (fixture "post-with-invalid-content-length"))))
 
-     (test-exn
+     (test-exn:fail:network
       "post-with-body-shorter-than-content-length"
-      (lambda (e)
-        (and (exn:fail:network? e)
-             (regexp-match #rx"port closed prematurely" (exn-message e))))
-      (lambda _
+      #rx"port closed prematurely"
+      (lambda ()
         (test-read-request (fixture "post-with-body-shorter-than-content-length")))))
 
     (test-suite
@@ -878,22 +967,15 @@
       "post-with-empty-multipart-body"
       (hasheq 'bindings null))
 
-     (test-exn
+     (test-exn:fail:network
       "post-with-multipart-data-without-disposition"
-      (lambda (e)
-        (and (exn:fail:network? e)
-             (regexp-match #"Couldn't extract form field name for file upload" (exn-message e))))
-      (lambda _
+      #rx"Couldn't extract form field name for file upload"
+      (lambda ()
         (test-read-request (fixture "post-with-multipart-data-without-disposition"))))
 
-     (test-exn
+     (test-exn:fail:network
       "post-with-multipart-data-without-body"
-      (lambda (e)
-        (and (exn:fail:network? e)
-             (regexp-match #"port closed prematurely" (exn-message e))))
-      (lambda _
+      #rx"port closed prematurely"
+      (lambda ()
         (test-read-request (fixture "post-with-multipart-data-without-body"))))))))
 
-(module+ test
-  (require rackunit/text-ui)
-  (run-tests request-tests))

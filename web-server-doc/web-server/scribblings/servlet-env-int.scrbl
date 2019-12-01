@@ -12,6 +12,8 @@
                      web-server/configuration/configuration-table
                      web-server/configuration/responders
                      web-server/dispatchers/dispatch-log
+                     web-server/web-server
+                     web-server/safety-limits
                      net/url
                      racket/serialize
                      web-server/stuffers
@@ -58,30 +60,22 @@ These functions optimize the construction of dispatchers and launching of server
 @defproc[(serve/launch/wait
           [make-dispatcher (semaphore? . -> . dispatcher/c)]
           [#:connection-close? connection-close? boolean? #f]
-          [#:launch-path launch-path (or/c false/c string?) #f]
+          [#:launch-path launch-path (or/c #f string?) #f]
           [#:banner? banner? boolean? #f]
-          [#:listen-ip listen-ip (or/c false/c string?) "127.0.0.1"]
+          [#:listen-ip listen-ip (or/c #f string?) "127.0.0.1"]
           [#:port port number? 8000]
+          [#:ssl-cert ssl-cert (or/c #f path-string?) #f]
+          [#:ssl-key ssl-key (or/c #f path-string?) #f]
           [#:max-waiting max-waiting exact-nonnegative-integer? 511]
-          [#:initial-connection-timeout initial-connection-timeout integer? 60]
-          [#:request-read-timeout request-read-timeout integer? 60]
-          [#:max-request-line-length max-request-line-length exact-positive-integer? (* 8 1024)]
-          [#:max-request-fields max-request-fields exact-positive-integer? 100]
-          [#:max-request-field-length max-request-field-length exact-positive-integer? (* 8 1024)]
-          [#:max-request-body-length max-request-body-length exact-positive-integer? (* 1 1024 1024)]
-          [#:max-request-files max-request-files exact-positive-integer? 100]
-          [#:max-request-file-length max-request-file-length exact-positive-integer? (* 10 1024 1024)]
-          [#:max-request-file-memory-threshold max-request-file-memory-threshold exact-positive-integer? (* 1 1024 1024)]
-          [#:response-timeout response-timeout exact-positive-integer? 60]
-          [#:response-send-timeout response-send-timeout exact-positive-integer? 60]
-          [#:ssl-cert ssl-cert (or/c false/c path-string?) #f]
-          [#:ssl-key ssl-key (or/c false/c path-string?) #f])
-         void]{
+          [#:safety-limits safety-limits safety-limits?
+           (make-safety-limits #:max-waiting max-waiting)])
+         any]{
  The other interesting part of @racket[serve/servlet] is its ability to start up a server and immediately
  launch a browser at it. This is provided by @racket[serve/launch/wait].
  
- It starts a server using the result of @racket[make-dispatcher] as the dispatcher. @racket[make-dispatcher] is supplied
- a semaphore that if posted, will cause the server to quit.
+ It starts a server using the result of @racket[make-dispatcher] as the dispatcher.
+ The @racket[make-dispatcher] argument is called with
+ a semaphore that, if posted, will cause the server to quit.
  
  If @racket[launch-path] is not false, then a browser is launched with that path appended to the URL to the server itself.
  
@@ -91,16 +85,25 @@ These functions optimize the construction of dispatchers and launching of server
  connections to all of the listening machine's addresses. Otherwise, the server accepts connections only at the interface(s) associated with the given string.
  For example, providing @racket["127.0.0.1"] (the default) as @racket[listen-ip] creates a server that accepts only connections to @racket["127.0.0.1"] (the loopback interface) from the local machine.
 
-Other parameters are passed to @racket[serve] to control the TCP backlog and connection handling parameters.
- 
  If @racket[ssl-key] and @racket[ssl-cert] are not false, then the server runs in HTTPS mode with @racket[ssl-cert]
  and @racket[ssl-key] as paths to the certificate and private key.    
  
  If @racket[connection-close?] is @racket[#t], then every connection is closed after one
  request. Otherwise, the client decides based on what HTTP version it uses.
 
- @history[
-#:changed "1.6" @elem{Added the @racket[#:request-read-timeout], @racket[#:max-request-line-length], @racket[#:max-request-fields], @racket[#:max-request-field-length], @racket[#:max-request-body-length], @racket[#:max-request-files], @racket[#:max-request-file-length], @racket[#:max-request-file-memory-threshold], @racket[#:response-timeout], and @racket[#:response-send-timeout] arguments.}]
+  The @racket[safety-limits] argument supplies a @tech{safety limits}
+  value specifying the policies to be used while reading and handling requests.
+
+  The @racket[max-waiting] argument is supported for backwards compatability.
+  If a @racket[safety-limits] argument is given, the @racket[max-waiting]
+  argument is ignored; otherwise, it is passed to @racket[make-safety-limits]
+  to construct the @tech{safety limits} value.
+  If neither @racket[max-waiting] nor @racket[safety-limits] are given,
+  the default @tech{safety limits} value is equivalent to @racket[(make-safety-limits)].
+ 
+  @history[#:changed "1.6"
+           @elem{Added the @racket[safety-limits] argument:
+              see @elemref["safety-limits-porting"]{compatability note}.}]
 }
               
 }

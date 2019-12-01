@@ -3,7 +3,7 @@
 (define collection 'multi)
 
 (define deps '("srfi-lite-lib"
-               ("base" #:version "6.2.900.15")
+               ("base" #:version "7.4.0.5")
                "net-lib"
                "net-cookies-lib"
                "compatibility-lib"

@@ -4,6 +4,10 @@
          net/url)
 (provide digest-auth-tests)
 
+(module+ main
+  (require rackunit/text-ui)
+  (run-tests digest-auth-tests))
+
 (define RFC-Example-bytes
   (string->bytes/utf-8 #<<END
 Digest username="Mufasa",

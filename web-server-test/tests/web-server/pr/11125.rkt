@@ -5,6 +5,7 @@
          web-server/http/request
          (submod web-server/http/request internal-test)
          web-server/servlet-env
+         web-server/safety-limits
          tests/eli-tester)
 
 (define (do-the-test #:connection-close? connection-close?)
@@ -65,7 +66,10 @@
         (flush-output http-write-p)
 
         (read-line http-read-p)
-        (read-headers http-read-p 100 1024)
+        (read-headers http-read-p
+                      #:safety-limits (make-unlimited-safety-limits
+                                       #:max-request-headers 100
+                                       #:max-request-header-length 1024))
         (string->number (string (read-char http-read-p))))
 
       (begin0

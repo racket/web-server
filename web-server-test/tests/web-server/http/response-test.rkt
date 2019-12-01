@@ -3,9 +3,14 @@
 (require rackunit
          web-server/http
          web-server/http/response
+         web-server/safety-limits
          web-server/private/connection-manager
          web-server/private/timer)
 (provide response-tests)
+
+(module+ test
+  (require rackunit/text-ui)
+  (run-tests response-tests))
 
 ;; Adds buffering on top of a pair of pipes so that OS-level buffering
 ;; of sockets may be simulated.
@@ -71,8 +76,12 @@
       (thread
        (lambda ()
          (define-values [conn-i conn-o] (make-pipe))
+         (define cm
+           (start-connection-manager #:safety-limits (make-unlimited-safety-limits
+                                                      #:response-send-timeout 60)))
          (define connection
-           (new-connection (start-connection-manager) 120 conn-i out (current-custodian) #f))
+           ;; explicit initial connection timeout argument should still be respected
+           (new-connection cm 120 conn-i out (current-custodian) #f))
          (parameterize ([current-connection connection])
            (output-response connection resp)))))
 
@@ -169,7 +178,3 @@
              (check-= (ttl) 60000 300)
              (sleep 1)))))))))
 
-
-(module+ test
-  (require rackunit/text-ui)
-  (run-tests response-tests))

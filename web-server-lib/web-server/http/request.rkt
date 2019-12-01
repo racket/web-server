@@ -9,6 +9,8 @@
          racket/port
          racket/promise
          web-server/http/request-structs
+         web-server/safety-limits
+         (submod web-server/safety-limits private)
          web-server/private/connection-manager
          web-server/private/util)
 
@@ -26,9 +28,6 @@
 ;; Happy hacking!
 ;;
 
-(define nonnegative-length/c
-  (or/c exact-nonnegative-integer? +inf.0))
-
 (define read-request/c
   (connection?
    listen-port-number?
@@ -36,97 +35,107 @@
    . -> .
    (values request? boolean?)))
 
-(provide/contract
- [parse-bindings (-> bytes? (listof binding?))]
- [read-headers (->* (input-port?)
-                    (nonnegative-length/c
-                     nonnegative-length/c)
-                    (listof header?))]
+(provide
+ (contract-out
+  ;; CAUTION: To maximize backwards compatibility for low-level
+  ;; programs, `make-read-request` and `read-request`
+  ;; use `(make-unlimited-safety-limits)`
+  ;; if the `#:safety-limits` argument is not given,
+  ;; which leaves applications vulnerable.
+  ;; Generally, you should use `make-read-request` with
+  ;; an explicit `#:safety-limits` argument.
+  ;; (Even better, don't use this private, undocumented
+  ;; module directly in the first place!!)
+  ;; To further discourage unsafety, `standard-read-request`
+  ;; uses `(make-safety-limits)`.
+  [make-read-request
+   (->* ()
+        (#:connection-close? boolean?
+         #:safety-limits safety-limits?)
+        read-request/c)]
+  [read-request
+   read-request/c]
+  [standard-read-request
+   read-request/c]
+  ;; `parse-bindings` and `read-headers` were supposed to be private,
+  ;; but there are at least some packages that depend on them,
+  ;; e.g. https://pkgs.racket-lang.org/package/rfc6455
+  ;; CAUTION: They effectively use `(make-unlimited-safety-limits)`
+  ;; by default to maximize compatibility,
+  ;; which leaves applications vulnerable as noted above.
+  [parse-bindings (-> bytes? (listof binding?))]
+  [read-headers (->* (input-port?)
+                     (#:safety-limits safety-limits?)
+                     (listof header?))]))
 
- [rename make-ext:read-request
-         make-read-request
-         (->* ()
-              (#:connection-close? boolean?
-               #:read-timeout number?
-               #:max-request-line-length exact-positive-integer?
-               #:max-request-fields exact-positive-integer?
-               #:max-request-field-length exact-positive-integer?
-               #:max-request-body-length exact-positive-integer?
-               #:max-request-files exact-positive-integer?
-               #:max-request-file-length exact-positive-integer?
-               #:max-request-file-memory-threshold exact-positive-integer?)
-              read-request/c)]
- [rename ext:read-request
-         read-request
-         read-request/c])
 
+(module* internal-test #f
+  (provide read-http-line/limited
+           read-bytes/lazy
+           read-request-line
+           read-bindings&post-data/raw
+           make-spooled-temporary-file
+           (struct-out mime-part)
+           read-mime-multipart))
 
 ;; **************************************************
 ;; read-request: connection number (input-port -> string string) -> request boolean?
-;; read the request line, and the headers, determine if the connection should
-;; be closed after servicing the request and build a request structure
-(define ((make-read-request
-          #:connection-close? [connection-close? #f]
-          #:read-timeout [read-timeout 60]
-          #:max-request-line-length [max-request-line-length (* 8 1024)]
-          #:max-request-fields [max-request-fields 100]
-          #:max-request-field-length [max-request-field-length (* 8 1024)]
-          #:max-request-body-length [max-request-body-length (* 1 1024 1024)]
-          #:max-request-files [max-request-files 100]
-          #:max-request-file-length [max-request-file-length (* 10 1024 1024)]
-          #:max-request-file-memory-threshold [max-request-file-memory-threshold (* 1 1024 1024)])
-         conn host-port port-addresses)
+;; Read the request line, and the headers, determine if the connection should
+;; be closed after servicing the request, and build a request structure
+(define (make-read-request #:connection-close? [connection-close? #f]
+                           #:safety-limits [limits (make-unlimited-safety-limits)])
+  
+  (match-define (safety-limits
+                 #:request-read-timeout read-timeout
+                 #:max-request-line-length max-request-line-length
+                 #:max-request-headers max-request-fields
+                 #:max-request-header-length max-request-field-length
+                 #:max-request-body-length max-request-body-length)
+    limits)
 
-  (reset-connection-timeout! conn read-timeout)
-  (define ip (connection-i-port conn))
-  (define-values (method uri major minor)
-    (read-request-line ip max-request-line-length))
-  (define initial-headers
-    (read-headers ip
-                  max-request-fields
-                  max-request-field-length))
-  (define-values (data-ip headers)
-    (complete-request ip
-                      initial-headers
-                      max-request-fields
-                      max-request-field-length
-                      max-request-body-length))
-  (define-values (host-ip client-ip)
-    (port-addresses ip))
-  (define-values (bindings/raw-promise raw-post-data)
-    (read-bindings&post-data/raw data-ip method uri headers
-                                 #:max-body-length max-request-body-length
-                                 #:multipart-reader (lambda (in boundary)
-                                                      (read-mime-multipart in boundary
-                                                                           #:max-files max-request-files
-                                                                           #:max-file-length max-request-file-length
-                                                                           #:max-file-memory-threshold max-request-file-memory-threshold
-                                                                           #:max-field-length max-request-field-length))))
-  (define request
-    (make-request method uri headers bindings/raw-promise raw-post-data
-                  host-ip host-port client-ip))
-  (define close?
-    (or connection-close?
-        (close-connection? headers major minor
-                           client-ip host-ip)))
-  (values request close?))
+  (define (do-read-request conn host-port port-addresses)
+    (reset-connection-timeout! conn read-timeout)
+    (define ip (connection-i-port conn))
+    (define-values (method uri major minor)
+      (read-request-line ip max-request-line-length))
+    (define initial-headers
+      (read-headers* ip
+                     #:max-count max-request-fields
+                     #:max-length max-request-field-length))
+    (define-values (data-ip headers)
+      (complete-request ip
+                        initial-headers
+                        max-request-fields
+                        max-request-field-length
+                        max-request-body-length))
+    (define-values (host-ip client-ip)
+      (port-addresses ip))
+    (define-values (bindings/raw-promise raw-post-data)
+      (read-bindings&post-data/raw data-ip method uri headers
+                                   #:safety-limits limits))
+    (define request
+      (make-request method uri headers bindings/raw-promise raw-post-data
+                    host-ip host-port client-ip))
+    (define close?
+      (or connection-close?
+          (close-connection? headers major minor
+                             client-ip host-ip)))
+    (values request close?))
 
-(define make-ext:read-request
-  (make-keyword-procedure
-   (lambda (kws kw-args . args)
-     (define read-request
-       (keyword-apply make-read-request kws kw-args args))
+  (define (read-request conn host-port port-addresses)
+    (with-handlers ([exn:fail?
+                     (λ (exn)
+                       (kill-connection! conn)
+                       (raise exn))])
+      (do-read-request conn host-port port-addresses)))
 
-     (lambda (conn host-port port-addresses)
-       (with-handlers ([exn:fail?
-                        (lambda (exn)
-                          (kill-connection! conn)
-                          (raise exn))])
-         (read-request conn host-port port-addresses))))))
+  read-request)
 
-(define ext:read-request
-  (make-ext:read-request))
+(define read-request
+  (make-read-request))
 
+(define standard-read-request
+  (make-read-request #:safety-limits (make-safety-limits)))
 
 ;; **************************************************
 ;; complete-request
@@ -148,7 +157,7 @@
 
      (define total-size
        (let loop ([total-size 0])
-         (define size-line (read-http-line/limited real-ip max-header-length))
+         (define size-line (read-http-line/limited real-ip #:limit max-header-length))
          (define size-in-bytes
            (match (regexp-split #rx";" size-line)
              [(cons size-in-hex _)
@@ -164,12 +173,12 @@
             ;; This is safe because of the preceding guard on new-size,
             (define limited-input (make-limited-input-port real-ip size-in-bytes #f))
             (copy-port limited-input decode-op)
-            (read-http-line/limited real-ip 2)
+            (read-http-line/limited real-ip #:limit 2)
             (loop new-size)])))
 
      (define more-headers
        (list* (header #"Content-Length" (string->bytes/utf-8 (number->string total-size)))
-              (read-headers real-ip max-remaining-headers max-header-length)))
+              (read-headers* real-ip #:max-count max-remaining-headers #:max-length max-header-length)))
 
      (close-output-port decode-op)
      (values decoded-ip (append initial-headers more-headers))]
@@ -184,37 +193,35 @@
 ; close-connection? : (listof (cons symbol bytes)) number number string string -> boolean
 ; determine if this connection should be closed after serving the
 ; response
-(define close-connection?
-  (let ([rx (byte-regexp #"[cC][lL][oO][sS][eE]")])
-    (lambda (headers major minor client-ip host-ip)
-      (or (< major 1)
-          (and (= major 1) (= minor 0))
-          (match (headers-assq* #"Connection" headers)
-            [(struct header (f v)) (regexp-match? rx v)]
-            [#f #f])))))
+(define (close-connection? headers major minor client-ip host-ip)
+  (or (< major 1)
+      (and (= major 1) (= minor 0))
+      (match (headers-assq* #"Connection" headers)
+        [(struct header (f v))
+         (regexp-match? #rx#"[cC][lL][oO][sS][eE]" v)]
+        [#f
+         #f])))
 
 
 ;; **************************************************
 ;; safe reading
 
-(define current-http-line-limit
-  (make-parameter (* 8 1024)))
-
 (define (CR? b) (eqv? b 13))
 (define (LF? b) (eqv? b 10))
 
 (define (bytes-find-crlf bs len)
-  (for/first ([i (in-range 0 (sub1 len))]
-              #:when (and (CR? (bytes-ref bs i))
-                          (LF? (bytes-ref bs (add1 i)))))
-    i))
+  (match (regexp-match-positions #rx#"\r\n" bs 0 len)
+    [(list (cons start _))
+     start]
+    [_
+     #f]))
 
 ; read-http-line/limited : inp number -> bytes
 ; `read-bytes-line' against untrusted input is not safe since the client
 ; could just feed us bytes until we run out of memory. This function
 ; will attempt to read a line from the input port up to a hard limit.
-(define (read-http-line/limited [in (current-input-port)]
-                                [limit (current-http-line-limit)]
+(define (read-http-line/limited #:limit limit
+                                [in (current-input-port)]
                                 [bufsize 128])
   (define buf (make-bytes bufsize))
   (define-values (line-len suffix-len)
@@ -261,8 +268,6 @@
        (unless (zero? suffix-len)
          (read-bytes suffix-len in)))]))
 
-(module+ internal-test
-  (provide read-http-line/limited))
 
 ; read-bytes/lazy : number inp -> bytes
 ; Like `read-bytes', but waits until the expected number of bytes is
@@ -289,21 +294,17 @@
        [(zero? offset) eof]
        [else (read-bytes (min offset n) in)])]))
 
-(module+ internal-test
-  (provide read-bytes/lazy))
-
 
 ;; **************************************************
 ;; read-request-line
-(define match-method
-  (let ([rx (byte-regexp #"^([^ ]+) (.+) HTTP/([0-9]+)\\.([0-9]+)$")])
-    (lambda (a) (regexp-match rx a))))
+(define (match-method a)
+  (regexp-match #rx#"^([^ ]+) (.+) HTTP/([0-9]+)\\.([0-9]+)$" a))
 
-; read-request-line : iport number -> bytes url number number
+; read-request-line : iport nonnegative-length/c -> bytes url number number
 ; to read in the first line of an http request, AKA the "request line"
 ; effect: in case of errors, complain [MF: where] and close the ports
-(define (read-request-line ip [max-length 1024])
-  (define line (read-http-line/limited ip max-length))
+(define (read-request-line ip max-length)
+  (define line (read-http-line/limited ip #:limit max-length))
   (if (eof-object? line)
       (network-error 'read-request "http input closed prematurely")
       (match (match-method line)
@@ -320,34 +321,32 @@
                  (string->number (bytes->string/utf-8 major))
                  (string->number (bytes->string/utf-8 minor)))])))
 
-(module+ internal-test
-  (provide read-request-line))
 
 
 ;; **************************************************
 ;; read-headers
-(define match-colon
-  (let ([rx (byte-regexp (bytes-append #"^([^:]*):[ " (bytes 9) #"]*(.*)"))])
-    (lambda (a) (regexp-match rx a))))
 
-; read-headers : iport number number -> (listof header?)
-(define (read-headers in [max-heads +inf.0] [max-head-length +inf.0])
-  (parameterize ([current-http-line-limit max-head-length])
-    (reverse
-     (let loop ([heads null])
-       (when (> (length heads) max-heads)
-         (network-error 'read-headers "header count exceeds limit of ~a" max-heads))
+;; read-headers : iport [safety-limits?] -> (listof header?)
+;; NOTE: This was supposed to be private, but is used by at least some
+;; packages which we don't want to break: see note above, on `provide`.
+(define (read-headers in #:safety-limits [limits (make-unlimited-safety-limits)])
+  (read-headers* in
+                 #:max-count (safety-limits-max-request-headers limits)
+                 #:max-length (safety-limits-max-request-header-length limits)))
 
-       (define l (read-http-line/limited in))
-       (cond
-         [(eof-object? l) heads]
-         [(zero? (bytes-length l)) heads]
-         [(match-colon l)
-          => (match-lambda
-               [(list _ field value)
-                (define head (make-header field (read-folded-head in value max-head-length)))
-                (loop (cons head heads))])]
-         [else (network-error 'read-headers "malformed header: ~e" l)])))))
+(define (read-headers* in #:max-count max-heads #:max-length max-length)
+  (for/list ([count (in-naturals)]
+             [l (in-producer (λ (in max-length) (read-http-line/limited in #:limit max-length))
+                             (λ (l) (or (eof-object? l) (zero? (bytes-length l))))
+                             in
+                             max-length)])
+    (when (> count max-heads)
+      (network-error 'read-headers "header count exceeds limit of ~a" max-heads))
+    (match (regexp-match #rx#"^([^:]*):[ \t]*(.*)" l)
+      [(list _ field value)
+       (header field (read-folded-head in value max-length))]
+      [_
+       (network-error 'read-headers "malformed header: ~e" l)])))
 
 ; read-folded-head : iport bytes number -> bytes
 ; reads the next line of input for headers that are line-folded
@@ -355,7 +354,7 @@
   (match (peek-byte in)
     ;; leading SPACE or TAB
     [(or 32 9)
-     (define line (read-http-line/limited in))
+     (define line (read-http-line/limited in #:limit max-length))
      (define rhs* (bytes-append rhs line))
      (when (> (bytes-length rhs*) max-length)
        (network-error 'read-headers "header too long (~a)" max-length))
@@ -365,20 +364,11 @@
 
 ;; **************************************************
 ;; read-bindings
-(define match-urlencoded
-  (let ([rx (byte-regexp #"application/x-www-form-urlencoded")])
-    (lambda (t)
-      (and t (regexp-match rx t)))))
-
-(define match-multipart
-  (let ([rx (byte-regexp #"multipart/form-data; *boundary=(.*)")])
-    (lambda (t)
-      (and t (regexp-match rx t)))))
 
 (define (read-bindings&post-data/raw in meth uri headers
-                                     #:max-body-length [max-body-length +inf.0]
-                                     #:multipart-reader [multipart-reader (lambda _
-                                                                            (raise-user-error 'read-request "multipart reader not set up"))])
+                                     #:safety-limits [limits (make-safety-limits)])
+  (define max-body-length
+    (safety-limits-max-request-body-length limits))
   (define bindings-GET
     (delay
       (filter-map
@@ -424,11 +414,12 @@
     [(bytes-ci=? #"GET" meth)
      (values bindings-GET #f)]
 
-    [(match-multipart content-type)
+    [(and content-type
+          (regexp-match #rx#"multipart/form-data; *boundary=(.*)" content-type))
      => (match-lambda
           [(list _ content-boundary)
            (define bindings
-             (for/list ([part (in-list (multipart-reader in content-boundary))])
+             (for/list ([part (in-list (read-mime-multipart in content-boundary #:safety-limits limits))])
                (match part
                  [(struct mime-part (headers contents))
                   (define rhs
@@ -457,7 +448,8 @@
                      (append (force bindings-GET) bindings))
                    #f)])]
 
-    [(match-urlencoded content-type)
+    [(and content-type
+          (regexp-match? #rx#"application/x-www-form-urlencoded" content-type))
      (read-data meth (lambda (data)
                        (values
                         (delay
@@ -470,29 +462,22 @@
      (read-data meth (lambda (data)
                        (values bindings-GET data)))]))
 
-;; parse-bindings : bytes? -> (listof binding?)
-(define match-query-key
-  (let ([rx (byte-regexp #"^([^=&]+)([=&]?)")])
-    (lambda (in)
-      (regexp-try-match rx in))))
-
-(define match-query-value
-  (let ([rx (byte-regexp #"^([^&]+)(&?)")])
-    (lambda (in)
-      (regexp-try-match rx in))))
 
 (define (urldecode bs)
   (string->bytes/utf-8
    (form-urlencoded-decode
     (bytes->string/utf-8 bs))))
 
+;; parse-bindings : bytes? -> (listof binding?)
+;; NOTE: This was supposed to be private, but is used by at least some
+;; packages which we don't want to break: see note above, on `provide`.
 (define (parse-bindings data)
   (call-with-input-bytes data
     (lambda (in)
       (let loop ([bindings null])
-        (match (match-query-key in)
+        (match (regexp-try-match #rx#"^([^=&]+)([=&]?)" in) ;; query key
           [(list _ key #"=")
-           (match (match-query-value in)
+           (match (regexp-try-match #rx#"^([^&]+)(&?)" in) ;; query value
              ;; k=&...
              ;; k=#<eof>
              [#f
@@ -521,7 +506,7 @@
 ;; **************************************************
 ;; read-mime-multipart
 
-; mime-part : (listof header?) * (listof bytes?)
+; mime-part : (listof header?) * input-port?
 (struct mime-part (headers contents)
   #:transparent)
 
@@ -583,46 +568,51 @@
                      (lambda args (apply write! args))
                      (lambda _ (close-output-port out)))))
 
-(module+ internal-test
-  (provide make-spooled-temporary-file))
 
-;; This is kind of high just to be safe, but I don't think you ever see
-;; more than a couple headers (Content-Disposition and Content-Type) per
-;; field in practice.
-(define MAX-HEADERS/FIELD 20)
 
-; Find the starting position of `needle' within `haystack'.
-(define (bytes-find haystack needle)
-  (define haystack-len (bytes-length haystack))
-  (define needle-len (bytes-length needle))
-  (and (<= needle-len haystack-len)
-       (or (and (bytes=? (subbytes haystack 0 haystack-len) needle) 0)
-           (for*/first ([pos (in-range (add1 (- haystack-len needle-len)))]
-                        [haystack* (in-value (subbytes haystack pos (+ pos needle-len)))]
-                        #:when (bytes=? haystack* needle))
-             pos))))
+(define MAX-HEADERS/PART
+  ;; Maximum number of headers allowed for a single multipart/form-data part.
+  ;; This is a constant because multipart/form-data headers are limited by
+  ;; <https://tools.ietf.org/html/rfc7578#section-4.8>;
+  ;; it is high to avoid rejecting any reasonable request.
+  20)
 
-(define (read-mime-multipart in boundary
-                             #:max-files [max-files 100]
-                             #:max-file-length [max-file-length (* 10 1024 1024)]
-                             #:max-file-memory-threshold [max-file-memory-threshold (* 1 1024 1024)]
-                             #:max-fields [max-fields 100]
-                             #:max-field-length [max-field-length (* 8 1024)])
+
+(define (read-mime-multipart in boundary #:safety-limits [limits (make-safety-limits)])
+  (match-define (safety-limits #:max-form-data-parts max-parts
+                               #:max-form-data-files max-files
+                               #:max-form-data-file-length max-file-length
+                               #:form-data-file-memory-threshold max-file-memory-threshold
+                               #:max-form-data-fields max-fields
+                               #:max-form-data-field-length max-field-length
+                               #:max-form-data-header-length max-header-length)
+    limits)
+  
   (define start-boundary (bytes-append #"--" boundary))
   (define start-boundary-len (bytes-length start-boundary))
+  (define start-boundary-rx (byte-regexp (regexp-quote start-boundary)))
   (define end-boundary (bytes-append start-boundary #"--"))
+  (define end-boundary-len
+    ;; trailing CRLF is handled by `read-http-line/limited`
+    (bytes-length end-boundary))
 
-  (define bufsize (max start-boundary-len (* 64 1024)))
+  (define bufsize (max end-boundary-len (* 64 1024)))
   (define buf (make-bytes bufsize))
 
   (define (find-boundary haystack)
-    (bytes-find haystack start-boundary))
+    (match (regexp-match-positions start-boundary-rx haystack)
+      [(list (cons pos _))
+       pos]
+      [_
+       #f]))
 
   (define (subport in n)
     (make-limited-input-port in n #f))
 
   (define (collect-part-headers)
-    (read-headers in MAX-HEADERS/FIELD (current-http-line-limit)))
+    (read-headers* in
+                   #:max-count MAX-HEADERS/PART
+                   #:max-length max-header-length))
 
   (define (collect-part-content file?)
     (define-values (content-in content-out)
@@ -643,22 +633,36 @@
 
       ;; Read unitl the position before the CRLF that precedes the
       ;; boundary and then skip over the boundary in the input.
+      ;; INVARIANT: The `pos` argument is a result of `find-boundary`.
       (define (copy-until-boundary! len pos)
-        (define pos* (max 0 (- pos 2)))
+        (when (< pos 2)
+          (network-error 'read-mime-multipart "malformed part (no data)"))
+        ;; Read the content
+        (define pos* (- pos 2))
         (increase-length len pos*)
         (copy-port (subport in pos*) content-out)
-
+        ;; Skip the CRLF
+        (let ([bs (read-bytes 2 in)])
+          (unless (equal? #"\r\n" bs)
+            (network-error 'read-mime-multipart
+                           "malformed part\n  expected: #\"\r\n\" before boundary\n  given: ~e"
+                           bs)))
+        ;; Read the (possibly final) boundary line.
         (define line
-          (begin
-            ;; Skip the CRLF and then read the boundary line.
-            (read-http-line/limited in)
-            (read-http-line/limited in)))
-
+          (read-http-line/limited in #:limit end-boundary-len))
         (when (eof-object? line)
           (network-error 'read-mime-multipart "port closed prematurely"))
-
-        (bytes=? line start-boundary))
-
+        (define more-parts?
+          (cond
+            [(bytes=? line start-boundary)
+             #true]
+            [(bytes=? line end-boundary)
+             #false]
+            [else
+             (network-error 'read-mime-multipart "malformed boundary line")]))
+        more-parts?)
+                          
+      
       (define more-parts?
         (let loop ([len 0]
                    [prev #""])
@@ -693,41 +697,72 @@
 
     (define headers (collect-part-headers))
     (define file? (file-part? headers))
-    (define field? (not file?))
-    (define total-files* (if file? (add1 total-files) total-files))
-    (define total-fields* (if file? total-fields (add1 total-fields)))
+
+    (let-values ([{total-files total-fields}
+                  (if file?
+                      (values (add1 total-files) total-fields)
+                      (values total-files (add1 total-fields)))])
+      (if file?
+          (when (> total-files max-files)
+            (network-error 'read-mime-multipart "too many files"))
+          (when (> total-fields max-fields)
+            (network-error 'read-mime-multipart "too many fields")))
+      (when (> (+ total-files total-fields) max-parts)
+        (network-error 'read-mime-multipart "too many multipart/form-data parts"))
+
+      (define-values (content more-parts?)
+        (collect-part-content file?))
+      (define part (mime-part headers content))
+      (define parts* (cons part parts))
+      (if more-parts?
+          (read-parts parts* total-files total-fields)
+          (reverse parts*))))
+
+  (let skip-preamble ([preamble-line-count 0])
+
+    ;; This code permits a "preamble" as defined in
+    ;; <https://tools.ietf.org/html/rfc2046#section-5.1>,
+    ;; which is cited by RFC 7578.
+    ;; However, the `multipart/form-data` definition
+    ;; doesn't explicitly mention a "preamble" and
+    ;; general tries to forbid MIME features it doesn't use,
+    ;; and browsers etc. don't seem to use this.
+    ;; Thus, we use a small limit that hopefully will be enough
+    ;; for any legacy clients out there.
+    
+    (define MAX-PREAMBLE-LINES 20)
+    (unless (< preamble-line-count MAX-PREAMBLE-LINES)
+      (network-error 'read-mime-multipart "too many \"preamble\" lines"))
+
+    (define MAX-PREAMBLE-LINE-LEN
+      ;; This is a guess at a limit that should be long enough for
+      ;; a legacy "preamble": it is the limit on message body lines from RFC 821,
+      ;; which is cited by (but not incorporated into) RFC 2046.
+      ;; Becauese  RFC 2046 limits boundaries to 70 ASCII characters,
+      ;; this will always be longer than `end-boundary-len`, too.
+      998)
+    (define line
+      (read-http-line/limited in #:limit MAX-PREAMBLE-LINE-LEN))
     (cond
-      [(and file? (> total-files* max-files))
-       (network-error 'read-mime-multipart "too many files")]
+      [(eof-object? line)
+       (network-error 'read-mime-multipart "port closed prematurely")]
+      [(bytes=? line start-boundary)
+       (read-parts)]
+      [(bytes=? line end-boundary)
+       null]
+      [else
+       (skip-preamble (add1 preamble-line-count))])))
 
-      [(and field? (> total-fields* max-fields))
-       (network-error 'read-mime-multipart "too many fields")])
 
-    (define-values (content more-parts?)
-      (collect-part-content file?))
-    (define part (mime-part headers content))
-    (define parts* (cons part parts))
-    (if more-parts?
-      (read-parts parts* total-files* total-fields*)
-      (reverse parts*)))
-
-  (let skip-preamble ()
-    (define line (read-http-line/limited in))
-    (cond
-      [(eof-object? line) (network-error 'read-mime-multipart "port closed prematurely")]
-      [(bytes=? line start-boundary) (read-parts)]
-      [(bytes=? line end-boundary) null]
-      [else (skip-preamble)])))
 
 (define (file-part? headers)
   (match (headers-assq* #"Content-Disposition" headers)
     [(header _ (regexp #rx"filename=")) #t]
     [_ #f]))
 
+
+
 (define (delete-file/safe p)
   (with-handlers ([exn:fail:filesystem? void])
     (delete-file p)))
 
-(module+ internal-test
-  (provide (struct-out mime-part)
-           read-mime-multipart))
