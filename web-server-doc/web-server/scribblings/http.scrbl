@@ -1,7 +1,8 @@
 #lang scribble/doc
 @(require "web-server.rkt"
           (for-label racket/random
-                     ))
+                     racket/port
+                     racket/serialize))
 
 @title[#:tag "http"]{HTTP: Hypertext Transfer Protocol}
 
@@ -61,37 +62,90 @@ The @web-server implements many HTTP libraries that are provided by this module.
                                    [headers (listof header?)]
                                    [content bytes?])]{
 
-  This struct has been superseded by @racket[binding:file/port].
-
   Represents the uploading of the file @racket[filename] with the id
   @racket[id] and the content @racket[content], where @racket[headers]
   are the additional headers from the MIME envelope the file was in.
   For example, the @racket[#"Content-Type"] header may be included by
   some browsers.
-}
 
-@defstruct[(binding:file/port binding:file) ([in input-port?])]{
+  See also @racket[binding:file/port-in], an alternative interface
+  to file uploads that can be significantly more memory efficient.
 
-  Prior to version 1.6, all file uploads were represented using
-  @racket[binding:file]s.  In version 1.6, file uploads were changed
-  so that uploaded files can be offloaded to disk if they are larger
-  than some threshold.  This meant that the API provided by
-  @racket[binding:file] could not be used to represent these new types
-  of uploads so this struct was introduced to preserve
-  backwards-compatibility.
+  @history[#:changed "1.6"
+           @elem{Extended to support a port-based representation:
+              see @racket[binding:file/port-in].}]
+ }
 
-  Values created with @racket[make-binding:file/port] and
-  @racket[make-binding:file] are instances of
-  @racket[binding:file/port] that are backwards-compatible with
-  @racket[binding:file].  Backwards-compatibility is preserved by
-  lazily hooking around @racket[binding:file-content] so that whenever
-  that procedure is applied to one of these values, the port's
-  contents are read, memoized and returned.
+ @deftogether[
+ (@defproc[(binding:file/port-in [binding binding:file/port?])
+           input-port?]
+   @defproc[(binding:file/port? [v any/c]) boolean?]
+   @defproc[(make-binding:file/port [id bytes?]
+                                    [filename bytes?]
+                                    [headers (listof header?)]
+                                    [content-in input-port?])
+            binding:file/port?])]{
 
-  Going forward, you should avoid using @racket[binding:file-content]
-  and instead read from @racket[in] as it is significantly more memory
-  efficient to do so.
-}
+  The web server can avoid storing uploaded files in memory.
+  In particular, a @tech[#:doc '(lib "web-server/scribblings/web-server-internal.scrbl")]{
+   safety limits} value can instruct this
+  library to offload files to disk if they are larger than some threshold.
+  Even for file uploads that are not written to disk,
+  the web server initially places the content in an input port,
+  rather than a byte-string, so that storage need not be retained
+  after the content has been read.
+
+  The port-based interface is exposed to programmers,
+  and it can be significantly more memory efficient than
+  the byte-string--based interface.
+  However, the port-based interface is stateful:
+  programmers who use it take responsibility for managing the state
+  of the input port.
+  Read on for details.
+
+  To maintain compatability, the port-based interface uses a private,
+  opaque subtype of @racket[binding:file].
+  Instances of this extended type are recognized by the predicate
+  @racket[binding:file/port?] and are created using
+  @racket[make-binding:file/port], which is like @racket[make-binding:file],
+  but takes the file content as an input port rather than a byte string.
+  Only @racket[binding:file] instances recognized by @racket[binding:file/port?]
+  support @racket[binding:file/port-in].
+  The web server uses @racket[make-binding:file/port] when reading
+  @racket[request] structures, which is the primary way most programs
+  encounter @racket[binding:file] instances:
+  however, deserialized instances (see below) and instances constructed
+  manually using @racket[make-binding:file] do not support the port-based API.
+
+  It is important to be aware of how @racket[binding:file-content]
+  works with port-based instances.
+  The first time @racket[binding:file-content] is called on a
+  port-based instance @racket[v], it consumes the port's remaining content
+  as with @racket[(port->bytes (binding:file/port-in v))],
+  memoizes the result for future calls to @racket[binding:file-content],
+  and closes the input port.
+  This behavior means that:
+  @itemlist[
+ @item{A given byte of input may be either stored in the
+    @racket[binding:file-content] field or read directly by
+    from the input port, but never both; and
+   }
+ @item{If the input port has already been closed directly
+    when @racket[binding:file-content] is called for the first time,
+    @racket[binding:file-content] will raise an exception.
+    }]
+
+  Accessing the @racket[binding:file-content] field indirectly,
+  such as by using @racket[match], has the same behavior as calling
+  @racket[binding:file-content] directly.
+  In particular, calling @racket[serialize] on a @racket[binding:file]
+  instance implicitly uses @racket[binding:file-content],
+  and deserialized instances are effectively constructed using
+  @racket[make-binding:file].
+
+  @history[#:added "1.6"]
+ }
+
 
 @defproc[(bindings-assq [id bytes?]
                         [binds (listof binding?)])
@@ -110,7 +164,7 @@ Like @racket[bindings-assq], but returns a list of all bindings matching @racket
                     [uri url?]
                     [headers/raw (listof header?)]
                     [bindings/raw-promise (promise/c (listof binding?))]
-                    [post-data/raw (or/c false/c bytes?)]
+                    [post-data/raw (or/c #f bytes?)]
                     [host-ip string?]
                     [host-port number?]
                     [client-ip string?])]{
@@ -120,6 +174,10 @@ Like @racket[bindings-assq], but returns a list of all bindings matching @racket
  POST data.
 
  You are @bold{unlikely to need to construct} a request struct.
+
+ @history[#:changed "1.6"
+          @elem{Fixed to answer @racket[#f] to @racket[serializable?],
+             as all @racket[request] instances contain non-serializable pieces.}]
 }
 
 @defproc[(request-bindings/raw [r request?])
