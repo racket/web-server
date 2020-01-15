@@ -298,7 +298,7 @@
       ; TODO: What if we want to output-file during a POST?
       (when (bytes-ci=? method #"GET")
         (with-handlers ([exn:fail? (lambda (exn)
-                                     (network-error 'output-file (exn-message exn)))])
+                                     (network-error 'output-file "~a" (exn-message exn)))])
           (call-with-input-file* file-path
             (lambda (input)
               (if (= (length converted-ranges) 1)
