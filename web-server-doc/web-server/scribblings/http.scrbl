@@ -430,18 +430,6 @@ Equivalent to
                as the result (instead of demanding @racket[void?]).}]
 }
 
-@defproc[(response/empty [#:code code number? 200]
-                         [#:message message (or/c false/c bytes?) #f]
-                         [#:cookies cookies (listof cookie?) '()]
-                         [#:seconds seconds number? (current-seconds)]
-                         [#:headers headers (listof header?) '()])
-         response?]{
-Generates a response with an empty body. The usual @tt{Content-Type} header will be absent, unless passed in via @racket[headers]. Equivalent to
-@racketblock[(response code message seconds #f headers (λ (o) (write-bytes #"" o)))], with the understanding that if @racket[message] is missing (or @racket[#f]), it will be inferred from @racket[code] using the association between status codes and messages found in RFCs 7231 and 7235. See the documentation for @racket[response/full] for the table of built-in status codes.
-
-@history[#:added "1.6"]
-}
-
 @defthing[TEXT/HTML-MIME-TYPE bytes?]{Equivalent to @racket[#"text/html; charset=utf-8"].}
 
 @defthing[APPLICATION/JSON-MIME-TYPE bytes?]{Equivalent to @racket[#"application/json; charset=utf-8"].}
@@ -1049,6 +1037,23 @@ web-server/insta
          #:changed "1.3"
           @elem{Updated contracts on @racket[code] and @racket[seconds]
              as with @racket[response].}]
+}
+
+@section[#:tag "empty"]{Empty Responses}
+@(require (for-label web-server/http))
+
+@defmodule[web-server/http]
+
+@defproc[(response/empty [#:code code number? 200]
+                         [#:message message (or/c false/c bytes?) #f]
+                         [#:cookies cookies (listof cookie?) '()]
+                         [#:seconds seconds number? (current-seconds)]
+                         [#:headers headers (listof header?) '()])
+         response?]{
+Generates a response with an empty body. The usual @tt{Content-Type} header will be absent, unless passed in via @racket[headers]. Equivalent to
+@racketblock[(response code message seconds #f headers (λ (o) (write-bytes #"" o)))], with the understanding that if @racket[message] is missing (or @racket[#f]), it will be inferred from @racket[code] using the association between status codes and messages found in RFCs 7231 and 7235. See the documentation for @racket[response/full] for the table of built-in status codes.
+
+@history[#:added "1.6"]
 }
 
 @section[#:tag "json"]{JSON Support}
