@@ -26,6 +26,8 @@
 
 (define interface-version 'v1)
 
+(define options-headers (list (make-header #"Accept" #"GET, HEAD, OPTIONS")))
+
 (define (make #:url->path url->path
               #:path->mime-type [path->mime-type (lambda (path) #f)]
               #:indices [indices (list "index.html" "index.htm")])
@@ -33,22 +35,28 @@
     (define uri (request-uri req))
     (define method (request-method req))
     (define-values (path _) (url->path uri))
-    (cond [(file-exists? path)
-           (output-file conn path method (path->mime-type path)
-                        (read-range-header (request-headers/raw req)))]
-          [(directory-exists? path)
-           (if (looks-like-directory? (url-path->string (url-path uri)))
-               (let/ec esc
-                 (for-each (lambda (dir-default)
-                             (define full-name (build-path path dir-default))
-                             (when (file-exists? full-name)
-                               (esc (output-file conn full-name method (path->mime-type full-name)
-                                                 (read-range-header (request-headers/raw req))))))
-                           indices)
-                 (next-dispatcher))
-               (output-response 
-                conn
-                (redirect-to (string-append (url-path->string (url-path uri)) "/"))))]
+    (cond [(bytes-ci=? method #"OPTIONS")
+           (output-response conn
+                            (response/empty #:headers options-headers))]
+          [(or (bytes-ci=? method #"GET")
+               (bytes-ci=? method #"HEAD"))
+           (cond [(file-exists? path)
+                  (output-file conn path method (path->mime-type path)
+                               (read-range-header (request-headers/raw req)))]
+                 [(directory-exists? path)
+                  (if (looks-like-directory? (url-path->string (url-path uri)))
+                      (let/ec esc
+                        (for-each (lambda (dir-default)
+                                    (define full-name (build-path path dir-default))
+                                    (when (file-exists? full-name)
+                                      (esc (output-file conn full-name method (path->mime-type full-name)
+                                                        (read-range-header (request-headers/raw req))))))
+                                  indices)
+                        (next-dispatcher))
+                      (output-response
+                       conn
+                       (redirect-to (string-append (url-path->string (url-path uri)) "/"))))]
+                 [else (next-dispatcher)])]
           [else (next-dispatcher)])))
 
 ;; read-range-header : (listof header) -> (U (alist-of (U integer #f) (U integer #f)) #f)
