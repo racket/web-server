@@ -226,13 +226,13 @@
        (md5 (string->bytes/utf-8 (number->string (current-inexact-milliseconds))))
        #f)))
 
-;; output-file: connection
-;;              path
-;;              symbol
-;;              bytes
-;;              (U (listof (U byte-range-spec suffix-byte-range-spec)) #f)
-;;              (U bytes #f)
-;;           -> void
+;; output-file/boundary: connection
+;;                       path
+;;                       symbol
+;;                       bytes
+;;                       (U (listof (U byte-range-spec suffix-byte-range-spec)) #f)
+;;                       (U bytes #f)
+;;                       -> void
 (define (output-file/boundary conn file-path method maybe-mime-type ranges boundary)
   ;; Ensure there is enough time left to write the first chunk of
   ;; response data. `output-file-range' then resets the connection
