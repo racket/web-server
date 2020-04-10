@@ -295,34 +295,32 @@
            (make-206-response modified-seconds maybe-mime-type total-content-length total-file-length converted-ranges boundary)
            (make-200-response modified-seconds maybe-mime-type total-content-length)))
       ; Send the appropriate file content:
-      ; TODO: What if we want to output-file during a POST?
-      (when (bytes-ci=? method #"GET")
-        (with-handlers ([exn:fail? (lambda (exn)
-                                     (network-error 'output-file "~a" (exn-message exn)))])
-          (call-with-input-file* file-path
-            (lambda (input)
-              (if (= (length converted-ranges) 1)
-                  ; Single ranges (in 200 or 206 responses) are sent straight out
-                  ; in their simplest form:
-                  (output-file-range conn input (caar converted-ranges) (cdar converted-ranges))
-                  ; Multiple ranges are encoded as multipart/byteranges:
-                  (let loop ([ranges converted-ranges]
-                             [multipart-headers multipart-headers])
-                    (match ranges
-                      [(list)
-                       ; Final boundary (must start on new line; ends with a new line)
-                       (fprintf (connection-o-port conn) "--~a--\r\n" boundary)
-                       (void)]
-                      [(list-rest (list-rest start end) rest)
-                       ; Intermediate boundary (must start on new line; ends with a new line)
-                       (fprintf (connection-o-port conn) "--~a\r\n" boundary)
-                       ; Headers and new line
-                       (display (car multipart-headers) (connection-o-port conn))
-                       ; Content
-                       (output-file-range conn input start end)
-                       ; Newline before next field
-                       (fprintf (connection-o-port conn) "\r\n")
-                       (loop rest (cdr multipart-headers))]))))))))))
+      (with-handlers ([exn:fail? (lambda (exn)
+                                   (network-error 'output-file "~a" (exn-message exn)))])
+        (call-with-input-file* file-path
+          (lambda (input)
+            (if (= (length converted-ranges) 1)
+                ; Single ranges (in 200 or 206 responses) are sent straight out
+                ; in their simplest form:
+                (output-file-range conn input (caar converted-ranges) (cdar converted-ranges))
+                ; Multiple ranges are encoded as multipart/byteranges:
+                (let loop ([ranges converted-ranges]
+                           [multipart-headers multipart-headers])
+                  (match ranges
+                    [(list)
+                     ; Final boundary (must start on new line; ends with a new line)
+                     (fprintf (connection-o-port conn) "--~a--\r\n" boundary)
+                     (void)]
+                    [(list-rest (list-rest start end) rest)
+                     ; Intermediate boundary (must start on new line; ends with a new line)
+                     (fprintf (connection-o-port conn) "--~a\r\n" boundary)
+                     ; Headers and new line
+                     (display (car multipart-headers) (connection-o-port conn))
+                     ; Content
+                     (output-file-range conn input start end)
+                     ; Newline before next field
+                     (fprintf (connection-o-port conn) "\r\n")
+                     (loop rest (cdr multipart-headers))])))))))))
 
 ;; prerender-multipart/byteranges-headers : bytes (alist-of integer integer) integer -> (list-of bytes)
 (define (prerender-multipart/byteranges-headers maybe-mime-type converted-ranges total-file-length)
@@ -452,4 +450,3 @@
   (make-header #"Content-Range"
                (string->bytes/utf-8
                 (format "bytes ~a-~a/~a" start (sub1 end) total-file-length))))
-
