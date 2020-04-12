@@ -27,14 +27,6 @@
 
 (define interface-version 'v1)
 
-; request? -> boolean?
-(define (is-get? req)
-  (bytes-ci=? (request-method req) #"GET"))
-
-; request? -> boolean?
-(define (is-head? req)
-  (bytes-ci=? (request-method req) #"HEAD"))
-
 (define (make #:url->path url->path
               #:path->mime-type [path->mime-type (lambda (path) #f)]
               #:indices [indices (list "index.html" "index.htm")])
