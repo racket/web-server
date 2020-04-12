@@ -15,4 +15,4 @@
 
 (define pkg-authors '(jay))
 
-(define version "1.6")
+(define version "1.7")
