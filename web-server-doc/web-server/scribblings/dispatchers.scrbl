@@ -346,10 +346,21 @@ Creates a denied procedure from an authorized procedure.
 
  This dispatcher supports HTTP Range GET requests and HEAD
  requests. If the request's method is neither HEAD nor GET,
- @racket[next-dispatcher] will be called.}
+ @racket[next-dispatcher] will be called.
 
-@history[#:changed "1.7"
-         @elem{Support for non-{GET,HEAD} requests.}]
+ If the path works out to something on disk (either as a
+ file, or, if the path refers to directory, one of the
+ specified @racket[indices] files in that directory), it
+ needs to be readable by the process that is running the web
+ server. Existing but unreadable files are handled as
+ non-existing files.}
+
+@history[
+  #:changed "1.7"
+  @elem{Support for non-{GET,HEAD} requests.}
+  #:changed "1.7"
+  @elem{Treat unreadable files as non-existing files.}
+]
 
 }
 
