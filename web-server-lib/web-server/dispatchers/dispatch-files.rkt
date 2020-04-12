@@ -25,6 +25,12 @@
   (and (regexp-match #rx"/$" path)
        #t))
 
+; path? -> boolean?
+(define (can-emit-file? path)
+  (and (file-exists? path)
+       (member 'read (file-or-directory-permissions path))
+       #t))
+
 (define interface-version 'v1)
 
 (define (make #:url->path url->path
@@ -43,21 +49,21 @@
                    (path->mime-type path)
                    (read-range-header (request-headers/raw req))))
     (define path/string (url-path->string (url-path uri)))
-    (define (emit-index-if-exists dir)
+    (define (emit-index-if-possible dir)
       (let/ec esc
         (for-each (lambda (dir-default)
                     (define full-name (build-path dir dir-default))
-                    (when (file-exists? full-name)
+                    (when (can-emit-file? full-name)
                       (esc (emit-file-response full-name))))
                   indices)
         (next-dispatcher)))
     (cond [(nor is-head? is-get?)
            (next-dispatcher)]
-          [(file-exists? path)
+          [(can-emit-file? path)
            (emit-file-response path)]
           [(directory-exists? path)
            (if (looks-like-directory? path/string)
-               (emit-index-if-exists path)
+               (emit-index-if-possible path)
                (output-response
                 conn
                 (redirect-to (string-append path/string "/"))))]
