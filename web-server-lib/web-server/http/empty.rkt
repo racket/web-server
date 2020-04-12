@@ -12,7 +12,7 @@
   (require rackunit))
 
 (define (response/empty
-         #:code [code 200]
+         #:code [code 204]
          #:message [message #f]
          #:seconds [seconds (current-seconds)]
          #:cookies [cooks '()]
