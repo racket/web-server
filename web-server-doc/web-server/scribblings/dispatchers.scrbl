@@ -344,7 +344,14 @@ Creates a denied procedure from an authorized procedure.
  Type of the path. The file is then
  streamed out the connection object.
 
- This dispatcher supports HTTP Range GET requests and HEAD requests.}}
+ This dispatcher supports HTTP Range GET requests and HEAD
+ requests. If the request's method is neither HEAD nor GET,
+ @racket[next-dispatcher] will be called.}
+
+@history[#:changed "1.7"
+         @elem{Support for non-{GET,HEAD} requests.}]
+
+}
 
 @; ------------------------------------------------------------
 @include-section["dispatch-servlets.scrbl"]
