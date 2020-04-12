@@ -122,3 +122,10 @@
    (test-exn "dir, not exists, head"
              exn:dispatcher?
              (lambda () (collect (dispatch #f a-dir) (req #t #"HEAD" empty))))))
+
+(test-exn "file, exists, post"
+          exn:dispatcher?
+          (lambda () (collect (dispatch #t tmp-file) (req #f #"POST" empty))))
+(test-exn "dir, exists, post"
+          exn:dispatcher?
+          (lambda () (collect (dispatch #t a-dir) (req #t #"POST" empty))))
