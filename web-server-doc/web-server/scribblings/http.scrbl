@@ -1044,7 +1044,7 @@ web-server/insta
 
 @defmodule[web-server/http]
 
-@defproc[(response/empty [#:code code number? 200]
+@defproc[(response/empty [#:code code number? 204]
                          [#:message message (or/c false/c bytes?) #f]
                          [#:cookies cookies (listof cookie?) '()]
                          [#:seconds seconds number? (current-seconds)]
@@ -1053,7 +1053,11 @@ web-server/insta
 Generates a response with an empty body. The usual @tt{Content-Type} header will be absent, unless passed in via @racket[headers]. Equivalent to
 @racketblock[(response code message seconds #f headers (λ (o) (write-bytes #"" o)))], with the understanding that if @racket[message] is missing (or @racket[#f]), it will be inferred from @racket[code] using the association between status codes and messages found in RFCs 7231 and 7235. See the documentation for @racket[response/full] for the table of built-in status codes.
 
-@history[#:added "1.6"]
+@history[
+  #:changed "1.7" Make default response code 204 rather than 200.
+  #:changed "1.7" Ensure a @tt{Content-Length} header is present in the response, with value @tt{0}.
+  #:added "1.6"
+]
 }
 
 @section[#:tag "json"]{JSON Support}
