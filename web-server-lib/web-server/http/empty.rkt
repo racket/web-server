@@ -20,7 +20,8 @@
   (response
    code (infer-response-message code message) seconds #f
    ; rfc2109 also recommends some cache-control stuff here for cookies
-   (append hdrs (map cookie->header cooks))
+   (cons (make-header #"Content-Length" #"0")
+         (append hdrs (map cookie->header cooks)))
    (λ (out) (write-bytes #"" out))))
 
 (provide/contract
