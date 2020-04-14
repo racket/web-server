@@ -1042,7 +1042,8 @@ web-server/insta
 @section[#:tag "empty"]{Empty Responses}
 @(require (for-label web-server/http))
 
-@defmodule[web-server/http]
+@defmodule*/no-declare[(web-server/http/empty)]
+@declare-exporting[web-server/http/empty web-server/http]
 
 @defproc[(response/empty [#:code code number? 204]
                          [#:message message (or/c false/c bytes?) #f]
@@ -1064,9 +1065,8 @@ Generates a response with an empty body. The usual @tt{Content-Type} header will
 @(require (for-label web-server/http/json
                      json))
 
-@defmodule*/no-declare[(web-server/http/json)]{}
-
-@declare-exporting[web-server/http/json json]
+@defmodule*/no-declare[(web-server/http/json)]
+@declare-exporting[web-server/http/json web-server/http]
 
 JSON is a widely used data format for the web. Racket's JSON
 library meets the web server with @racket[response/jsexpr],
