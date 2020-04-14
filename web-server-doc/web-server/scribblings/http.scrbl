@@ -1054,8 +1054,8 @@ Generates a response with an empty body. The usual @tt{Content-Type} header will
 @racketblock[(response code message seconds #f headers (λ (o) (write-bytes #"" o)))], with the understanding that if @racket[message] is missing (or @racket[#f]), it will be inferred from @racket[code] using the association between status codes and messages found in RFCs 7231 and 7235. See the documentation for @racket[response/full] for the table of built-in status codes.
 
 @history[
-  #:changed "1.7" Make default response code 204 rather than 200.
-  #:changed "1.7" Ensure a @tt{Content-Length} header is present in the response, with value @tt{0}.
+  #:changed "1.7" @elem{Make default response code 204 rather than 200.}
+  #:changed "1.7" @elem{Ensure a @tt{Content-Length} header is present in the response, with value @tt{0}.}
   #:added "1.6"
 ]
 }
