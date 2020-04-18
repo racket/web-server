@@ -166,6 +166,19 @@ URLs to paths on the filesystem.
 }}
 
 @; ------------------------------------------------------------
+@section[#:tag "dispatch-method"]{Filtering Requests by Method}
+@a-dispatcher[web-server/dispatchers/dispatch-method
+              @elem{defines a dispatcher constructor
+                 that calls an underlying dispatcher
+                 provided the request method belongs to a given list.}]{
+
+@defproc[(make (method (or/c symbol? (listof symbol?))) (inner dispatcher/c))
+         dispatcher/c]{
+ Calls @racket[inner] if the method of the request, converted to
+ a string, case-insensitively matches @racket[method] (if method is a symbol, or, if a list, one of the elements of @racket[method]). Otherwise, calls @racket[next-dispatcher].
+}}
+
+@; ------------------------------------------------------------
 @section[#:tag "dispatch-pathprocedure"]{Procedure Invocation upon Request}
 @a-dispatcher[web-server/dispatchers/dispatch-pathprocedure
               @elem{defines a dispatcher constructor
