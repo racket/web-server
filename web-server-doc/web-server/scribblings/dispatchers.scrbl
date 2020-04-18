@@ -153,7 +153,7 @@ URLs to paths on the filesystem.
 }}
 
 @; ------------------------------------------------------------
-@section[#:tag "dispatch-filter"]{Filtering Requests}
+@section[#:tag "dispatch-filter"]{Filtering Requests by URL}
 @a-dispatcher[web-server/dispatchers/dispatch-filter
               @elem{defines a dispatcher constructor
                  that calls an underlying dispatcher
