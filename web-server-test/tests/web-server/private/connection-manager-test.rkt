@@ -82,6 +82,7 @@
    (test-case "Extend timer"
      (define ib (open-input-bytes #""))
      (define ob (open-output-bytes))
+     (define st (current-inexact-milliseconds))
      (define-values (conn evt)
        (make-connection&evt 1 ib ob))
 
@@ -93,4 +94,5 @@
                (read ib)))
            (with-handlers ([exn? (lambda _ #t)])
              (begin0 #f
-               (write 1 ob))))))))
+               (write 1 ob)))
+           (>= (- (current-inexact-milliseconds) st) 2000))))))
