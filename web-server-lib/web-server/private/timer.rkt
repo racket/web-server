@@ -115,4 +115,5 @@
  [start-timer (timer-manager? number? (-> any/c) . -> . timer?)]
  [reset-timer! (timer? number? . -> . any/c)]
  [increment-timer! (timer? number? . -> . any/c)]
+ [revise-timer! (timer? number? (-> any/c) . -> . void?)]
  [cancel-timer! (timer? . -> . any/c)])
