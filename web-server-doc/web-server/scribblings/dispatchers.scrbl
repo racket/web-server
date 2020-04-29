@@ -254,15 +254,20 @@ a URL that refreshes the password file, servlet cache, etc.}
  @racket['apache-default] to @racket[apache-default-format].
 }
 
-@defproc[(make [#:format format format-req/c paren-format]
+@defproc[(make [#:format format (or/c log-format/c format-req/c) paren-format]
                [#:log-path log-path (or/c path-string? output-port?) "log"])
          dispatcher/c]{
  Logs requests to @racket[log-path], which can be either a filepath or an @racket[output-port?],
- using @racket[format] to format the requests.
+ using @racket[format] to format the requests. (If @racket[format] is a symbol, a log formatter
+ will be tacitly made using @racket[log-format->format].)
  Then invokes @racket[next-dispatcher].
 
- @history[#:changed "1.3"
-          @elem{Allow @racket[log-path] to be an @racket[output-port?]}]
+ @history[
+   #:changed "1.3"
+   @elem{Allow @racket[log-path] to be an @racket[output-port?]}
+   #:changed "1.8"
+   @elem{Allow @racket[format] to be a symbol (more precisely, a @racket[log-format/c]).}
+]
 }}
 
 @; ------------------------------------------------------------
