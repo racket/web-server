@@ -239,7 +239,7 @@ a URL that refreshes the password file, servlet cache, etc.}
  Formats a request like Apache's default. However, Apache's default
  includes information about the response to a request, which this
  function does not have access to, so it defaults the last two fields
- to 200 and 512.
+ to @racket[200] and @racket[512].
 
 }
 
