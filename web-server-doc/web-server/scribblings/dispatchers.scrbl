@@ -207,7 +207,7 @@ a URL that refreshes the password file, servlet cache, etc.}
 @defthing[paren-format format-req/c]{
  Formats a request by:
  @racketblock[
-  (format 
+  (format
    "~s\n"
    (list 'from (request-client-ip req)
          'to (request-host-ip req)
@@ -219,12 +219,12 @@ a URL that refreshes the password file, servlet cache, etc.}
 @defthing[extended-format format-req/c]{
  Formats a request by:
  @racketblock[
-  (format 
+  (format
    "~s\n"
    `((client-ip ,(request-client-ip req))
      (host-ip ,(request-host-ip req))
-     (referer 
-      ,(let ([R (headers-assq* 
+     (referer
+      ,(let ([R (headers-assq*
                  #"Referer"
                  (request-headers/raw req))])
          (if R
@@ -354,7 +354,7 @@ Creates a denied procedure from an authorized procedure.
                [#:indices indices (listof string?) (list "index.html" "index.htm")])
          dispatcher/c]{
  Uses @racket[url->path] to extract a path from the URL in the request
- object. If this path does not exist, then the dispatcher does not apply and 
+ object. If this path does not exist, then the dispatcher does not apply and
  @racket[next-dispatcher] is invoked.
  If the path is a directory, then the @racket[indices] are checked in order
  for an index file to serve. In that case, or in the case of a path that is
@@ -395,7 +395,7 @@ Creates a denied procedure from an authorized procedure.
          thread?]{
  Starts a thread that calls @racket[(collect-garbage)] every @racket[time] seconds.
 }
-                 
+
 @defproc[(make)
          dispatcher/c]{
  Returns a dispatcher that prints memory usage on every request.
@@ -411,7 +411,7 @@ Creates a denied procedure from an authorized procedure.
                [#:over-limit over-limit (symbols 'block 'kill-new 'kill-old) 'block])
          dispatcher/c]{
  Returns a dispatcher that defers to @racket[inner] for work, but will forward a maximum of @racket[limit] requests concurrently.
-         
+
  If there are no additional spaces inside the limit and a new request is received, the @racket[over-limit] option determines what is done.
  The default (@racket['block]) causes the new request to block until an old request is finished being handled.
  If @racket[over-limit] is @racket['kill-new], then the new request handler is killed---a form of load-shedding.
@@ -429,7 +429,7 @@ Creates a denied procedure from an authorized procedure.
 Consider this example:
 @racketmod[
  racket
- 
+
 (require web-server/web-server
          web-server/http
          web-server/http/response
@@ -456,7 +456,7 @@ Consider this example:
                                   <)))))
              (request-method req)))
           #:over-limit 'block))
-        (lambda (conn req)          
+        (lambda (conn req)
           (output-response/method
            conn
            (response/full 200 #"Okay"
