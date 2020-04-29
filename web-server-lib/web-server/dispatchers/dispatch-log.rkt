@@ -6,7 +6,7 @@
          racket/match
          racket/contract)
 (require web-server/dispatchers/dispatch
-         web-server/http)  
+         web-server/http)
 (define format-req/c (request? . -> . string?))
 (define log-format/c (symbols 'parenthesized-default 'extended 'apache-default))
 
@@ -71,7 +71,7 @@
             (referer ,(let ([R (headers-assq* #"Referer" (request-headers/raw req))])
                         (if R
                             (header-value R)
-                            #f)))                                              
+                            #f)))
             (uri ,(url->string (request-uri req)))
             (time ,(current-seconds)))))
 
@@ -82,7 +82,7 @@
      (lambda ()
        (let loop ([log-p #f])
          (sync
-          (handle-evt 
+          (handle-evt
            log-ch
            (match-lambda
              [(list req)
