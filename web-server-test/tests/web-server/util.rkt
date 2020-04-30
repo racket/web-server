@@ -16,7 +16,8 @@
          collect
          htxml
          call
-         bytes-sort)
+         bytes-sort
+         fake-connection-for-bytes)
 
 (require xml/path)
 (provide (rename-out
@@ -101,3 +102,8 @@
       (parameterize ([current-namespace ns]
                      [current-output-port (open-output-nowhere)])
         (eval expr)))))
+
+; bytes? -> connection?
+(define (fake-connection-for-bytes bstr)
+  (define-values (c i o) (make-mock-connection bstr))
+  c)
