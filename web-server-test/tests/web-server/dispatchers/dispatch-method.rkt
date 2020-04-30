@@ -24,11 +24,6 @@
            80
            "whatever"))
 
-; bytes? -> connection?
-(define (fake-connection-for-bytes bstr)
-  (define-values (c i o) (make-mock-connection bstr))
-  c)
-
 ; method matches
 (let ([d (method:make '(get) do-nothing-dispatcher)]
       [r (fake-request-for-method #"GET")]
