@@ -62,7 +62,7 @@
 (define (redact b)
   (regexp-replace
    #"Connection: close\r\n"
-   (regexp-replace 
+   (regexp-replace
     #"Date: [a-zA-Z0-9:, ]+ GMT\r\n"
     (regexp-replace
      #"Last-Modified: [a-zA-Z0-9:, ]+ GMT\r\n"
@@ -82,7 +82,7 @@
            (namespace-require 'mzlib/serialize)
            (eval '(module m-id . rest))
            (eval '(require 'm-id)))
-         
+
          (lambda (s-expr)
            (parameterize ([current-namespace ns]
                           [current-output-port (open-output-nowhere)])
