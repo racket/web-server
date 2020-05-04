@@ -370,6 +370,7 @@ Examples:
    (list "203" "Non-Authoritative Information")
    (list "204" "No Content")
    (list "205" "Reset Content")
+   (list "206" "Partial Content")
 
    (list "300" "Multiple Choices")
    (list "301" "Moved Permanently")
@@ -377,6 +378,7 @@ Examples:
    (list "303" "See Other")
    (list "305" "Use Proxy")
    (list "307" "Temporary Redirect")
+   (list "308" "Permanent Redirect")
 
    (list "400" "Bad Request")
    (list "401" "Unauthorized")

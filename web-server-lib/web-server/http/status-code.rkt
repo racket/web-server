@@ -37,6 +37,7 @@
    203 "Non-Authoritative Information"
    204 "No Content"
    205 "Reset Content"
+   206 "Partial Content" ; RFC 7233
 
    300 "Multiple Choices"
    301 "Moved Permanently"
@@ -44,6 +45,7 @@
    303 "See Other"
    305 "Use Proxy"
    307 "Temporary Redirect"
+   308 "Permanent Redirect" ; RFC 7538
 
    400 "Bad Request"
    401 "Unauthorized"
@@ -73,8 +75,8 @@
 (module+ test
   (check-equal?
    (list 100 101
-         200 201 202 203 204 205
-         300 301 302 303 305 307
+         200 201 202 203 204 205 206
+         300 301 302 303 305 307 308
          400 401 402 403 404 405 406 407 408 409 410 411 413 414 415 417 426
          500 501 502 503 504 505)
    (sort (hash-keys common-http-status-codes&messages) <)))
