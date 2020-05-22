@@ -15,14 +15,13 @@
 ;; Configuration
 (require racket/runtime-path
          racket/file
+         racket/list
          (for-syntax racket/base))
 (define-runtime-path *data-file*
   "english-measure-questions.rktd")
 (define *questions-per-quiz* 5)
 
-(require web-server/servlet
-         mzlib/list
-         mzlib/etc)
+(require web-server/servlet)
 
 (provide (all-defined-out))
 (define interface-version 'v1)
