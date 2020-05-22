@@ -1,7 +1,6 @@
 #lang racket/base
 (require web-server/servlet
          net/url
-         mzlib/etc
          (except-in racket/list
                     drop)
          racket/pretty
@@ -47,7 +46,7 @@
 
 ; build-suspender : (listof html) (listof html) [(listof (cons sym str))] [(listof (cons sym str))] -> str -> response
 (define build-suspender
-  (opt-lambda (title content [body-attributes '([bgcolor "white"])] [head-attributes null])
+  (lambda (title content [body-attributes '([bgcolor "white"])] [head-attributes null])
     (lambda (k-url)
       (response/xexpr
        `(html (head ,head-attributes
