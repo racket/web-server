@@ -1,6 +1,7 @@
 #lang racket/base
 
-(require rackunit
+(require racket/port
+         rackunit
          web-server/http
          web-server/http/response
          web-server/safety-limits
@@ -150,6 +151,33 @@
            (check-equal? (sync/timeout 1 chunks) #f)
            (check-true (thread-dead? responder-thread)))))
 
+     (test-case "connections are closed when responders fail"
+       (define responder-thread #f)
+       (define response-out #f)
+       (define write-ready (make-semaphore))
+       (define resp
+         (response/output
+          (lambda (out)
+            ;; Prevent the error from being written to stderr
+            ;; s.t. raco test --drdr doesn't fail because of it.
+            (current-error-port (open-output-nowhere))
+            (set! responder-thread (current-thread))
+            (set! response-out out)
+            (semaphore-wait write-ready)
+            (write-bytes #"a" out)
+            (flush-output out)
+            (error 'fail))))
+
+       (call-with-test-client+server resp
+         (lambda (in out chunks)
+           (check-equal? (subbytes (sync/timeout 1 chunks) 0 8) #"HTTP/1.1")
+
+           (semaphore-post write-ready)
+           (check-equal? (sync/timeout 1 chunks) #"1\r\na\r\n")
+           (check-equal? (sync/timeout 1 chunks) #"0\r\n\r\n")
+           (check-true (port-closed? response-out))
+           (check-true (thread-dead? responder-thread)))))
+
      (test-case "every chunk resets the rolling 60 second timeout window"
        (define connection #f)
        (define write-ready (make-semaphore))
@@ -177,4 +205,3 @@
              (sync (system-idle-evt))
              (check-= (ttl) 60000 300)
              (sleep 1)))))))))
-
