@@ -139,7 +139,10 @@
   (define to-client (connection-o-port conn))
   (define to-chunker-t
     (thread (λ ()
-              ((response-output bresp) to-chunker)
+              (with-handlers ([exn:fail?
+                               (lambda (e)
+                                 ((error-display-handler) (exn-message e) e))])
+                ((response-output bresp) to-chunker))
               (close-output-port to-chunker))))
 
   ;; The client might go away while the response is being generated,
