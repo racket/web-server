@@ -165,7 +165,7 @@
             (set! response-out out)
             (semaphore-wait write-ready)
             (write-bytes #"a" out)
-            (flush-output out)
+            (semaphore-wait write-ready)
             (error 'fail))))
 
        (call-with-test-client+server resp
@@ -174,7 +174,10 @@
 
            (semaphore-post write-ready)
            (check-equal? (sync/timeout 1 chunks) #"1\r\na\r\n")
+
+           (semaphore-post write-ready)
            (check-equal? (sync/timeout 1 chunks) #"0\r\n\r\n")
+
            (check-true (port-closed? response-out))
            (check-true (thread-dead? responder-thread)))))
 
