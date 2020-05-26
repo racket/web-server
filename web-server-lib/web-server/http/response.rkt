@@ -138,13 +138,23 @@
   (define-values (from-servlet to-chunker) (make-pipe))
   (define to-client (connection-o-port conn))
   (define to-chunker-t
-    (thread (λ ()
-              (with-handlers ([exn:fail?
-                               (lambda (e)
-                                 (close-output-port to-chunker)
-                                 (raise e))])
-                ((response-output bresp) to-chunker)
-                (close-output-port to-chunker)))))
+    (thread
+     (λ ()
+       ;; When errors occur, we immediately kill the connection to
+       ;; make it clear to the client that something went wrong.  By
+       ;; doing this, we ensure that the terminating chunk won't be
+       ;; sent and the client can't misinterpret the response as
+       ;; successful.  This is in line with how other web servers
+       ;; behave.
+       ;;
+       ;; See: https://github.com/racket/web-server/pull/93
+       (with-handlers ([exn:fail?
+                        (lambda (e)
+                          (kill-connection! conn)
+                          (close-output-port to-chunker)
+                          (raise e))])
+         ((response-output bresp) to-chunker)
+         (close-output-port to-chunker)))))
 
   ;; The client might go away while the response is being generated,
   ;; in which case the output port will be closed so we have to
