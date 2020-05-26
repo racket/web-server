@@ -141,9 +141,10 @@
     (thread (λ ()
               (with-handlers ([exn:fail?
                                (lambda (e)
-                                 ((error-display-handler) (exn-message e) e))])
-                ((response-output bresp) to-chunker))
-              (close-output-port to-chunker))))
+                                 (close-output-port to-chunker)
+                                 (raise e))])
+                ((response-output bresp) to-chunker)
+                (close-output-port to-chunker)))))
 
   ;; The client might go away while the response is being generated,
   ;; in which case the output port will be closed so we have to
