@@ -96,5 +96,5 @@
                   (lambda ()
                     ((servlet-handler the-servlet) req))
                   servlet-prompt)))))))
-      
-      (output-response conn (any->response maybe-response)))))
+
+      (output-response/method conn (any->response maybe-response) (request-method req)))))

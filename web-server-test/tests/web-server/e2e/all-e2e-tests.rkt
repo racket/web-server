@@ -1,7 +1,6 @@
 #lang racket/base
 
 (require racket/path
-         racket/port
          racket/tcp
          rackunit)
 
