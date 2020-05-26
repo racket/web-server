@@ -153,7 +153,6 @@
 
      (test-case "connections are closed when responders fail"
        (define responder-thread #f)
-       (define response-out #f)
        (define write-ready (make-semaphore))
        (define resp
          (response/output
@@ -162,7 +161,6 @@
             ;; s.t. raco test --drdr doesn't fail because of it.
             (current-error-port (open-output-nowhere))
             (set! responder-thread (current-thread))
-            (set! response-out out)
             (semaphore-wait write-ready)
             (write-bytes #"a" out)
             (semaphore-wait write-ready)
@@ -176,10 +174,7 @@
            (check-equal? (sync/timeout 1 chunks) #"1\r\na\r\n")
 
            (semaphore-post write-ready)
-           (check-equal? (sync/timeout 1 chunks) #"0\r\n\r\n")
-
-           (check-true (port-closed? response-out))
-           (check-true (thread-dead? responder-thread)))))
+           (check-equal? (sync/timeout 1 chunks) #f))))
 
      (test-case "every chunk resets the rolling 60 second timeout window"
        (define connection #f)
