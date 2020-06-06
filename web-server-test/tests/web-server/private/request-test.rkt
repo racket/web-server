@@ -103,7 +103,7 @@
   (parameterize ([current-custodian custodian])
     (define ip (open-input-bytes b))
     (define op (open-output-bytes))
-    (define timer (make-timer tm ip +inf.0 void))
+    (define timer (make-timer tm +inf.0 void))
     (define conn
       (connection 0 timer ip op custodian #f))
 

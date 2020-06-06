@@ -189,7 +189,7 @@
               (loop)))))
 
        (define (ttl)
-         (- (timer-expire-seconds (connection-timer connection))
+         (- (timer-deadline (connection-timer connection))
             (current-inexact-milliseconds)))
 
        (call-with-test-client+server resp

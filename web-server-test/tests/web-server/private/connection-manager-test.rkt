@@ -22,7 +22,7 @@
   (define action (timer-action timer))
   (revise-timer!
    timer
-   (max 0 (- (timer-expire-seconds timer)
+   (max 0 (- (timer-deadline timer)
              (current-inexact-milliseconds)))
    (lambda ()
      (dynamic-wind

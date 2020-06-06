@@ -1,7 +1,8 @@
 #lang racket/base
 
-(require racket/contract
-         racket/async-channel)
+(require racket/async-channel
+         racket/contract
+         racket/match)
 
 ;; Timeout plan
 ;; ============
@@ -18,73 +19,84 @@
 ;; The application may further adjust its allotted timeout for handling
 ;; requests by using the dispatcher in the dispatch-timeout module.
 
-(struct timer-manager (thread timer-ch))
-(define-struct timer (tm evt expire-seconds action)
-  #:mutable)
+(define-logger web-server/timer)
+
+(struct timer-manager (thd ch))
+(struct timer (tm [deadline #:mutable] [action #:mutable])
+  #:extra-constructor-name make-timer)
 
 ;; start-timer-manager : -> timer-manager?
 ;; The timer manager thread
 (define (start-timer-manager)
-  (define timer-ch (make-async-channel))
-  (timer-manager
-   (thread
-    (lambda ()
-      (let loop ([timers null])
-        ;; (printf "Timers: ~a\n" (length timers))
-        ;; Wait for either...
-        (apply sync
-               ;; ... a timer-request message ...
-               (handle-evt
-                timer-ch
-                (lambda (req)
-                  ;; represent a req as a (timer-list -> timer-list) function:
-                  ;; add/remove/change timer evet:
-                  (loop (req timers))))
-               ;; ... or a timer
-               (map (lambda (timer)
-                      (handle-evt
-                       (timer-evt timer)
-                       (lambda (_)
-                         ;; execute timer
-                         ((timer-action timer))
-                         (loop (remq timer timers)))))
-                    timers)))))
-   timer-ch))
+  (define ch (make-async-channel))
+  (define thd
+    (thread
+     (lambda ()
+       (define timers (make-hash))
+       (let loop ([first-deadline +inf.0]
+                  [deadline-evt never-evt])
+         (log-web-server/timer-debug "timers: ~a, next deadline in ~.sms" (hash-count timers) (- first-deadline (current-inexact-milliseconds)))
+         (sync
+          (handle-evt
+           ch
+           (match-lambda
+             [(cons 'add t)
+              (define deadline (timer-deadline t))
+              (define-values (first-deadline* deadline-evt*)
+                (if (< deadline first-deadline)
+                    (values deadline (alarm-evt deadline))
+                    (values first-deadline deadline-evt)))
+              (hash-set! timers t #t)
+              (loop first-deadline* deadline-evt*)]
 
-;; Limitation on this add-timer: thunk cannot make timer
-;;  requests directly, because it's executed directly by
-;;  the timer-manager thread
+             [(cons 'remove t)
+              (hash-remove! timers t)
+              (loop first-deadline deadline-evt)]))
+
+          (handle-evt
+           deadline-evt
+           (lambda (_)
+             (define now (current-inexact-milliseconds))
+             (define-values (n-expired first-deadline)
+               (for/fold ([n-expired 0]
+                          [first-deadline +inf.0])
+                         ([t (in-hash-keys timers)])
+                 (define deadline (timer-deadline t))
+                 (cond
+                   [(<= deadline now)
+                    ((timer-action t))
+                    (hash-remove! timers t)
+                    (values (add1 n-expired) first-deadline)]
+
+                   [else
+                    (values n-expired (if (< deadline first-deadline)
+                                          deadline
+                                          first-deadline))])))
+             (log-web-server/timer-debug "expired ~a timers" n-expired)
+             (loop first-deadline (alarm-evt first-deadline)))))))))
+
+  (timer-manager thd ch))
+
 ;; add-timer : timer-manager number (-> void) -> timer
-(define (add-timer manager msecs thunk)
+(define (add-timer tm msecs action)
   (define now (current-inexact-milliseconds))
-  (define t
-    (timer manager
-           (alarm-evt (+ now msecs))
-           (+ now msecs)
-           thunk))
-  (async-channel-put
-   (timer-manager-timer-ch manager)
-   (lambda (timers)
-     (list* t timers)))
-  t)
+  (define t (timer tm (+ now msecs) action))
+  (begin0 t
+    (async-channel-put
+     (timer-manager-ch tm)
+     (cons 'add t))))
 
 ;; revise-timer! : timer msecs (-> void) -> timer
 ;; revise the timer to ring msecs from now
-(define (revise-timer! timer msecs thunk)
-  (define now (current-inexact-milliseconds))
-  (async-channel-put
-   (timer-manager-timer-ch (timer-tm timer))
-   (lambda (timers)
-     (set-timer-evt! timer (alarm-evt (+ now msecs)))
-     (set-timer-expire-seconds! timer (+ now msecs))
-     (set-timer-action! timer thunk)
-     timers)))
+(define (revise-timer! t msecs [action (timer-action t)])
+  (set-timer-deadline! t (+ (current-inexact-milliseconds) msecs))
+  (set-timer-action! t action))
 
-(define (cancel-timer! timer)
+;; cancel-timer! : timer -> void
+(define (cancel-timer! t)
   (async-channel-put
-   (timer-manager-timer-ch (timer-tm timer))
-   (lambda (timers)
-     (remq timer timers))))
+   (timer-manager-ch (timer-tm t))
+   (cons 'remove t)))
 
 ;; start-timer : timer-manager num (-> void) -> timer
 ;; to make a timer that calls to-do after sec from make-timer's application
@@ -93,23 +105,21 @@
 
 ;; reset-timer : timer num -> void
 ;; to cause timer to expire after sec from the adjust-msec-to-live's application
-(define (reset-timer! timer secs)
-  (revise-timer! timer (* 1000 secs) (timer-action timer)))
+(define (reset-timer! t secs)
+  (revise-timer! t (* 1000 secs)))
 
 ;; increment-timer! : timer num -> void
 ;; add secs to the timer, rather than replace
-(define (increment-timer! timer secs)
-  (revise-timer! timer
-                 (+ (- (timer-expire-seconds timer) (current-inexact-milliseconds))
-                    (* 1000 secs))
-                 (timer-action timer)))
+(define (increment-timer! t secs)
+  (revise-timer! t
+                 (+ (- (timer-deadline t) (current-inexact-milliseconds))
+                    (* 1000 secs))))
 
 
 (provide/contract
  [timer-manager? (-> any/c boolean?)]
  [struct timer ([tm timer-manager?]
-                [evt evt?]
-                [expire-seconds number?]
+                [deadline number?]
                 [action (-> any/c)])]
  [start-timer-manager (-> timer-manager?)]
  [start-timer (timer-manager? number? (-> any/c) . -> . timer?)]

@@ -2,7 +2,7 @@
 (require racket/contract
          racket/match
          "../safety-limits.rkt"
-         (submod "../safety-limits.rkt" private) 
+         (submod "../safety-limits.rkt" private)
          "timer.rkt")
 
 (provide
@@ -55,7 +55,7 @@
 
 ;; new-connection: connection-manager [number] i-port o-port custodian -> connection
 ;; ask the connection manager for a new connection
-(define new-connection 
+(define new-connection
   (case-lambda
     [(cm i-port o-port cust close?)
      (new-connection cm #f i-port o-port cust close?)]
@@ -74,17 +74,16 @@
       (start-timer tm
                    (or time-to-live initial-timeout)
                    (lambda ()
-                     (cond
-                       [(weak-box-value conn-wb)
-                        => kill-connection-w/o-timer!]))))
+                     (define conn (weak-box-value conn-wb))
+                     (when conn
+                       (kill-connection-w/o-timer! conn)))))
      conn]))
 
 ;; kill-connection!: connection -> void
 ;; kill this connection
 (define (kill-connection! conn)
   #;(printf "K: ~a\n" (connection-id conn))
-  (with-handlers ([exn:fail? void])
-    (cancel-timer! (connection-timer conn)))
+  (cancel-timer! (connection-timer conn))
   (kill-connection-w/o-timer! conn))
 
 (define (kill-connection-w/o-timer! conn)

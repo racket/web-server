@@ -159,8 +159,9 @@
   ;; The client might go away while the response is being generated,
   ;; in which case the output port will be closed so we have to
   ;; gracefully back out when that happens.
-  (with-handlers ([exn:fail? (lambda (e)
-                               (kill-thread to-chunker-t))])
+  (with-handlers ([exn:fail?
+                   (lambda (_)
+                     (kill-thread to-chunker-t))])
     (define buffer (make-bytes 16384))
     (let loop ()
       (define bytes-read-or-eof
