@@ -54,7 +54,7 @@
   (define ip (open-input-bytes ib))
   (define op (open-output-bytes))
   (define tm (start-timer-manager))
-  (values (make-connection 0 (make-timer tm never-evt +inf.0 (lambda () (void)))
+  (values (make-connection 0 (make-timer tm +inf.0 void)
                            ip op (make-custodian) #t)
           ip
           op))
