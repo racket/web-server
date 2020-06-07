@@ -62,14 +62,13 @@
 (define-syntax (add-missing-headers stx)
   (syntax-parse stx
     [(_ hs:expr [name:bytes value:expr] ...+)
-     #:with to-add-init #'(list name ...)
      #'(let ([res hs])
          (define to-add
-           (for/fold ([to-add to-add-init])
+           (for/fold ([to-add (list name ...)])
                      ([h (in-list hs)])
              (remove (header-field h) to-add bytes-ci=?)))
          (let ([value-e value])
-           (when (and (member name to-add bytes-ci=?) value-e)
+           (when (and value-e (member name to-add bytes-ci=?))
              (set! res (cons (header name value-e) res)))) ...
          res)]))
 
