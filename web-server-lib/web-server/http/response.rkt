@@ -13,6 +13,7 @@
          web-server/private/util
          syntax/parse/define
          (for-syntax racket/base
+                     syntax/parse
                      syntax/parse/lib/function-header))
 
 (provide
@@ -54,53 +55,44 @@
        (output-response-body conn resp))]
     ;; Otherwise, use chunked encoding
     [else
-     (output-response-head conn resp
-                           (list (header #"Transfer-Encoding" #"chunked")))
+     (output-response-head conn resp #t)
      (output-response-body/chunked conn resp)]))
 
 ;; Write the headers portion of a response to an output port.
 ;; NOTE: According to RFC 2145 the server should write HTTP/1.1
 ;;       header for *all* clients.
-(define-syntax-rule (maybe-header h k v)
-  (if (hash-has-key? h k)
-      empty
-      (list (header k v))))
-(define-syntax-rule (maybe-headers h [k v] ...)
-  (append (maybe-header h k v)
-          ...))
+(define-syntax (add-missing-headers stx)
+  (syntax-parse stx
+    [(_ hs:expr [name:bytes value:expr] ...+)
+     #:with to-add-init #'(list name ...)
+     #'(let ([res hs])
+         (define to-add
+           (for/fold ([to-add to-add-init])
+                     ([h (in-list hs)])
+             (remove (header-field h) to-add bytes-ci=?)))
+         (let ([value-e value])
+           (when (and (member name to-add bytes-ci=?) value-e)
+             (set! res (cons (header name value-e) res)))) ...
+         res)]))
 
-(define (output-response-head conn bresp [more-hs empty])
-  (fprintf (connection-o-port conn)
-           "HTTP/1.1 ~a ~a\r\n"
-           (response-code bresp)
-           (response-message bresp))
-  (define hs (append (response-headers bresp) more-hs))
-  (define seen? (make-hash))
-  (for ([h (in-list hs)])
-    (hash-set! seen? (header-field h) #t))
-  (output-headers
-   conn
-   (append
-    (maybe-headers
-     seen?
-     [#"Date"
-      (string->bytes/utf-8 (seconds->gmt-string (current-seconds)))]
-     [#"Last-Modified"
-      (string->bytes/utf-8 (seconds->gmt-string (response-seconds bresp)))]
-     [#"Server"
-      #"Racket"])
-    (if (response-mime bresp)
-        (maybe-headers
-         seen?
-         [#"Content-Type"
-          (response-mime bresp)])
-        empty)
-    (if (connection-close? conn)
-        (maybe-headers
-         seen?
-         [#"Connection" #"close"])
-        empty)
-    hs)))
+(define (output-response-head conn bresp [chunked? #f])
+  (fprintf
+   (connection-o-port conn)
+   "HTTP/1.1 ~a ~a\r\n"
+   (response-code bresp)
+   (response-message bresp))
+
+  (define hs
+    (add-missing-headers
+     (response-headers bresp)
+     [#"Connection"        (and (connection-close? conn) #"close")]
+     [#"Content-Type"      (response-mime bresp)]
+     [#"Date"              (string->bytes/utf-8 (seconds->gmt-string (current-seconds)))]
+     [#"Last-Modified"     (string->bytes/utf-8 (seconds->gmt-string (response-seconds bresp)))]
+     [#"Server"            #"Racket"]
+     [#"Transfer-Encoding" (and chunked? #"chunked")]))
+
+  (output-headers conn hs))
 
 ;; output-headers : connection (list-of header) -> void
 (define (output-headers conn headers)

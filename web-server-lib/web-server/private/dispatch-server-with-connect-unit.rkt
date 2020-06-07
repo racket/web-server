@@ -141,7 +141,7 @@
     ;; connection will be closed. This shouldn't change any other
     ;; behavior: read-request is already blocking, peeking doesn't
     ;; consume a byte, etc.
-    (define (connection-loop)
+    (let connection-loop ()
       (cond
         [(eof-object? (peek-byte/safe ip))
          (kill-connection! conn)]
@@ -154,8 +154,7 @@
          (config:dispatch conn req)
          (if (connection-close? conn)
              (kill-connection! conn)
-             (connection-loop))]))
-    (connection-loop)))
+             (connection-loop))]))))
 
 (define (peek-byte/safe ip)
   (with-handlers ([exn:fail? (lambda (_) eof)])
