@@ -5,7 +5,6 @@
          racket/port
          racket/list
          racket/match
-         xml/xml
          web-server/private/connection-manager
          (submod web-server/private/connection-manager private)
          web-server/http/request-structs
@@ -35,8 +34,6 @@
                                  (raise e))])
       body ...
       (flush-output (connection-o-port conn)))))
-
-
 
 (define (output-response conn resp)
   (output-response/method conn resp #"GET"))
@@ -75,10 +72,55 @@
              (set! res (cons (header name value-e) res)))) ...
          res)]))
 
+;; Compile-time fprintf specialized to byte strings.
+(define-syntax (cprintf stx)
+  (define b-a (char->integer #\a))
+  (define b-tilde (char->integer #\~))
+  (define (parse-fmt bs)
+    (let loop ([bs bs]
+               [chunks null])
+      (cond
+        [(bytes=? bs #"")
+         (reverse chunks)]
+
+        [(and (>= (bytes-length bs) 2)
+              (= (bytes-ref bs 0) b-tilde)
+              (= (bytes-ref bs 1) b-a))
+         (loop (subbytes bs 2) (cons 'arg chunks))]
+
+        [(null? chunks)
+         (loop (subbytes bs 1) (list (subbytes bs 0 1)))]
+
+        [(bytes? (car chunks))
+         (loop (subbytes bs 1) (cons (bytes-append (car chunks) (subbytes bs 0 1)) (cdr chunks)))]
+
+        [else
+         (loop (subbytes bs 1) (cons (subbytes bs 0 1) chunks))])))
+
+  (syntax-parse stx
+    [(_ fmt:bytes arg-e:expr ...)
+     #'(cprintf (current-output-port) fmt arg-e ...)]
+
+    [(_ out-e:expr fmt:bytes arg-e:expr ...)
+     #:with out-id (datum->syntax #'out-e 'out)
+     #:with (write-e ...) (for/fold ([exprs null]
+                                     [args (syntax-e #'(arg-e ...))]
+                                     #:result (reverse exprs))
+                                    ([chunk (in-list (parse-fmt (syntax->datum #'fmt)))])
+                            (if (eq? chunk 'arg)
+                                (values
+                                 (cons #`(display #,(car args) out-id) exprs)
+                                 (cdr args))
+                                (values
+                                 (cons #`(write-bytes #,(datum->syntax #'fmt chunk) out-id) exprs)
+                                 args)))
+     #'(let ([out-id out-e])
+         write-e ...)]))
+
 (define (output-response-head conn bresp [chunked? #f])
-  (fprintf
+  (cprintf
    (connection-o-port conn)
-   "HTTP/1.1 ~a ~a\r\n"
+   #"HTTP/1.1 ~a ~a\r\n"
    (response-code bresp)
    (response-message bresp))
 
@@ -99,12 +141,14 @@
   (print-headers (connection-o-port conn) headers))
 
 ;; print-headers : output-port (list-of header) -> void
-(define (print-headers out headers)
-  (for-each (match-lambda
-              [(struct header (field value))
-               (fprintf out "~a: ~a\r\n" field value)])
-            headers)
-  (fprintf out "\r\n"))
+(define (print-headers out hs)
+  (for ([h (in-list hs)])
+    (cprintf
+     out
+     #"~a: ~a\r\n"
+     (header-field h)
+     (header-value h)))
+  (write-bytes #"\r\n" out))
 
 ; RFC 2616 Section 4.4
 (define (terminated-response? r)
@@ -163,14 +207,13 @@
         ;; a responder can run indefinitely as long as it writes
         ;; *something* every (current-send-timeout) seconds.
         (reset-connection-response-send-timeout! conn)
-        (fprintf to-client "~a\r\n" (number->string bytes-read-or-eof 16))
+        (cprintf to-client #"~a\r\n" (number->string bytes-read-or-eof 16))
         (write-bytes buffer to-client 0 bytes-read-or-eof)
-        (fprintf to-client "\r\n")
+        (write-bytes #"\r\n" to-client)
         (flush-output to-client)
         (loop)))
     (thread-wait to-chunker-t)
-    (fprintf to-client "0\r\n")
-    (fprintf to-client "\r\n")
+    (write-bytes #"0\r\n\r\n" to-client)
     (flush-output to-client)))
 
 ; seconds->gmt-bytes : exact-integer -> bytes
@@ -179,32 +222,33 @@
   (define d (seconds->date s #f))
   (with-output-to-bytes
    (lambda ()
-     (display-week-day (date-week-day d))
-     (display-zero-padded (date-day d))
-     (display-month (date-month d))
-     (display (date-year d))
-     (display #" ")
-     (display-zero-padded (date-hour d))
-     (display #":")
-     (display-zero-padded (date-minute d))
-     (display #":")
-     (display-zero-padded (date-second d)))))
+     (write-week-day (date-week-day d))
+     (write-zero-padded (date-day d))
+     (write-month (date-month d))
+     (write (date-year d))
+     (write-bytes #" ")
+     (write-zero-padded (date-hour d))
+     (write-bytes #":")
+     (write-zero-padded (date-minute d))
+     (write-bytes #":")
+     (write-zero-padded (date-second d))
+     (write-bytes #" GMT"))))
 
 (module+ testing
   (provide seconds->gmt-bytes))
 
-(define-syntax-rule (display-zero-padded e)
+(define-syntax-rule (write-zero-padded e)
   (let ([n e])
     (cond
       [(< n 10)
-       (display #\0)
-       (display n)]
+       (write-bytes #"0")
+       (write n)]
 
       [else
-       (display n)])))
+       (write n)])))
 
-(define-syntax-rule (display-month m)
-  (display
+(define-syntax-rule (write-month m)
+  (write-bytes
    (case m
      [(1)  #" Jan "]
      [(2)  #" Feb "]
@@ -219,8 +263,8 @@
      [(11) #" Nov "]
      [(12) #" Dev "])))
 
-(define-syntax-rule (display-week-day d)
-  (display
+(define-syntax-rule (write-week-day d)
+  (write-bytes
    (case d
      [(0) #"Sun, "]
      [(1) #"Mon, "]
@@ -348,17 +392,18 @@
                     (match ranges
                       [(list)
                        ; Final boundary (must start on new line; ends with a new line)
-                       (fprintf (connection-o-port conn) "--~a--\r\n" boundary)
+                       (cprintf (connection-o-port conn) #"--~a--\r\n" boundary)
                        (void)]
                       [(list-rest (list-rest start end) rest)
+                       (define out (connection-o-port conn))
                        ; Intermediate boundary (must start on new line; ends with a new line)
-                       (fprintf (connection-o-port conn) "--~a\r\n" boundary)
+                       (cprintf out #"--~a\r\n" boundary)
                        ; Headers and new line
-                       (display (car multipart-headers) (connection-o-port conn))
+                       (display (car multipart-headers) out)
                        ; Content
                        (output-file-range conn input start end)
                        ; Newline before next field
-                       (fprintf (connection-o-port conn) "\r\n")
+                       (write-bytes #"\r\n" out)
                        (loop rest (cdr multipart-headers))]))))))))))
 
 ;; prerender-multipart/byteranges-headers : bytes (alist-of integer integer) integer -> (list-of bytes)
