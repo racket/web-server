@@ -98,64 +98,47 @@
   (define conn
     (new-connection cm ip op (current-custodian) #f))
 
-  (with-handlers
-      ([(match-lambda
-          [(or
-            ;; This error is "Connection reset by peer" and doesn't
-            ;; really indicate a problem with the server. It
-            ;; occurs when our end doesn't "realize" that the
-            ;; connection was interrupted (for whatever reason)
-            ;; and it attempts to send a packet to the other end,
-            ;; to which the other end replies with an RST packet
-            ;; because it wasn't expecting anything from our end.
-            (exn:fail:network:errno _ _ (cons 54 'posix))
-            ;; This error is "Broken pipe" and it occurs when our
-            ;; end attempts to write to the other end over a closed
-            ;; socket. It can happen when a browser suddenly closes
-            ;; the socket while we're sending it data (eg. because
-            ;; the user closed a tab).
-            (exn:fail:network:errno _ _ (cons 32 'posix))
-            ;; This is error is not useful because it just means the
-            ;; other side closed the connection early during writing,
-            ;; which we can't do anything about.
-            (exn:fail "fprintf: output port is closed" _)
-            ;; The connection may get timed out while the request is
-            ;; being read, when that happens we need to gracefully kill
-            ;; the connection.
-            (exn:fail (regexp #rx"input port is closed") _))
-           #true]
-          [_
-           #false])
-      (λ (x)
-        (kill-connection! conn))])
-    ;; HTTP/1.1 allows any number of requests to come from this input
-    ;; port. However, there is no explicit cancellation of a
-    ;; connection---the browser will just close the port. This leaves
-    ;; the Web server in the unfortunate state of config:read-request
-    ;; trying to read an HTTP and failing---with an ugly error
-    ;; message. This call to peek here will block until at least one
-    ;; character is available and then transfer to read-request. At
-    ;; that point, an error message would be reasonable because the
-    ;; request would be badly formatted or ended early. However, if
-    ;; the connection is closed, then peek will get the EOF and the
-    ;; connection will be closed. This shouldn't change any other
-    ;; behavior: read-request is already blocking, peeking doesn't
-    ;; consume a byte, etc.
+  (with-handlers ([exn-expected?
+                   (lambda (_)
+                     (kill-connection! conn))])
     (let connection-loop ()
-      (cond
-        [(eof-object? (peek-byte/safe ip))
-         (kill-connection! conn)]
+      (define-values (req close?)
+        (config:read-request conn config:port port-addresses))
+      (reset-connection-timeout! conn config:response-timeout)
+      (set-connection-close?! conn close?)
+      (config:dispatch conn req)
+      (if (connection-close? conn)
+          (kill-connection! conn)
+          (connection-loop)))))
 
-        [else
-         (define-values (req close?)
-           (config:read-request conn config:port port-addresses))
-         (reset-connection-timeout! conn config:response-timeout)
-         (set-connection-close?! conn close?)
-         (config:dispatch conn req)
-         (if (connection-close? conn)
-             (kill-connection! conn)
-             (connection-loop))]))))
+(define/match (exn-expected? _)
+  [((or
+     ;; This error is "Connection reset by peer" and doesn't really
+     ;; indicate a problem with the server. It occurs when our end
+     ;; doesn't "realize" that the connection was interrupted (for
+     ;; whatever reason) and it attempts to send a packet to the other
+     ;; end, to which the other end replies with an RST packet because
+     ;; it wasn't expecting anything from our end.
+     (exn:fail:network:errno _ _ (cons (or 54 104) 'posix))
+     ;; This error is "Broken pipe" and it occurs when our end attempts
+     ;; to write to the other end over a closed socket. It can happen
+     ;; when a browser suddenly closes the socket while we're sending
+     ;; it data (eg. because the user closed a tab).
+     (exn:fail:network:errno _ _ (cons 32 'posix))
+     ;; This is error is not useful because it just means the other
+     ;; side closed the connection early during writing, which we can't
+     ;; do anything about.
+     (exn:fail "fprintf: output port is closed" _)
+     ;; The connection may get timed out while the request is being
+     ;; read, when that happens we need to gracefully kill the
+     ;; connection.
+     (exn:fail (regexp #rx"input port is closed") _)
+     ;; There is no explicit connection closing under HTTP/1.1 so we
+     ;; attempt to read a a new request off of a connection as soon as
+     ;; the previous one was handled.  If the client goes a way, then
+     ;; this error gets triggered and we can safely ignore it.
+     (exn:fail (regexp #rx"http input closed prematurely") _)))
+   #t]
 
-(define (peek-byte/safe ip)
-  (with-handlers ([exn:fail? (lambda (_) eof)])
-    (peek-bytes 1 0 ip)))
+  [(_)
+   #f])

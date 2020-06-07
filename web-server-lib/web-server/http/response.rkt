@@ -1,7 +1,7 @@
 #lang racket/base
 
-(require racket/contract
-         file/md5
+(require file/md5
+         racket/contract
          racket/port
          racket/list
          racket/match
@@ -29,9 +29,10 @@
 (define-simple-macro (define/ext (~and (name:id conn:id arg:formal ...) fun-header)
                        body:expr ...+)
   (define fun-header
-    (with-handlers ([exn:fail? (λ (e)
-                                 (kill-connection! conn)
-                                 (raise e))])
+    (with-handlers ([exn:fail?
+                     (λ (e)
+                       (kill-connection! conn)
+                       (raise e))])
       body ...
       (flush-output (connection-o-port conn)))))
 
