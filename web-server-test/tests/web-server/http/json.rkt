@@ -56,7 +56,7 @@
  (bytes-sort
   (bytes-append
    #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: "
-   (string->bytes/utf-8 (seconds->gmt-string 0))
+   (seconds->gmt-bytes 0)
    #"\r\nServer: Racket\r\nContent-Type: application/json; charset=utf-8\r\nConnection: close\r\n\r\n[\"whoop\",{\"there\":[\"it\",\"is\"]}]"))
 
  ; The default MIME type ("application/json; charset=utf-8")
