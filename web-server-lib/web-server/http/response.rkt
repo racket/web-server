@@ -87,8 +87,8 @@
      (response-headers bresp)
      [#"Connection"        (and (connection-close? conn) #"close")]
      [#"Content-Type"      (response-mime bresp)]
-     [#"Date"              (string->bytes/utf-8 (seconds->gmt-string (current-seconds)))]
-     [#"Last-Modified"     (string->bytes/utf-8 (seconds->gmt-string (response-seconds bresp)))]
+     [#"Date"              (seconds->gmt-bytes (current-seconds))]
+     [#"Last-Modified"     (seconds->gmt-bytes (response-seconds bresp))]
      [#"Server"            #"Racket"]
      [#"Transfer-Encoding" (and chunked? #"chunked")]))
 
@@ -173,32 +173,62 @@
     (fprintf to-client "\r\n")
     (flush-output to-client)))
 
-; seconds->gmt-string : Nat -> String
+; seconds->gmt-bytes : exact-integer -> bytes
 ; format is rfc1123 compliant according to rfc2068 (http/1.1)
+(define (seconds->gmt-bytes s)
+  (define d (seconds->date s #f))
+  (with-output-to-bytes
+   (lambda ()
+     (display-week-day (date-week-day d))
+     (display-zero-padded (date-day d))
+     (display-month (date-month d))
+     (display (date-year d))
+     (display #" ")
+     (display-zero-padded (date-hour d))
+     (display #":")
+     (display-zero-padded (date-minute d))
+     (display #":")
+     (display-zero-padded (date-second d)))))
+
 (module+ testing
-  (provide seconds->gmt-string))
-(define (seconds->gmt-string s)
-  (let* ([local-date (seconds->date s)]
-         [date (seconds->date (- s (date-time-zone-offset local-date)))])
-    (format "~a, ~a ~a ~a ~a:~a:~a GMT"
-            (vector-ref DAYS (date-week-day date))
-            (two-digits (date-day date))
-            (vector-ref MONTHS (sub1 (date-month date)))
-            (date-year date)
-            (two-digits (date-hour date))
-            (two-digits (date-minute date))
-            (two-digits (date-second date)))))
+  (provide seconds->gmt-bytes))
 
-; two-digits : num -> str
-(define (two-digits n)
-  (let ([str (number->string n)])
-    (if (< n 10) (string-append "0" str) str)))
+(define-syntax-rule (display-zero-padded e)
+  (let ([n e])
+    (cond
+      [(< n 10)
+       (display #\0)
+       (display n)]
 
-(define MONTHS
-  #("Jan" "Feb" "Mar" "Apr" "May" "Jun" "Jul" "Aug" "Sep" "Oct" "Nov" "Dec"))
+      [else
+       (display n)])))
 
-(define DAYS
-  #("Sun" "Mon" "Tue" "Wed" "Thu" "Fri" "Sat"))
+(define-syntax-rule (display-month m)
+  (display
+   (case m
+     [(1)  #" Jan "]
+     [(2)  #" Feb "]
+     [(3)  #" Mar "]
+     [(4)  #" Apr "]
+     [(5)  #" May "]
+     [(6)  #" Jun "]
+     [(7)  #" Jul "]
+     [(8)  #" Aug "]
+     [(9)  #" Sep "]
+     [(10) #" Oct "]
+     [(11) #" Nov "]
+     [(12) #" Dev "])))
+
+(define-syntax-rule (display-week-day d)
+  (display
+   (case d
+     [(0) #"Sun, "]
+     [(1) #"Mon, "]
+     [(2) #"Tue, "]
+     [(3) #"Wed, "]
+     [(4) #"Thu, "]
+     [(5) #"Fri, "]
+     [(6) #"Sat, "])))
 
 
 ;; output-file: connection
