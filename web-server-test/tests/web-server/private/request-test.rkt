@@ -21,8 +21,8 @@
 (define-runtime-path fixtures
   "fixtures/")
 
-(define (fixture/ip filename)
-  (open-input-file (build-path fixtures filename)))
+(define (fixture/ip filename [chunker randomly-chunked-ip])
+  (chunker (open-input-file (build-path fixtures filename))))
 
 (define (fixture filename)
   (file->bytes (build-path fixtures filename)))
@@ -200,28 +200,74 @@
                          (check-multipart data boundary expected))))])
 
 (define-syntax-parser test-multipart/fixture
-  [(_ filename:expr boundary:expr expected:expr)
+  [(_ filename:expr boundary:expr expected:expr (~optional chunker:expr))
    (syntax/loc this-syntax
-     (test-multipart filename (fixture/ip filename) boundary expected))])
+     (test-multipart filename (fixture/ip filename (~? chunker randomly-chunked-ip)) boundary expected))])
 
 
-;                                                  
-;                                                  
-;                                                  
-;                                                  
-;   ;;             ;;                  ;; ;;       
-;   ;;             ;;                     ;;       
-;  ;;;;; ;;    ;; ;;;;;     ;; ;;; ;;  ;;;;;;; ;;  
-;   ;;  ;  ; ;;  ; ;;     ;;  ; ;; ;;  ;; ;;  ;  ; 
-;   ;;  ;  ;  ;    ;;      ;    ;; ;;  ;; ;;  ;  ; 
+(define ((make-ip-chunker sizer) inp)
+  (define-values (in out)
+    (make-pipe))
+  (begin0 in
+    (thread
+     (lambda ()
+       (let loop ()
+         (define bs (read-bytes (sizer) inp))
+         (cond
+           [(eof-object? bs)
+            (close-output-port out)]
+
+           [else
+            (write-bytes bs out)
+            (flush-output out)
+            (sync (system-idle-evt))
+            (loop)]))))))
+
+
+;; Wraps `inp' so that only one byte at a time is available from it.
+(define drip-ip
+  (make-ip-chunker (lambda () 1)))
+
+
+;; Wraps `inp' so that parts of it are available in random chunk
+;; sizes, like they would be under realistic network conditions.
+(define randomly-chunked-ip
+  (make-ip-chunker (lambda ()
+                     (random 1 128))))
+
+
+;; Creates an input port whose contents are the appended chunks.  The
+;; data is available for reading one chunk at a time.
+(define (feed-ip chunks)
+  (define-values (in out)
+    (make-pipe))
+  (begin0 in
+    (thread
+     (lambda ()
+       (for ([c (in-list chunks)])
+         (write-bytes c out)
+         (flush-output out)
+         (sync (system-idle-evt)))
+       (close-output-port out)))))
+
+
+;
+;
+;
+;
+;   ;;             ;;                  ;; ;;
+;   ;;             ;;                     ;;
+;  ;;;;; ;;    ;; ;;;;;     ;; ;;; ;;  ;;;;;;; ;;
+;   ;;  ;  ; ;;  ; ;;     ;;  ; ;; ;;  ;; ;;  ;  ;
+;   ;;  ;  ;  ;    ;;      ;    ;; ;;  ;; ;;  ;  ;
 ;   ;; ;;;;;;  ;;  ;;  ;;;  ;;  ;; ;;  ;; ;; ;;;;;;
-;   ;;  ;        ;;;;         ;;;; ;;  ;; ;;  ;    
-;    ;  ;    ;   ;  ;     ;   ;  ; ;;  ;;  ;  ;    
-;    ;;; ;;;  ;;;   ;;;    ;;;   ;;;;  ;;  ;;; ;;; 
-;                                                  
-;                                                  
-;                                                  
-;                                                  
+;   ;;  ;        ;;;;         ;;;; ;;  ;; ;;  ;
+;    ;  ;    ;   ;  ;     ;   ;  ; ;;  ;;  ;  ;
+;    ;;; ;;;  ;;;   ;;;    ;;;   ;;;;  ;;  ;;; ;;;
+;
+;
+;
+;
 
 (define request-tests
   (test-suite
@@ -246,7 +292,7 @@
      (test-equal?
       "input with other line endings"
       (read-http-line/limited (open-input-string "hello world\n how's it going?")
-                               #:limit (* 8 1024))
+                              #:limit (* 8 1024))
       (read-bytes-line (open-input-string "hello world\n how's it going?") 'return-linefeed))
 
      (test-equal?
@@ -381,7 +427,7 @@
          (define-values (method uri major minor)
            (read-request-line (open-input-string line) 1024))
          uri)
-       
+
        (test-equal?
         "absolute URI"
         (parse-request-uri "GET http://example.com/foo HTTP/1.1")
@@ -391,7 +437,7 @@
         "absolute schemaless URI"
         (parse-request-uri "GET //example.com/foo HTTP/1.1")
         (url #f #f "" #f #t (list (path/param "" '()) (path/param
-"example.com" '()) (path/param "foo" '())) '() #f))
+                                                       "example.com" '()) (path/param "foo" '())) '() #f))
 
        (test-equal?
         "absolute path"
@@ -405,6 +451,12 @@
 
     (test-suite
      "read-mime-multipart"
+
+     (test-exn:fail:network
+      "multipart boundary too long"
+      #rx"boundary too long"
+      (lambda ()
+        (read-mime-multipart (open-input-bytes #"") (make-bytes 300 65))))
 
      (test-exn:fail:network
       "multipart-body-empty"
@@ -443,9 +495,93 @@
 
      (test-exn:fail:network
       "multipart-body-field-without-data"
-      #rx"malformed part \\(no data\\)"
+      #rx"part without data"
       (lambda ()
         (read-mime-multipart (fixture/ip "multipart-body-field-without-data") #"abc")))
+
+     (test-exn:fail:network
+      "multipart-body-field-without-data (dripped)"
+      #rx"part without data"
+      (lambda ()
+        (read-mime-multipart (fixture/ip "multipart-body-field-without-data" drip-ip) #"abc")))
+
+     (test-exn:fail:network
+      "multipart-body-fields-without-data"
+      #rx"part without data"
+      (lambda ()
+        (read-mime-multipart (fixture/ip "multipart-body-fields-without-data") #"abc")))
+
+     (test-exn:fail:network
+      "multipart-body-fields-without-data (dripped)"
+      #rx"part without data"
+      (lambda ()
+        (read-mime-multipart (fixture/ip "multipart-body-fields-without-data" drip-ip) #"abc")))
+
+     (test-exn:fail:network
+      "multipart body field without data (full boundary)"
+      #rx"part without data"
+      (lambda ()
+        (read-mime-multipart
+         (feed-ip
+          '(#"--abc\r\n"
+            #"cont"
+            #"ent-disposition: "
+            #"multipart/form-data; name=\"a\""
+            #"\r\n"
+            #"\r\n--abc--"
+            #"\r\n"))
+         #"abc")))
+
+     (test-exn:fail:network
+      "multipart body field without data (split at CR)"
+      #rx"part without data"
+      (lambda ()
+        (read-mime-multipart
+         (feed-ip
+          '(#"--abc\r\n"
+            #"cont"
+            #"ent-disposition: "
+            #"multipart/form-data"
+            #"; name=\"a\"\r"
+            #"\n\r"
+            #"\n--ab"
+            #"c--\r\n"))
+         #"abc")))
+
+     (test-exn:fail:network
+      "multipart body field without data (split boundary)"
+      #rx"part without data"
+      (lambda ()
+        (read-mime-multipart
+         (feed-ip
+          '(#"--abc\r\n"
+            #"cont"
+            #"ent-disposition: "
+            #"multipart/form-data; name=\"a\""
+            #"\r\n\r\n"
+            #"--ab"
+            #"c--\r\n"))
+         #"abc")))
+
+     (test-multipart
+      "multipart body (split at CR)"
+      (feed-ip
+       '(#"--ab"
+         #"c\r\n"
+         #"Content-Disposition: "
+         #"multipart/form-data"
+         #"; name=\"f\"\r"
+         #"\n\r"
+         #"\nhello\r"
+         #"world\n\r"
+         #"\n--"
+         #"ab"
+         #"c--\r"
+         #"\n"))
+      #"abc"
+      (list
+       (mime-part (list (header #"Content-Disposition" #"multipart/form-data; name=\"f\""))
+                  (open-input-bytes #"hello\rworld\n"))))
 
      (test-multipart/fixture
       "multipart-body-with-line-breaks"
@@ -543,7 +679,7 @@
       (lambda ()
         (read-mime-multipart (fixture/ip "multipart-body-with-mixture-of-fields-and-files")
                              #"abc"
-                             #:safety-limits (make-safety-limits 
+                             #:safety-limits (make-safety-limits
                                               #:max-form-data-fields 3))))
 
      (test-not-exn
@@ -585,7 +721,70 @@
       (λ ()
         (read-mime-multipart (fixture/ip "multipart-body-with-too-long-preamble")
                              #"abc"
-                             #:safety-limits (make-safety-limits))))))
+                             #:safety-limits (make-safety-limits))))
+
+     (test-multipart/fixture
+      "multipart-body-realistic"
+      #"---------------------------200748463811934395181707906709"
+      (list
+       (mime-part (list (header #"Content-Disposition" #"form-data; name=\"customer-email\""))
+                  (open-input-bytes #"REDACTED@yahoo.com"))
+       (mime-part (list (header #"Content-Disposition" #"form-data; name=\"customer-locale\""))
+                  (open-input-bytes #"ro_ro.UTF-8"))
+       (mime-part (list (header #"Content-Disposition" #"form-data; name=\"discount\""))
+                  (open-input-bytes #"0"))
+       (mime-part (list (header #"Content-Disposition" #"form-data; name=\"discount-vat-amount\""))
+                  (open-input-bytes #"0"))
+       (mime-part (list (header #"Content-Disposition" #"form-data; name=\"discount-label\""))
+                  (open-input-bytes #""))
+       (mime-part (list (header #"Content-Disposition" #"form-data; name=\"shipping-cost\""))
+                  (open-input-bytes #"1260"))
+       (mime-part (list (header #"Content-Disposition" #"form-data; name=\"shipping-vat-amount\""))
+                  (open-input-bytes #"239"))
+       (mime-part (list (header #"Content-Disposition" #"form-data; name=\"shipping-vat-rate\""))
+                  (open-input-bytes #"standard"))
+       (mime-part (list (header #"Content-Disposition" #"form-data; name=\"payment-method\""))
+                  (open-input-bytes #"credit-card"))
+       (mime-part (list (header #"Content-Disposition" #"form-data; name=\"shipping-address.first-name\""))
+                  (open-input-bytes #"REDACTED"))
+       (mime-part (list (header #"Content-Disposition" #"form-data; name=\"shipping-address.last-name\""))
+                  (open-input-bytes #"REDACTED"))
+       (mime-part (list (header #"Content-Disposition" #"form-data; name=\"shipping-address.phone\""))
+                  (open-input-bytes #"0000000000"))
+       (mime-part (list (header #"Content-Disposition" #"form-data; name=\"shipping-address.company\""))
+                  (open-input-bytes #""))
+       (mime-part (list (header #"Content-Disposition" #"form-data; name=\"shipping-address.line-1\""))
+                  (open-input-bytes #"REDACTED"))
+       (mime-part (list (header #"Content-Disposition" #"form-data; name=\"shipping-address.line-2\""))
+                  (open-input-bytes #""))
+       (mime-part (list (header #"Content-Disposition" #"form-data; name=\"shipping-address.country\""))
+                  (open-input-bytes #"Romania"))
+       (mime-part (list (header #"Content-Disposition" #"form-data; name=\"shipping-address.state\""))
+                  (open-input-bytes #"REDACTED"))
+       (mime-part (list (header #"Content-Disposition" #"form-data; name=\"shipping-address.city\""))
+                  (open-input-bytes #"REDACTED"))
+       (mime-part (list (header #"Content-Disposition" #"form-data; name=\"shipping-address.zip\""))
+                  (open-input-bytes #"000000"))
+       (mime-part (list (header #"Content-Disposition" #"form-data; name=\"billing-address.first-name\""))
+                  (open-input-bytes #"REDACTED"))
+       (mime-part (list (header #"Content-Disposition" #"form-data; name=\"billing-address.last-name\""))
+                  (open-input-bytes #"REDACTED"))
+       (mime-part (list (header #"Content-Disposition" #"form-data; name=\"billing-address.phone\""))
+                  (open-input-bytes #"0000000000"))
+       (mime-part (list (header #"Content-Disposition" #"form-data; name=\"billing-address.company\""))
+                  (open-input-bytes #""))
+       (mime-part (list (header #"Content-Disposition" #"form-data; name=\"billing-address.line-1\""))
+                  (open-input-bytes #"REDACTED"))
+       (mime-part (list (header #"Content-Disposition" #"form-data; name=\"billing-address.line-2\""))
+                  (open-input-bytes #""))
+       (mime-part (list (header #"Content-Disposition" #"form-data; name=\"billing-address.country\""))
+                  (open-input-bytes #"Romania"))
+       (mime-part (list (header #"Content-Disposition" #"form-data; name=\"billing-address.state\""))
+                  (open-input-bytes #"REDACTED"))
+       (mime-part (list (header #"Content-Disposition" #"form-data; name=\"billing-address.city\""))
+                  (open-input-bytes #"REDACTED"))
+       (mime-part (list (header #"Content-Disposition" #"form-data; name=\"billing-address.zip\""))
+                  (open-input-bytes #"000000"))))))
 
    (test-suite
     "Headers"
@@ -896,7 +1095,7 @@
       #rx"body length exceeds limit"
       (lambda ()
         (do-test-read-request/limits (fixture "post-with-json-body")
-                                  (make-safety-limits #:max-request-body-length 10)))))
+                                     (make-safety-limits #:max-request-body-length 10)))))
 
     (test-suite
      "GET bindings"
@@ -978,4 +1177,3 @@
       #rx"port closed prematurely"
       (lambda ()
         (test-read-request (fixture "post-with-multipart-data-without-body"))))))))
-
