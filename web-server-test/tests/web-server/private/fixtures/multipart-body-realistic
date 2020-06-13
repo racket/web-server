@@ -1,0 +1,117 @@
+-----------------------------200748463811934395181707906709
+Content-Disposition: form-data; name="customer-email"
+
+REDACTED@yahoo.com
+-----------------------------200748463811934395181707906709
+Content-Disposition: form-data; name="customer-locale"
+
+ro_ro.UTF-8
+-----------------------------200748463811934395181707906709
+Content-Disposition: form-data; name="discount"
+
+0
+-----------------------------200748463811934395181707906709
+Content-Disposition: form-data; name="discount-vat-amount"
+
+0
+-----------------------------200748463811934395181707906709
+Content-Disposition: form-data; name="discount-label"
+
+
+-----------------------------200748463811934395181707906709
+Content-Disposition: form-data; name="shipping-cost"
+
+1260
+-----------------------------200748463811934395181707906709
+Content-Disposition: form-data; name="shipping-vat-amount"
+
+239
+-----------------------------200748463811934395181707906709
+Content-Disposition: form-data; name="shipping-vat-rate"
+
+standard
+-----------------------------200748463811934395181707906709
+Content-Disposition: form-data; name="payment-method"
+
+credit-card
+-----------------------------200748463811934395181707906709
+Content-Disposition: form-data; name="shipping-address.first-name"
+
+REDACTED
+-----------------------------200748463811934395181707906709
+Content-Disposition: form-data; name="shipping-address.last-name"
+
+REDACTED
+-----------------------------200748463811934395181707906709
+Content-Disposition: form-data; name="shipping-address.phone"
+
+0000000000
+-----------------------------200748463811934395181707906709
+Content-Disposition: form-data; name="shipping-address.company"
+
+
+-----------------------------200748463811934395181707906709
+Content-Disposition: form-data; name="shipping-address.line-1"
+
+REDACTED
+-----------------------------200748463811934395181707906709
+Content-Disposition: form-data; name="shipping-address.line-2"
+
+
+-----------------------------200748463811934395181707906709
+Content-Disposition: form-data; name="shipping-address.country"
+
+Romania
+-----------------------------200748463811934395181707906709
+Content-Disposition: form-data; name="shipping-address.state"
+
+REDACTED
+-----------------------------200748463811934395181707906709
+Content-Disposition: form-data; name="shipping-address.city"
+
+REDACTED
+-----------------------------200748463811934395181707906709
+Content-Disposition: form-data; name="shipping-address.zip"
+
+000000
+-----------------------------200748463811934395181707906709
+Content-Disposition: form-data; name="billing-address.first-name"
+
+REDACTED
+-----------------------------200748463811934395181707906709
+Content-Disposition: form-data; name="billing-address.last-name"
+
+REDACTED
+-----------------------------200748463811934395181707906709
+Content-Disposition: form-data; name="billing-address.phone"
+
+0000000000
+-----------------------------200748463811934395181707906709
+Content-Disposition: form-data; name="billing-address.company"
+
+
+-----------------------------200748463811934395181707906709
+Content-Disposition: form-data; name="billing-address.line-1"
+
+REDACTED
+-----------------------------200748463811934395181707906709
+Content-Disposition: form-data; name="billing-address.line-2"
+
+
+-----------------------------200748463811934395181707906709
+Content-Disposition: form-data; name="billing-address.country"
+
+Romania
+-----------------------------200748463811934395181707906709
+Content-Disposition: form-data; name="billing-address.state"
+
+REDACTED
+-----------------------------200748463811934395181707906709
+Content-Disposition: form-data; name="billing-address.city"
+
+REDACTED
+-----------------------------200748463811934395181707906709
+Content-Disposition: form-data; name="billing-address.zip"
+
+000000
+-----------------------------200748463811934395181707906709--

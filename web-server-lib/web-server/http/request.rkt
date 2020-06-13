@@ -84,7 +84,7 @@
 ;; be closed after servicing the request, and build a request structure
 (define (make-read-request #:connection-close? [connection-close? #f]
                            #:safety-limits [limits (make-unlimited-safety-limits)])
-  
+
   (match-define (safety-limits
                  #:request-read-timeout read-timeout
                  #:max-request-line-length max-request-line-length
@@ -171,8 +171,7 @@
               (network-error 'complete-request "chunked content exceeds max body length"))
 
             ;; This is safe because of the preceding guard on new-size,
-            (define limited-input (make-limited-input-port real-ip size-in-bytes #f))
-            (copy-port limited-input decode-op)
+            (copy-bytes! size-in-bytes real-ip decode-op)
             (read-http-line/limited real-ip #:limit 2)
             (loop new-size)])))
 
@@ -206,15 +205,17 @@
 ;; **************************************************
 ;; safe reading
 
-(define (CR? b) (eqv? b 13))
-(define (LF? b) (eqv? b 10))
+(define (CR? b)     (eqv? b 13))
+(define (LF? b)     (eqv? b 10))
+(define (hyphen? b) (eqv? b 45))
 
-(define (bytes-find-crlf bs len)
-  (match (regexp-match-positions #rx#"\r\n" bs 0 len)
-    [(list (cons start _))
-     start]
-    [_
-     #f]))
+(define ((make-finder rx) bs [len #f])
+  (match (regexp-match-positions rx bs 0 len)
+    [(list (cons start _)) start]
+    [_ #f]))
+
+(define find-cr   (make-finder #rx#"\r"))
+(define find-crlf (make-finder #rx#"\r\n"))
 
 ; read-http-line/limited : inp number -> bytes
 ; `read-bytes-line' against untrusted input is not safe since the client
@@ -241,7 +242,7 @@
          (values (sub1 offset) 2)]
 
         ;; the current chunk has a CRLF somewhere within it
-        [(bytes-find-crlf buf len)
+        [(find-crlf buf len)
          => (lambda (pos)
               (values (+ offset pos) 2))]
 
@@ -568,15 +569,39 @@
                      (lambda args (apply write! args))
                      (lambda _ (close-output-port out)))))
 
+(define MULTIPART-BUFSIZE (* 64 1024))
 
+;; RFC 2046[1] specifies that the maximum boundary length must not be
+;; longer than 70 characters, not counting the leading hyphens. To help
+;; compatibility with bad client implementations, we double that limit.
+;;
+;; [1]: https://tools.ietf.org/html/rfc2046#section-5.1.1
+(define MAX-BOUNDARY-LEN 140)
 
-(define MAX-HEADERS/PART
-  ;; Maximum number of headers allowed for a single multipart/form-data part.
-  ;; This is a constant because multipart/form-data headers are limited by
-  ;; <https://tools.ietf.org/html/rfc7578#section-4.8>;
-  ;; it is high to avoid rejecting any reasonable request.
-  20)
+;; `read-mime-multipart' permits a "preamble" as defined in RFC 2046[1],
+;; which is cited by RFC 7578. However, the `multipart/form-data`
+;; definition doesn't explicitly mention a "preamble" and general tries
+;; to forbid MIME features it doesn't use, and browsers etc. don't seem
+;; to use this. Thus, we use a small limit that hopefully will be enough
+;; for any legacy clients out there.
+;;
+;; [1]: https://tools.ietf.org/html/rfc2046#section-5.1
+(define MAX-PREAMBLE-LINES 20)
 
+;; This is a guess at a limit that should be long enough for a legacy
+;; "preamble": it is the limit on message body lines from RFC 821, which
+;; is cited by (but not incorporated into) RFC 2046. Because RFC 2046
+;; limits boundaries to 70 ASCII characters, this will always be longer
+;; than `end-boundary-len`, too.
+(define MAX-PREAMBLE-LINE-LEN 998)
+
+;; Maximum number of headers allowed for a single multipart/form-data
+;; part. This is a constant because multipart/form-data headers are
+;; limited by RFC7578[1]. It is high to avoid rejecting any reasonable
+;; request.
+;;
+;; [1]: https://tools.ietf.org/html/rfc7578#section-4.8
+(define MAX-HEADERS/PART 20)
 
 (define (read-mime-multipart in boundary #:safety-limits [limits (make-safety-limits)])
   (match-define (safety-limits #:max-form-data-parts max-parts
@@ -587,7 +612,10 @@
                                #:max-form-data-field-length max-field-length
                                #:max-form-data-header-length max-header-length)
     limits)
-  
+
+  (when (> (bytes-length boundary) MAX-BOUNDARY-LEN)
+    (network-error 'read-mime-multipart "boundary too long"))
+
   (define start-boundary (bytes-append #"--" boundary))
   (define start-boundary-len (bytes-length start-boundary))
   (define start-boundary-rx (byte-regexp (regexp-quote start-boundary)))
@@ -596,97 +624,91 @@
     ;; trailing CRLF is handled by `read-http-line/limited`
     (bytes-length end-boundary))
 
-  (define bufsize (max end-boundary-len (* 64 1024)))
-  (define buf (make-bytes bufsize))
+  (define buf (make-bytes MULTIPART-BUFSIZE))
+  (define find-boundary (make-finder start-boundary-rx))
 
-  (define (find-boundary haystack)
-    (match (regexp-match-positions start-boundary-rx haystack)
-      [(list (cons pos _))
-       pos]
-      [_
-       #f]))
-
-  (define (subport in n)
-    (make-limited-input-port in n #f))
-
-  (define (collect-part-headers)
+  (define (read-part-headers)
     (read-headers* in
                    #:max-count MAX-HEADERS/PART
                    #:max-length max-header-length))
 
-  (define (collect-part-content file?)
+  (define (read-part-content file?)
     (define-values (content-in content-out)
       (make-spooled-temporary-file max-file-memory-threshold))
 
-    (with-handlers ([(lambda (e) #t)
-                     (lambda (e)
-                       (delete-file/safe (object-name content-in))
-                       (raise e))])
-
-      ;; Increase `len' by `n', raising an exception if the limit is exceeded.
-      (define (increase-length len n)
-        (define len* (+ len n))
+    ;; Increase `len' by `n', raising an exception if the limit is exceeded.
+    (define-syntax-rule (increase-length len n)
+      (let ([len* (+ len n)])
         (begin0 len*
           (when (> len* (if file? max-file-length max-field-length))
             (define who (if file? "file" "field"))
-            (network-error 'read-mime-multipart "~a exceeds max length" who))))
+            (network-error 'read-mime-multipart "~a exceeds max length" who)))))
 
-      ;; Read unitl the position before the CRLF that precedes the
-      ;; boundary and then skip over the boundary in the input.
-      ;; INVARIANT: The `pos` argument is a result of `find-boundary`.
-      (define (copy-until-boundary! len pos)
-        (when (< pos 2)
-          (network-error 'read-mime-multipart "malformed part (no data)"))
-        ;; Read the content
-        (define pos* (- pos 2))
-        (increase-length len pos*)
-        (copy-port (subport in pos*) content-out)
-        ;; Skip the CRLF
-        (let ([bs (read-bytes 2 in)])
-          (unless (equal? #"\r\n" bs)
-            (network-error 'read-mime-multipart
-                           "malformed part\n  expected: #\"\r\n\" before boundary\n  given: ~e"
-                           bs)))
-        ;; Read the (possibly final) boundary line.
-        (define line
-          (read-http-line/limited in #:limit end-boundary-len))
-        (when (eof-object? line)
+    (with-handlers ([(lambda (_) #t)
+                     (lambda (e)
+                       (delete-file/safe (object-name content-in))
+                       (raise e))])
+      (let read-loop ([len 0])
+        (define n-read (peek-bytes-avail! buf 0 #f in))
+        (when (eof-object? n-read)
           (network-error 'read-mime-multipart "port closed prematurely"))
-        (define more-parts?
-          (cond
-            [(bytes=? line start-boundary)
-             #true]
-            [(bytes=? line end-boundary)
-             #false]
-            [else
-             (network-error 'read-mime-multipart "malformed boundary line")]))
-        more-parts?)
-                          
-      
+
+        ;; We are guaranteed to have read at least 1 byte at this point.
+        (cond
+          ;; We found a boundary in the buffer, so we're nearly done.
+          ;; Commit to the content up to the CRLF that precedes the
+          ;; boundary.
+          [(find-boundary buf n-read)
+           => (lambda (pos)
+                (when (< pos 2)
+                  (network-error 'read-mime-multipart "part without data"))
+                (define pos* (- pos 2))
+                (increase-length len pos*)
+                (copy-bytes! pos* in content-out))]
+
+          ;; We found a CR in the buffer, so a boundary might follow.
+          [(find-cr buf n-read)
+           => (lambda (pos)
+                ;; Commit to the content up to CR.
+                (define new-len (increase-length len pos))
+                (copy-bytes! pos in content-out)
+                ;; Check for a CRLF followed by a boundary.
+                (define crlf+boundary-len (+ 2 start-boundary-len))
+                (define maybe-crlf+boundary (peek-bytes crlf+boundary-len 0 in))
+                (unless (find-boundary maybe-crlf+boundary)
+                  ;; We're not at a boundary so just consume the CR.
+                  (define new-len* (increase-length new-len 1))
+                  (copy-bytes! 1 in content-out)
+                  (read-loop new-len*)))]
+
+          ;; We're right at a boundary but aren't expecting it so the
+          ;; request must not have contained any data for a part.
+          [(and (hyphen? (bytes-ref buf 0))
+                (find-boundary (peek-bytes start-boundary-len 0 in)))
+           (network-error 'read-mime-multipart "part without data")]
+
+          ;; No boundary and no CR found so we can just commit
+          ;; whatever's in the buffer then loop.
+          [else
+           (define new-len (increase-length len n-read))
+           (copy-bytes! n-read in content-out)
+           (read-loop new-len)]))
+
+      ;; Skip the CRLF.
+      (define maybe-crlf (read-bytes 2 in))
+      (unless (equal? #"\r\n" maybe-crlf)
+        (network-error 'read-mime-multipart
+                       "malformed part\n  expected: CRLF before boundary\n  given: ~e"
+                       maybe-crlf))
+
+      ;; Read the next boundary.
+      (define line (read-http-line/limited in #:limit end-boundary-len))
       (define more-parts?
-        (let loop ([len 0]
-                   [prev #""])
-          (define n (peek-bytes-avail! buf 0 #f in))
-          (cond
-            [(eof-object? n)
-             (network-error 'read-mime-multipart "port closed prematurely")]
-
-            [else
-             (define bs (subbytes buf 0 n))
-             (cond
-               [(find-boundary bs)
-                => (lambda (pos)
-                     (copy-until-boundary! len pos))]
-
-               [(find-boundary (bytes-append prev bs))
-                => (lambda (pos)
-                     (copy-until-boundary! len (- pos (bytes-length prev))))]
-
-               [else
-                (define new-len (increase-length len n))
-                (define new-prev (subbytes bs (max 0 (- n start-boundary-len))))
-                (copy-port (subport in n) content-out)
-                (loop new-len new-prev)])])))
+        (cond
+          [(eof-object? line) (network-error 'read-mime-multipart "port closed prematurely")]
+          [(bytes=? line start-boundary) #t]
+          [(bytes=? line end-boundary) #f]
+          [else (network-error 'read-mime-multipart "malformed boundary line: ~.s" line)]))
 
       (close-output-port content-out)
       (values content-in more-parts?)))
@@ -695,7 +717,7 @@
                       [total-files 0]
                       [total-fields 0])
 
-    (define headers (collect-part-headers))
+    (define headers (read-part-headers))
     (define file? (file-part? headers))
 
     (let-values ([{total-files total-fields}
@@ -711,7 +733,7 @@
         (network-error 'read-mime-multipart "too many multipart/form-data parts"))
 
       (define-values (content more-parts?)
-        (collect-part-content file?))
+        (read-part-content file?))
       (define part (mime-part headers content))
       (define parts* (cons part parts))
       (if more-parts?
@@ -719,50 +741,24 @@
           (reverse parts*))))
 
   (let skip-preamble ([preamble-line-count 0])
-
-    ;; This code permits a "preamble" as defined in
-    ;; <https://tools.ietf.org/html/rfc2046#section-5.1>,
-    ;; which is cited by RFC 7578.
-    ;; However, the `multipart/form-data` definition
-    ;; doesn't explicitly mention a "preamble" and
-    ;; general tries to forbid MIME features it doesn't use,
-    ;; and browsers etc. don't seem to use this.
-    ;; Thus, we use a small limit that hopefully will be enough
-    ;; for any legacy clients out there.
-    
-    (define MAX-PREAMBLE-LINES 20)
     (unless (< preamble-line-count MAX-PREAMBLE-LINES)
       (network-error 'read-mime-multipart "too many \"preamble\" lines"))
 
-    (define MAX-PREAMBLE-LINE-LEN
-      ;; This is a guess at a limit that should be long enough for
-      ;; a legacy "preamble": it is the limit on message body lines from RFC 821,
-      ;; which is cited by (but not incorporated into) RFC 2046.
-      ;; Becauese  RFC 2046 limits boundaries to 70 ASCII characters,
-      ;; this will always be longer than `end-boundary-len`, too.
-      998)
-    (define line
-      (read-http-line/limited in #:limit MAX-PREAMBLE-LINE-LEN))
+    (define line (read-http-line/limited in #:limit MAX-PREAMBLE-LINE-LEN))
     (cond
-      [(eof-object? line)
-       (network-error 'read-mime-multipart "port closed prematurely")]
-      [(bytes=? line start-boundary)
-       (read-parts)]
-      [(bytes=? line end-boundary)
-       null]
-      [else
-       (skip-preamble (add1 preamble-line-count))])))
+      [(eof-object? line) (network-error 'read-mime-multipart "port closed prematurely")]
+      [(bytes=? line start-boundary) (read-parts)]
+      [(bytes=? line end-boundary) null]
+      [else (skip-preamble (add1 preamble-line-count))])))
 
-
+(define (copy-bytes! amt from to)
+  (copy-port (make-limited-input-port from amt #f) to))
 
 (define (file-part? headers)
   (match (headers-assq* #"Content-Disposition" headers)
     [(header _ (regexp #rx"filename=")) #t]
     [_ #f]))
 
-
-
 (define (delete-file/safe p)
   (with-handlers ([exn:fail:filesystem? void])
     (delete-file p)))
-
