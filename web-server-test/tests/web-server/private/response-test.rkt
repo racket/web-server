@@ -200,7 +200,13 @@
     #"Wed, 01 Apr 1970 12:16:17 GMT")
    (check-equal?
     (seconds->gmt-bytes (+ (* 90 86400) (quotient 86400 2) 10))
-    #"Wed, 01 Apr 1970 12:00:10 GMT")))
+    #"Wed, 01 Apr 1970 12:00:10 GMT")
+   (check-equal?
+    (seconds->gmt-bytes (+ (* 90 86400) (* 13 3600) 20))
+    #"Wed, 01 Apr 1970 13:00:20 GMT")
+   (check-equal?
+    (seconds->gmt-bytes (+ (* 90 86400) (* 13 3600) 620))
+    #"Wed, 01 Apr 1970 13:10:20 GMT")))
 
 (define response-tests
   (test-suite
