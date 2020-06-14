@@ -374,29 +374,32 @@
                                      (network-error 'output-file "~a" (exn-message exn)))])
           (call-with-input-file* file-path
             (lambda (input)
-              (define out (connection-o-port conn))
-              (if (= (length converted-ranges) 1)
-                  ; Single ranges (in 200 or 206 responses) are sent straight out
-                  ; in their simplest form:
-                  (output-file-range conn input (caar converted-ranges) (cdar converted-ranges))
-                  ; Multiple ranges are encoded as multipart/byteranges:
-                  (let loop ([ranges converted-ranges]
-                             [multipart-headers multipart-headers])
-                    (match ranges
-                      [(list)
-                       ; Final boundary (must start on new line; ends with a new line)
-                       (cprintf out #"--~a--\r\n" boundary)
-                       (void)]
-                      [(list-rest (list-rest start end) rest)
-                       ; Intermediate boundary (must start on new line; ends with a new line)
-                       (cprintf out #"--~a\r\n" boundary)
-                       ; Headers and new line
-                       (display (car multipart-headers) out)
-                       ; Content
-                       (output-file-range conn input start end)
-                       ; Newline before next field
-                       (write-bytes #"\r\n" out)
-                       (loop rest (cdr multipart-headers))]))))))))))
+              (cond
+                ; Single ranges (in 200 or 206 responses) are sent straight out
+                ; in their simplest form:
+                [(= (length converted-ranges) 1)
+                 (output-file-range conn input (caar converted-ranges) (cdar converted-ranges))]
+
+                ; Multiple ranges are encoded as multipart/byteranges:
+                [else
+                 (define out (connection-o-port conn))
+                 (let loop ([ranges converted-ranges]
+                            [multipart-headers multipart-headers])
+                   (match ranges
+                     [(list)
+                      ; Final boundary (must start on new line; ends with a new line)
+                      (cprintf out #"--~a--\r\n" boundary)
+                      (void)]
+                     [(list-rest (list-rest start end) rest)
+                      ; Intermediate boundary (must start on new line; ends with a new line)
+                      (cprintf out #"--~a\r\n" boundary)
+                      ; Headers and new line
+                      (display (car multipart-headers) out)
+                      ; Content
+                      (output-file-range conn input start end)
+                      ; Newline before next field
+                      (write-bytes #"\r\n" out)
+                      (loop rest (cdr multipart-headers))]))]))))))))
 
 ;; prerender-multipart/byteranges-headers : bytes (alist-of integer integer) integer -> (list-of bytes)
 (define (prerender-multipart/byteranges-headers maybe-mime-type converted-ranges total-file-length)
