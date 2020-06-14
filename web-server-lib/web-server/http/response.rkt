@@ -220,59 +220,67 @@
 ; format is rfc1123 compliant according to rfc2068 (http/1.1)
 (define (seconds->gmt-bytes s)
   (define d (seconds->date s #f))
-  (with-output-to-bytes
-   (lambda ()
-     (write-week-day (date-week-day d))
-     (write-zero-padded (date-day d))
-     (write-month (date-month d))
-     (write (date-year d))
-     (write-bytes #" ")
-     (write-zero-padded (date-hour d))
-     (write-bytes #":")
-     (write-zero-padded (date-minute d))
-     (write-bytes #":")
-     (write-zero-padded (date-second d))
-     (write-bytes #" GMT"))))
+  (define t (make-bytes 29 32))  ;; #\space = 32
+  (begin0 t
+    (write-week-day! t (date-week-day d))
+    (write-zero-padded! t 5 (date-day d))
+    (write-month! t (date-month d))
+    (write-number! t 15 (date-year d))
+    (write-zero-padded! t 17 (date-hour d))
+    (bytes-set! t 19 58) ;; #\:
+    (write-zero-padded! t 20 (date-minute d))
+    (bytes-set! t 22 58) ;; #\:
+    (write-zero-padded! t 23 (date-second d))
+    (bytes-copy! t 26 #"GMT")))
 
 (module+ testing
   (provide seconds->gmt-bytes))
 
-(define-syntax-rule (write-zero-padded e)
+(define-syntax-rule (write-zero-padded! dest dest-start e)
   (let ([n e])
     (cond
       [(< n 10)
-       (write-bytes #"0")
-       (write n)]
+       (bytes-set! dest dest-start 48)  ;; #\0 = 48
+       (bytes-set! dest (add1 dest-start) (+ n 48))]
 
       [else
-       (write n)])))
+       (write-number! dest (add1 dest-start) n)])))
 
-(define-syntax-rule (write-month m)
-  (write-bytes
+(define-syntax-rule (write-month! dest m)
+  (bytes-copy!
+   dest 8
    (case m
-     [(1)  #" Jan "]
-     [(2)  #" Feb "]
-     [(3)  #" Mar "]
-     [(4)  #" Apr "]
-     [(5)  #" May "]
-     [(6)  #" Jun "]
-     [(7)  #" Jul "]
-     [(8)  #" Aug "]
-     [(9)  #" Sep "]
-     [(10) #" Oct "]
-     [(11) #" Nov "]
-     [(12) #" Dev "])))
+     [(1)  #"Jan"]
+     [(2)  #"Feb"]
+     [(3)  #"Mar"]
+     [(4)  #"Apr"]
+     [(5)  #"May"]
+     [(6)  #"Jun"]
+     [(7)  #"Jul"]
+     [(8)  #"Aug"]
+     [(9)  #"Sep"]
+     [(10) #"Oct"]
+     [(11) #"Nov"]
+     [(12) #"Dev"])))
 
-(define-syntax-rule (write-week-day d)
-  (write-bytes
+(define-syntax-rule (write-week-day! dest d)
+  (bytes-copy!
+   dest 0
    (case d
-     [(0) #"Sun, "]
-     [(1) #"Mon, "]
-     [(2) #"Tue, "]
-     [(3) #"Wed, "]
-     [(4) #"Thu, "]
-     [(5) #"Fri, "]
-     [(6) #"Sat, "])))
+     [(0) #"Sun,"]
+     [(1) #"Mon,"]
+     [(2) #"Tue,"]
+     [(3) #"Wed,"]
+     [(4) #"Thu,"]
+     [(5) #"Fri,"]
+     [(6) #"Sat,"])))
+
+(define-syntax-rule (write-number! dest dest-end num)
+  (let loop ([k dest-end] [n num])
+    (define d (remainder n 10))
+    (bytes-set! dest k (+ d 48))  ;; #\0
+    (when (> n 10)
+      (loop (sub1 k) (quotient n 10)))))
 
 
 ;; output-file: connection
@@ -382,6 +390,7 @@
                                      (network-error 'output-file "~a" (exn-message exn)))])
           (call-with-input-file* file-path
             (lambda (input)
+              (define out (connection-o-port conn))
               (if (= (length converted-ranges) 1)
                   ; Single ranges (in 200 or 206 responses) are sent straight out
                   ; in their simplest form:
@@ -392,10 +401,9 @@
                     (match ranges
                       [(list)
                        ; Final boundary (must start on new line; ends with a new line)
-                       (cprintf (connection-o-port conn) #"--~a--\r\n" boundary)
+                       (cprintf out #"--~a--\r\n" boundary)
                        (void)]
                       [(list-rest (list-rest start end) rest)
-                       (define out (connection-o-port conn))
                        ; Intermediate boundary (must start on new line; ends with a new line)
                        (cprintf out #"--~a\r\n" boundary)
                        ; Headers and new line
