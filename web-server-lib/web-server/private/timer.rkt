@@ -1,7 +1,6 @@
 #lang racket/base
 
-(require racket/async-channel
-         racket/contract
+(require racket/contract
          racket/match)
 
 ;; Timeout plan
@@ -21,14 +20,13 @@
 
 (define-logger web-server/timer)
 
-(struct timer-manager (thd ch))
+(struct timer-manager (thd))
 (struct timer (tm [deadline #:mutable] [action #:mutable])
   #:extra-constructor-name make-timer)
 
 ;; start-timer-manager : -> timer-manager?
 ;; The timer manager thread
 (define (start-timer-manager)
-  (define ch (make-async-channel))
   (define thd
     (thread
      (lambda ()
@@ -38,20 +36,21 @@
          (log-web-server/timer-debug "timers: ~a, next deadline in ~.sms" (hash-count timers) (- first-deadline (current-inexact-milliseconds)))
          (sync
           (handle-evt
-           ch
-           (match-lambda
-             [(cons 'add t)
-              (define deadline (timer-deadline t))
-              (define-values (first-deadline* deadline-evt*)
-                (if (< deadline first-deadline)
-                    (values deadline (alarm-evt deadline))
-                    (values first-deadline deadline-evt)))
-              (hash-set! timers t #t)
-              (loop first-deadline* deadline-evt*)]
+           (thread-receive-evt)
+           (lambda (_)
+             (match (thread-receive)
+               [(cons 'add t)
+                (define deadline (timer-deadline t))
+                (define-values (first-deadline* deadline-evt*)
+                  (if (< deadline first-deadline)
+                      (values deadline (alarm-evt deadline))
+                      (values first-deadline deadline-evt)))
+                (hash-set! timers t #t)
+                (loop first-deadline* deadline-evt*)]
 
-             [(cons 'remove t)
-              (hash-remove! timers t)
-              (loop first-deadline deadline-evt)]))
+               [(cons 'remove t)
+                (hash-remove! timers t)
+                (loop first-deadline deadline-evt)])))
 
           (handle-evt
            deadline-evt
@@ -75,15 +74,15 @@
              (log-web-server/timer-debug "expired ~a timers" n-expired)
              (loop first-deadline (alarm-evt first-deadline)))))))))
 
-  (timer-manager thd ch))
+  (timer-manager thd))
 
 ;; add-timer : timer-manager number (-> void) -> timer
 (define (add-timer tm msecs action)
   (define now (current-inexact-milliseconds))
   (define t (timer tm (+ now msecs) action))
   (begin0 t
-    (async-channel-put
-     (timer-manager-ch tm)
+    (thread-send
+     (timer-manager-thd tm)
      (cons 'add t))))
 
 ;; revise-timer! : timer msecs (-> void) -> timer
@@ -94,8 +93,8 @@
 
 ;; cancel-timer! : timer -> void
 (define (cancel-timer! t)
-  (async-channel-put
-   (timer-manager-ch (timer-tm t))
+  (thread-send
+   (timer-manager-thd (timer-tm t))
    (cons 'remove t)))
 
 ;; start-timer : timer-manager num (-> void) -> timer
