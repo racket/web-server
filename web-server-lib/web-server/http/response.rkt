@@ -263,7 +263,7 @@
   (let loop ([k dest-end] [n num])
     (define d (remainder n 10))
     (bytes-set! dest k (+ d 48))  ;; #\0
-    (when (> n 10)
+    (when (>= n 10)
       (loop (sub1 k) (quotient n 10)))))
 
 
