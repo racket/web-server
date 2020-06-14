@@ -6,6 +6,7 @@
                   make-temporary-file)
          web-server/http
          web-server/http/response
+         (submod web-server/http/response testing)
          (prefix-in compat0: web-server/compat/0/http/response-structs)
          "../util.rkt")
 
@@ -178,20 +179,42 @@
                           #"HEAD")
                   #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nContent-Type: text/html; charset=utf-8\r\n\r\n"))))
 
+(define seconds->gmt-bytes-tests
+  (test-suite
+   "seconds->gmt-bytes"
+
+   (check-equal?
+    (seconds->gmt-bytes 0)
+    #"Thu, 01 Jan 1970 00:00:00 GMT")
+   (check-equal?
+    (seconds->gmt-bytes 86400)
+    #"Fri, 02 Jan 1970 00:00:00 GMT")
+   (check-equal?
+    (seconds->gmt-bytes (+ 86400 3600 193))
+    #"Fri, 02 Jan 1970 01:03:13 GMT")
+   (check-equal?
+    (seconds->gmt-bytes (+ (* 30 86400) 3600 193))
+    #"Sat, 31 Jan 1970 01:03:13 GMT")
+   (check-equal?
+    (seconds->gmt-bytes (+ (* 90 86400) (quotient 86400 2) 977))
+    #"Wed, 01 Apr 1970 12:16:17 GMT")))
+
 (define response-tests
   (test-suite
    "HTTP Responses"
-   
+
    output-response-tests
-   
+
    output-response/method-tests
-   
+
+   seconds->gmt-bytes-tests
+
    (let ()
      (define tmp-file (make-temporary-file))
-     (with-output-to-file tmp-file 
+     (with-output-to-file tmp-file
        (lambda ()
          (display
-          (xexpr->string 
+          (xexpr->string
            `(html (head (title "A title"))
                   (body "Here's some content!")))))
        #:exists 'truncate/replace)
