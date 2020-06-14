@@ -12,6 +12,7 @@
          web-server/private/util
          syntax/parse/define
          (for-syntax racket/base
+                     racket/list
                      syntax/parse
                      syntax/parse/lib/function-header))
 
@@ -74,28 +75,11 @@
 
 ;; Compile-time fprintf specialized to byte strings.
 (define-syntax (cprintf stx)
-  (define b-a (char->integer #\a))
-  (define b-tilde (char->integer #\~))
   (define (parse-fmt bs)
-    (let loop ([bs bs]
-               [chunks null])
-      (cond
-        [(bytes=? bs #"")
-         (reverse chunks)]
-
-        [(and (>= (bytes-length bs) 2)
-              (= (bytes-ref bs 0) b-tilde)
-              (= (bytes-ref bs 1) b-a))
-         (loop (subbytes bs 2) (cons 'arg chunks))]
-
-        [(null? chunks)
-         (loop (subbytes bs 1) (list (subbytes bs 0 1)))]
-
-        [(bytes? (car chunks))
-         (loop (subbytes bs 1) (cons (bytes-append (car chunks) (subbytes bs 0 1)) (cdr chunks)))]
-
-        [else
-         (loop (subbytes bs 1) (cons (subbytes bs 0 1) chunks))])))
+    (filter-not
+     (lambda (sub)
+       (equal? sub #""))
+     (add-between (regexp-split #rx#"~a" bs) 'arg)))
 
   (syntax-parse stx
     [(_ fmt:bytes arg-e:expr ...)
