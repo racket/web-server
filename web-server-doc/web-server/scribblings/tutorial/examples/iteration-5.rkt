@@ -28,7 +28,7 @@
 
 
 ;; post-insert-comment!: post string -> void
-;; Consumes a post and a comment string.  As a side-efect, 
+;; Consumes a post and a comment string.  As a side-effect, 
 ;; adds the comment to the bottom of the post's list of comments.
 (define (post-insert-comment! a-post a-comment)
   (set-post-comments!
