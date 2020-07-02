@@ -1211,7 +1211,7 @@ to have made a loose connection between the name used to identify a form
 element in the rendering code, and the name used for it in the extracting code:
 
 @racketblock[
-@code:comment{render-blog-page: blog request -> doesnt'}
+@code:comment{render-blog-page: blog request -> doesn't return}
 @code:comment{Send an HTML page of the content of the}
 @code:comment{blog.}
 (define (render-blog-page a-blog request)
