@@ -245,7 +245,7 @@
      [(9)  #"Sep"]
      [(10) #"Oct"]
      [(11) #"Nov"]
-     [(12) #"Dev"])))
+     [(12) #"Dec"])))
 
 (define-syntax-rule (write-week-day! dest d)
   (bytes-copy!
