@@ -120,11 +120,14 @@
      ;; end, to which the other end replies with an RST packet because
      ;; it wasn't expecting anything from our end.
      (exn:fail:network:errno _ _ (cons (or 54 104) 'posix))
+     ;; (Can this happen to a unix socket?  Better safe than sorry)
+     (exn:fail:filesystem:errno _ _ (cons (or 54 104) 'posix))
      ;; This error is "Broken pipe" and it occurs when our end attempts
      ;; to write to the other end over a closed socket. It can happen
      ;; when a browser suddenly closes the socket while we're sending
      ;; it data (eg. because the user closed a tab).
      (exn:fail:network:errno _ _ (cons 32 'posix))
+     (exn:fail:filesystem:errno _ _ (cons 32 'posix))
      ;; This is error is not useful because it just means the other
      ;; side closed the connection early during writing, which we can't
      ;; do anything about.
