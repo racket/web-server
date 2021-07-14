@@ -1,7 +1,6 @@
 #lang racket/unit
 
-(require mzlib/thread
-         net/tcp-sig
+(require net/tcp-sig
          racket/async-channel
          racket/match
          "../safety-limits.rkt"
@@ -26,6 +25,7 @@
   (when ac
     (async-channel-put ac v)))
 
+
 ;; serve: -> -> void
 ;; start the server and return a thunk to shut it down
 (define (serve #:confirmation-channel [confirmation-channel #f])
@@ -36,30 +36,88 @@
     (define cm (start-connection-manager #:safety-limits config:safety-limits))
     (thread
      (lambda ()
-       (run-server
-        ;; This is the port argument, but because we specialize listen, it is ignored.
-        1
-        (handle-connection/cm cm)
-        #f
-        (lambda (exn)
-          ((error-display-handler)
-           (format "Connection error: ~a" (exn-message exn))
-           exn))
-        (lambda (_ mw re)
-          (with-handlers ([exn?
-                           (λ (x)
-                             (async-channel-put* confirmation-channel x)
-                             (raise x))])
-            (define listener
-              (tcp-listen config:port config:max-waiting #t config:listen-ip))
-            (let-values
-                ([(local-addr local-port end-addr end-port)
-                  (tcp-addresses listener #t)])
-              (async-channel-put* confirmation-channel local-port))
-            listener))
-        tcp-close
-        tcp-accept
-        tcp-accept/enable-break))))
+       (let ([l (with-handlers ([exn?
+                                 (λ (x)
+                                   (async-channel-put* confirmation-channel x)
+                                   (raise x))])
+                  (define listener
+                    (tcp-listen config:port config:max-waiting #t config:listen-ip))
+                  (let-values
+                      ([(local-addr local-port end-addr end-port)
+                        (tcp-addresses listener #t)])
+                    (async-channel-put* confirmation-channel local-port))
+                  listener)]
+             [can-break? (break-enabled)])
+         (dynamic-wind
+           void
+           (lambda ()
+             ;; All connections should use the same parameterization,
+             ;;  to facilitate transferring continuations from one
+             ;;  connection to another:
+             (let ([paramz (current-parameterization)])
+               ;; Loop to handle connections:
+               (let loop ()
+                 ;; Introducing this thread causes PR12443 to no longer fail.
+                 
+                 ;; The Web Server will definitely kill the custodian
+                 ;; associated with the resources of the connection. I
+                 ;; think what is going on is that the loop here is
+                 ;; attached to one of these custodians (eventually)
+                 ;; and then the listening loop thread gets killed
+                 ;; too. This patch basically just disconnects the loop
+                 ;; from the new custodian. The error reported in the
+                 ;; PR still shows up, but it has no effect on the
+                 ;; response time/etc, whereas before it would stop
+                 ;; listening and 'ab' would fail.
+                 (with-handlers 
+                   ([exn:fail:network?
+                     (lambda (exn)
+                       ((error-display-handler)
+                        (format "Connection error: ~a" (exn-message exn))
+                        exn))])
+                   ;; Make a custodian for the next session:
+                   (let ([c (make-custodian)])
+                     (parameterize
+                         ([current-custodian c])
+                       ;; disable breaks during session set-up...
+                       (parameterize-break 
+                           #f
+                         ;; ... but enable breaks while blocked on an accept:
+                         (let-values ([(r w) ((if can-break?
+                                                  tcp-accept/enable-break
+                                                  tcp-accept)
+                                              l)])
+                           ;; Handler thread:
+                           (let ([t 
+                                  (thread 
+                                   (lambda ()
+                                     ;; First, install the parameterization
+                                     ;;  used for all connections:
+                                     (call-with-parameterization
+                                      paramz
+                                      (lambda ()
+                                        ;; Install this connection's custodian
+                                        ;;  for this thread in the shared
+                                        ;;  parameterization:
+                                        (current-custodian c)
+                                        ;; Enable breaking:
+                                        (when can-break?
+                                          (break-enabled #t))
+                                        ;; Prevent the handler from
+                                        ;; killing this custodian, by
+                                        ;; creating an intermediary,
+                                        ;; but child custodian
+                                        (parameterize ([current-custodian 
+                                                        (make-custodian)])
+                                          ;; Call the handler
+                                          ((handle-connection/cm cm) r w))))))])
+                             ;; Clean-up and timeout thread:
+                             (thread 
+                              (lambda ()
+                                (sync t)
+                                (custodian-shutdown-all c)))))))))
+                 (loop))))
+           (lambda () (tcp-close l)))))))
   (lambda ()
     (custodian-shutdown-all the-server-custodian)))
 
