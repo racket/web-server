@@ -23,3 +23,6 @@
 (define pkg-desc "documentation part of \"web-server\"")
 
 (define pkg-authors '(jay))
+
+(define license
+  '(Apache-2.0 OR MIT))
