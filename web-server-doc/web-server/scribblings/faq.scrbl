@@ -67,7 +67,7 @@ then these URLs can be easily poached.
 
 One solution to this is to use a special cookie as an authenticator. This way, if a URL escapes, it will
 not be able to be used, unless the cookie is present. For advice about how to do this well, see
-@link["http://cookies.lcs.mit.edu/pubs/webauth.html"]{Dos and Don'ts of Client Authentication on the Web}
+@link["https://pdos.csail.mit.edu/papers/webauth:sec10.pdf"]{Dos and Don'ts of Client Authentication on the Web}
 from the MIT Cookie Eaters.
 
 Note: It may be considered a great feature that URLs can be shared this way, because delegation is
