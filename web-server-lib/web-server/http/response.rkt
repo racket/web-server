@@ -25,7 +25,7 @@
   [output-response/method
    (connection? response? bytes? . -> . any)]
   [output-file
-   (connection? path-string? bytes? (or/c bytes? #f) (or/c pair? #f) . -> . any)]))
+   (connection? path-string? bytes? (or/c bytes? #f) (or/c pair? #f) (listof header?) . -> . any)]))
 
 (define-simple-macro (define/ext (~and (name:id conn:id arg:formal ...) fun-header)
                        body:expr ...+)
@@ -272,6 +272,7 @@
 ;;              symbol
 ;;              bytes
 ;;              (U (listof (U byte-range-spec suffix-byte-range-spec)) #f)
+;;              (listof header)
 ;;           -> void
 ;;
 ;; Ranges is #f if the client did not specify a Range header, or:
@@ -288,7 +289,7 @@
 ;; A boundary is generated only if a multipart/byteranges response needs
 ;; to be generated (i.e. if a Ranges header was specified with more than
 ;; one range in it).
-(define/ext (output-file conn file-path method maybe-mime-type ranges)
+(define/ext (output-file conn file-path method maybe-mime-type ranges headers)
   (output-file/boundary
    conn
    file-path
@@ -297,7 +298,8 @@
    ranges
    (if (and ranges (> (length ranges) 1))
        (md5 (string->bytes/utf-8 (number->string (current-inexact-milliseconds))))
-       #f)))
+       #f)
+   headers))
 
 ;; output-file/boundary: connection
 ;;                       path
@@ -305,8 +307,9 @@
 ;;                       bytes
 ;;                       (U (listof (U byte-range-spec suffix-byte-range-spec)) #f)
 ;;                       (U bytes #f)
+;;                       (listof header)
 ;;                       -> void
-(define (output-file/boundary conn file-path method maybe-mime-type ranges boundary)
+(define (output-file/boundary conn file-path method maybe-mime-type ranges boundary headers)
   ;; Ensure there is enough time left to write the first chunk of
   ;; response data. `output-file-range' then resets the connection
   ;; timeout once for every chunk it's able to write to the client.
@@ -365,8 +368,8 @@
       (output-response-head
        conn
        (if ranges
-           (make-206-response modified-seconds maybe-mime-type total-content-length total-file-length converted-ranges boundary)
-           (make-200-response modified-seconds maybe-mime-type total-content-length)))
+           (make-206-response modified-seconds maybe-mime-type total-content-length total-file-length converted-ranges boundary headers)
+           (make-200-response modified-seconds maybe-mime-type total-content-length headers)))
       ; Send the appropriate file content:
       ; TODO: What if we want to output-file during a POST?
       (when (bytes-ci=? method #"GET")
@@ -479,8 +482,11 @@
       (error 'convert-http-ranges "No satisfiable ranges in ~a/~a." ranges total-file-length)
       converted))
 
-;; make-206-response : integer bytes integer integer (alist-of integer integer) bytes -> basic-response
-(define (make-206-response modified-seconds maybe-mime-type total-content-length total-file-length converted-ranges boundary)
+;; make-206-response : integer bytes integer integer (alist-of integer integer) bytes (listof header) -> basic-response
+(define (make-206-response modified-seconds maybe-mime-type total-content-length total-file-length converted-ranges boundary headers)
+  (define heads (append (list (make-header #"Accept-Ranges" #"bytes")
+                              (make-content-length-header total-content-length))
+                        headers))
   (if (= (length converted-ranges) 1)
       (let ([start (caar converted-ranges)]
             [end   (cdar converted-ranges)])
@@ -488,26 +494,25 @@
          206 #"Partial content"
          modified-seconds
          maybe-mime-type
-         (list (make-header #"Accept-Ranges" #"bytes")
-               (make-content-length-header total-content-length)
-               (make-content-range-header start end total-file-length))
+         (cons (make-content-range-header start end total-file-length)
+               heads)
          void))
       (response
        206 #"Partial content"
        modified-seconds
        (bytes-append #"multipart/byteranges; boundary=" boundary)
-       (list (make-header #"Accept-Ranges" #"bytes")
-             (make-content-length-header total-content-length))
+       heads
        void)))
 
-;; make-200-response : integer bytes integer -> basic-response
-(define (make-200-response modified-seconds maybe-mime-type total-content-length)
+;; make-200-response : integer bytes integer (listof header) -> basic-response
+(define (make-200-response modified-seconds maybe-mime-type total-content-length headers)
   (response
    200 #"OK"
    modified-seconds
    maybe-mime-type
-   (list (make-header #"Accept-Ranges" #"bytes")
-         (make-content-length-header total-content-length))
+   (append (list (make-header #"Accept-Ranges" #"bytes")
+                 (make-content-length-header total-content-length))
+           headers)
    void))
 
 ;; make-416-response : integer bytes -> basic-response
