@@ -25,7 +25,9 @@
   [output-response/method
    (connection? response? bytes? . -> . any)]
   [output-file
-   (connection? path-string? bytes? (or/c bytes? #f) (or/c pair? #f) (listof header?) . -> . any)]))
+   (->* (connection? path-string? bytes? (or/c bytes? #f) (or/c pair? #f))
+        ((listof header?))
+        any)]))
 
 (define-simple-macro (define/ext (~and (name:id conn:id arg:formal ...) fun-header)
                        body:expr ...+)
@@ -289,7 +291,7 @@
 ;; A boundary is generated only if a multipart/byteranges response needs
 ;; to be generated (i.e. if a Ranges header was specified with more than
 ;; one range in it).
-(define/ext (output-file conn file-path method maybe-mime-type ranges headers)
+(define/ext (output-file conn file-path method maybe-mime-type ranges [headers (list)])
   (output-file/boundary
    conn
    file-path
@@ -309,7 +311,7 @@
 ;;                       (U bytes #f)
 ;;                       (listof header)
 ;;                       -> void
-(define (output-file/boundary conn file-path method maybe-mime-type ranges boundary headers)
+(define (output-file/boundary conn file-path method maybe-mime-type ranges boundary [headers (list)])
   ;; Ensure there is enough time left to write the first chunk of
   ;; response data. `output-file-range' then resets the connection
   ;; timeout once for every chunk it's able to write to the client.
