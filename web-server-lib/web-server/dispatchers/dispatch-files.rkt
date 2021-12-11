@@ -1,6 +1,7 @@
 #lang racket/base
 (require net/url
          racket/match
+         racket/list
          racket/contract
          racket/bool)
 
@@ -16,8 +17,24 @@
  [make
   (->* (#:url->path url->path/c)
        (#:path->mime-type (path-string? . -> . (or/c false/c bytes?))
-                          #:indices (listof path-string?))
+        #:indices (listof path-string?)
+        #:cache-max-age (or/c false/c (and/c exact-integer? positive?))
+        #:cache-smaxage (or/c false/c (and/c exact-integer? positive?))
+        #:cache-stale-while-revalidate (or/c false/c (and/c exact-integer? positive?))
+        #:cache-stale-if-error (or/c false/c (and/c exact-integer? positive?))
+        #:cache-no-cache boolean?
+        #:cache-no-store boolean?
+        #:cache-no-transform boolean?
+        #:cache-must-revalidate boolean?
+        #:cache-proxy-revalidate boolean?
+        #:cache-must-understand boolean?
+        #:cache-private boolean?
+        #:cache-public boolean?
+        #:cache-immutable boolean?)
        dispatcher/c)])
+
+(module+ test
+  (require rackunit))
 
 ;; looks-like-directory : str -> bool
 ;; to determine if is url style path looks like it refers to a directory
@@ -33,9 +50,73 @@
 
 (define interface-version 'v1)
 
+(define/contract (cache-policy-pair->header-value pair)
+  (-> (cons/c symbol? (or/c boolean? integer?))
+      string?)
+  (cond [(integer? (cdr pair))
+         (string-append (symbol->string (car pair))
+                        "="
+                        (number->string (cdr pair)))]
+        [else
+         (symbol->string (car pair))]))
+
+; (listof (pairof symbol? (or boolean? integer?))) -> (listof (pairof symbol? (or #t integer?)))
+(define/contract (remove-false-policies policies)
+  (-> (listof (cons/c symbol? (or/c boolean? integer?)))
+      (listof (cons/c symbol? (or/c #t integer?))))
+  (define (ok? pair)
+    (or (integer? (cdr pair))
+        (eq? #t (cdr pair))))
+  (filter ok? policies))
+
+(define/contract (cache-policy-alist->header policy)
+  (-> (listof (cons/c symbol? (or/c boolean? integer?)))
+      (or/c false/c header?))
+  (define trimmed-policy (remove-false-policies policy))
+  (cond [(null? trimmed-policy)
+         #f]
+        [else
+         (define policy-parts (map cache-policy-pair->header-value
+                                   trimmed-policy))
+         (define rendered-policy-parts (apply string-append
+                                              (add-between policy-parts ", ")))
+         (make-header #"Cache-Control"
+                      (string->bytes/utf-8 rendered-policy-parts))]))
+
 (define (make #:url->path url->path
               #:path->mime-type [path->mime-type (lambda (path) #f)]
-              #:indices [indices (list "index.html" "index.htm")])
+              #:indices [indices (list "index.html" "index.htm")]
+              #:cache-max-age [cache-max-age #f]
+              #:cache-smaxage [cache-smaxage #f]
+              #:cache-no-cache [cache-no-cache #f]
+              #:cache-no-store [cache-no-store #f]
+              #:cache-no-transform [cache-no-transform #f]
+              #:cache-must-revalidate [cache-must-revalidate #f]
+              #:cache-proxy-revalidate [cache-proxy-revalidate #f]
+              #:cache-must-understand [cache-must-understand #f]
+              #:cache-private [cache-private #f]
+              #:cache-public [cache-public #f]
+              #:cache-immutable [cache-immutable #f]
+              #:cache-stale-while-revalidate [cache-stale-while-revalidate #f]
+              #:cache-stale-if-error [cache-stale-if-error #f])
+  (define cache-policy/header
+    (cache-policy-alist->header
+     (list (cons 'max-age cache-max-age)
+           (cons 's-maxage cache-smaxage)
+           (cons 'stale-while-revalidate cache-stale-while-revalidate)
+           (cons 'stale-if-error cache-stale-if-error)
+           (cons 'no-cache cache-no-cache)
+           (cons 'no-store cache-no-store)
+           (cons 'no-transform cache-no-transform)
+           (cons 'must-revalidate cache-must-revalidate)
+           (cons 'proxy-revalidate cache-proxy-revalidate)
+           (cons 'must-understand cache-must-understand)
+           (cons 'private cache-private)
+           (cons 'public cache-public)
+           (cons 'immutable cache-immutable))))
+  (define headers (cond [(header? cache-policy/header)
+                         (list cache-policy/header)]
+                        [else (list)]))
   (lambda (conn req)
     (define uri (request-uri req))
     (define method (request-method req))
@@ -47,7 +128,8 @@
                    path
                    method
                    (path->mime-type path)
-                   (read-range-header (request-headers/raw req))))
+                   (read-range-header (request-headers/raw req))
+                   headers))
     (define path/string (url-path->string (url-path uri)))
     (define (emit-index-if-possible dir)
       (let/ec esc
