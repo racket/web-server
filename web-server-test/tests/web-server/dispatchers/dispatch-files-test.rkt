@@ -35,6 +35,16 @@
                         (set-box! b (add1 (unbox b)))))
               #:indices (list (if i? (file-name-from-path tmp-file) not-there))))
 
+(define (dispatch/cache i? . paths)
+  (define b (box 0))
+  (files:make #:url->path
+              (lambda (url)
+                (begin0 (values (list-ref paths (min (unbox b) (sub1 (length paths)))) empty)
+                        (set-box! b (add1 (unbox b)))))
+              #:indices (list (if i? (file-name-from-path tmp-file) not-there))
+              #:cache-max-age 89432
+              #:cache-public #t))
+
 (define file-url (string->url "http://test.com/foo"))
 (define dir-url (string->url "http://test.com/foo/"))
 (define (req d? meth heads)
@@ -81,6 +91,12 @@
    (test-equal?* "file, exists, whole, no Range, get"
                 (collect (dispatch #t tmp-file) (req #f #"GET" empty))
                 #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nAccept-Ranges: bytes\r\nContent-Length: 81\r\n\r\n<html><head><title>A title</title></head><body>Here's some content!</body></html>")
+   (test-equal?* "file, exists, whole, no Range, get, cache max-age & public"
+                (collect (dispatch/cache #t tmp-file) (req #f #"GET" empty))
+                #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nAccept-Ranges: bytes\r\nCache-Control: max-age=89432, public\r\nContent-Length: 81\r\n\r\n<html><head><title>A title</title></head><body>Here's some content!</body></html>")
+   (test-equal?* "file, exists, whole, no Range, head, cache max-age & public"
+                (collect (dispatch/cache #t tmp-file) (req #f #"HEAD" empty))
+                #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nAccept-Ranges: bytes\r\nCache-Control: max-age=89432, public\r\nContent-Length: 81\r\n\r\n")
    (test-equal?* "file, exists, whole, no Range, head"
                 (collect (dispatch #t tmp-file) (req #f #"HEAD" empty))
                 #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nAccept-Ranges: bytes\r\nContent-Length: 81\r\n\r\n")
