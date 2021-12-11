@@ -16,10 +16,10 @@
 (provide dispatch-files-tests)
 
 (define tmp-file (make-temporary-file))
-(with-output-to-file tmp-file 
+(with-output-to-file tmp-file
   (lambda ()
     (display
-     (xexpr->string 
+     (xexpr->string
       `(html (head (title "A title"))
              (body "Here's some content!")))))
   #:exists 'truncate/replace)
@@ -39,14 +39,14 @@
 (define dir-url (string->url "http://test.com/foo/"))
 (define (req d? meth heads)
   (make-request meth (if d? dir-url file-url) heads (delay empty) #"" "host" 80 "client"))
-  
+
 (define-syntax-rule (test-equal?* n lhs rhs)
   (test-equal? n (bytes-sort lhs) (bytes-sort rhs)))
 
 (define dispatch-files-tests
   (test-suite
    "Files"
-   
+
    (local [(define (yes s) (test-not-false s (looks-like-directory? s)))
            (define (no s) (test-false s (looks-like-directory? s)))]
    (test-suite
@@ -54,7 +54,7 @@
 
     (no "") (no "foo") (no "/foo") (no "/foo/bar")
     (yes "/") (yes "/foo/") (yes "foo/" )(yes "/bar/zog/trog/")))
-   
+
    (test-case
     "read-range-header: missing and badly formed headers"
     (check-false (files:read-range-header (list (make-header #"Ranges" #"bytes=1-10"))) "check 1")
@@ -66,18 +66,18 @@
                    (files:read-range-header (list (make-header #"Range" #"bytes=a-10")))) "check 4")
     (check-false (parameterize ([current-error-port (open-output-nowhere)])
                    (files:read-range-header (list (make-header #"Range" #"bytes=1-1.0")))) "check 5"))
-   
+
    (test-case
     "read-range-header: single range"
     (check-equal? (files:read-range-header (list (make-header #"Range" #"bytes=1-10"))) (list (cons 1 10)) "check 1")
     (check-equal? (files:read-range-header (list (make-header #"Range" #"bytes=1-"))) (list (cons 1 #f)) "check 2")
     (check-equal? (files:read-range-header (list (make-header #"Range" #"bytes=-10"))) (list (cons #f 10)) "check 3"))
-   
+
    (test-equal?
     "read-range-header: multiple ranges"
     (files:read-range-header (list (make-header #"Range" #"bytes=1-10,20-,-30")))
     (list (cons 1 10) (cons 20 #f) (cons #f 30)))
-   
+
    (test-equal?* "file, exists, whole, no Range, get"
                 (collect (dispatch #t tmp-file) (req #f #"GET" empty))
                 #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nAccept-Ranges: bytes\r\nContent-Length: 81\r\n\r\n<html><head><title>A title</title></head><body>Here's some content!</body></html>")
@@ -96,11 +96,11 @@
    (test-equal?* "file, exists, part, head"
                 (collect (dispatch #t tmp-file) (req #f #"HEAD" (list (make-header #"Range" #"bytes=5-9"))))
                 #"HTTP/1.1 206 Partial content\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nAccept-Ranges: bytes\r\nContent-Length: 5\r\nContent-Range: bytes 5-9/81\r\n\r\n")
-   
+
    (test-exn "path, non"
              exn:dispatcher?
              (lambda () (collect (dispatch #t not-there) (req #f #"GET" empty))))
-   
+
    (test-equal?* "dir, exists, no Range, get"
                 (collect (dispatch #t a-dir) (req #t #"GET" empty))
                 #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nAccept-Ranges: bytes\r\nContent-Length: 81\r\n\r\n<html><head><title>A title</title></head><body>Here's some content!</body></html>")
