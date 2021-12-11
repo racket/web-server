@@ -351,7 +351,20 @@ Creates a denied procedure from an authorized procedure.
 
 @defproc[(make [#:url->path url->path url->path/c]
                [#:path->mime-type path->mime-type (path? . -> . (or/c false/c bytes)?) (lambda (path) #f)]
-               [#:indices indices (listof string?) (list "index.html" "index.htm")])
+               [#:indices indices (listof string?) (list "index.html" "index.htm")]
+               [#:cache-max-age cache-max-age (or/c false/c (and/c exact-integer? positive?)) #f]
+               [#:cache-smaxage cache-smaxage (or/c false/c (and/c exact-integer? positive?)) #f]
+               [#:cache-stale-while-revalidate cache-stale-while-revalidate (or/c false/c (and/c exact-integer? positive?)) #f]
+               [#:cache-stale-if-error cache-stale-if-error (or/c false/c (and/c exact-integer? positive?)) #f]
+               [#:cache-no-cache cache-no-cache boolean? #f]
+               [#:cache-no-store cache-no-store boolean? #f]
+               [#:cache-no-transform cache-no-transform boolean? #f]
+               [#:cache-must-revalidate cache-must-revalidate boolean? #f]
+               [#:cache-proxy-revalidate cache-proxy-revalidate boolean? #f]
+               [#:cache-must-understand cache-must-understand boolean? #f]
+               [#:cache-private cache-private boolean? #f]
+               [#:cache-public cache-public boolean? #f]
+               [#:cache-immutable cache-immutable boolean? #f])
          dispatcher/c]{
  Uses @racket[url->path] to extract a path from the URL in the request
  object. If this path does not exist, then the dispatcher does not apply and
@@ -371,9 +384,39 @@ Creates a denied procedure from an authorized procedure.
  specified @racket[indices] files in that directory), it
  needs to be readable by the process that is running the web
  server. Existing but unreadable files are handled as
- non-existing files.}
+ non-existing files.
+
+ The various keyword arguments that start with @tt{cache-}
+ (@racket[cache-public], @racket[cache-max-age] and so on)
+ all map straightforwardly to legal values that can appear
+ in the standard @tt{Cache-Control} response header. By
+ default, all are @racket[#f], which has the effect that
+ responses emitted by this dispatcher do not have a
+ @tt{Cache-Control} header. If any cache-related keyword has
+ a non-@racket[#f] value, a @tt{Cache-Control} header will
+ be present in the response. Thus, if
+ @racket[cache-immutable] is @racket[#t] and
+ @racket[cache-max-age] is @racket[12345], an
+ @tt{Cache-Control} header will be present in all responses
+ and its value will be @tt{max-age=12345, immutable}. For
+ more information see
+ @hyperlink["https://www.ietf.org/rfc/rfc2616.html#section-14.9"]{RFC
+ 2616 section 14.9 “Cache Control”} and the
+ @hyperlink["https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Cache-Control"]{Mozilla
+ Developer Network documentation on
+ @tt{Cache-Control}}. Note that some combinations of cache
+ headers may lead to unintended behavior. Example: using
+ @racket[#t] for both @racket[#:cache-public] and
+ @racket[#:cache-private] (those two are effectively
+ antonyms). Beyond the contract for each of the keyword
+ arguments, no additional checks are made by @racket[make]
+ to ensure that the supplied cache-related arguments are a
+ meaningful combination or are suitable for your web
+ application.}
 
 @history[
+  #:changed "1.9"
+  @elem{Support a number of options for setting a @tt{Cache-Control} response header}
   #:changed "1.7"
   @elem{Support for non-{GET,HEAD} requests.}
   #:changed "1.7"
