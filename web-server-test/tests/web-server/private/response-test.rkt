@@ -242,6 +242,11 @@
                    (output output-file tmp-file #"GET" #"text/html" #f)
                    #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nContent-Type: text/html\r\nAccept-Ranges: bytes\r\nContent-Length: 81\r\n\r\n<html><head><title>A title</title></head><body>Here's some content!</body></html>")
 
+      (test-equi? "(get) whole file - no Range header, extra headers"
+                  (output output-file tmp-file #"GET" #"text/html" #f (list (make-header #"X-Bart" #"qwijibo")
+                                                                            (make-header #"Server" #"Ruckus")))
+                   #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Ruckus\r\nContent-Type: text/html\r\nAccept-Ranges: bytes\r\nContent-Length: 81\r\nX-Bart: qwijibo\r\n\r\n<html><head><title>A title</title></head><body>Here's some content!</body></html>")
+
       (test-equi? "(get) whole file - Range header present"
                    (output output-file tmp-file #"GET" #"text/html" '((0 . 80)))
                    #"HTTP/1.1 206 Partial content\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nContent-Type: text/html\r\nAccept-Ranges: bytes\r\nContent-Length: 81\r\nContent-Range: bytes 0-80/81\r\n\r\n<html><head><title>A title</title></head><body>Here's some content!</body></html>")
