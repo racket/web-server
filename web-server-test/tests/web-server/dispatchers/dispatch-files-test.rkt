@@ -42,6 +42,7 @@
                 (begin0 (values (list-ref paths (min (unbox b) (sub1 (length paths)))) empty)
                         (set-box! b (add1 (unbox b)))))
               #:indices (list (if i? (file-name-from-path tmp-file) not-there))
+              #:cache-immutable #t
               #:cache-max-age 89432
               #:cache-public #t))
 
@@ -91,12 +92,12 @@
    (test-equal?* "file, exists, whole, no Range, get"
                 (collect (dispatch #t tmp-file) (req #f #"GET" empty))
                 #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nAccept-Ranges: bytes\r\nContent-Length: 81\r\n\r\n<html><head><title>A title</title></head><body>Here's some content!</body></html>")
-   (test-equal?* "file, exists, whole, no Range, get, cache max-age & public"
+   (test-equal?* "file, exists, whole, no Range, get, caching"
                 (collect (dispatch/cache #t tmp-file) (req #f #"GET" empty))
-                #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nAccept-Ranges: bytes\r\nCache-Control: max-age=89432, public\r\nContent-Length: 81\r\n\r\n<html><head><title>A title</title></head><body>Here's some content!</body></html>")
-   (test-equal?* "file, exists, whole, no Range, head, cache max-age & public"
+                #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nAccept-Ranges: bytes\r\nCache-Control: immutable, max-age=89432, public\r\nContent-Length: 81\r\n\r\n<html><head><title>A title</title></head><body>Here's some content!</body></html>")
+   (test-equal?* "file, exists, whole, no Range, head, caching"
                 (collect (dispatch/cache #t tmp-file) (req #f #"HEAD" empty))
-                #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nAccept-Ranges: bytes\r\nCache-Control: max-age=89432, public\r\nContent-Length: 81\r\n\r\n")
+                #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nAccept-Ranges: bytes\r\nCache-Control: immutable, max-age=89432, public\r\nContent-Length: 81\r\n\r\n")
    (test-equal?* "file, exists, whole, no Range, head"
                 (collect (dispatch #t tmp-file) (req #f #"HEAD" empty))
                 #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nAccept-Ranges: bytes\r\nContent-Length: 81\r\n\r\n")
@@ -120,9 +121,15 @@
    (test-equal?* "dir, exists, no Range, get"
                 (collect (dispatch #t a-dir) (req #t #"GET" empty))
                 #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nAccept-Ranges: bytes\r\nContent-Length: 81\r\n\r\n<html><head><title>A title</title></head><body>Here's some content!</body></html>")
+   (test-equal?* "dir, exists, no Range, get, caching"
+                (collect (dispatch/cache #t a-dir) (req #t #"GET" empty))
+                #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nAccept-Ranges: bytes\r\nCache-Control: immutable, max-age=89432, public\r\nContent-Length: 81\r\n\r\n<html><head><title>A title</title></head><body>Here's some content!</body></html>")
    (test-equal?* "dir, exists, no Range, head"
                 (collect (dispatch #t a-dir) (req #t #"HEAD" empty))
                 #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nAccept-Ranges: bytes\r\nContent-Length: 81\r\n\r\n")
+   (test-equal?* "dir, exists, no Range, head, caching"
+                (collect (dispatch/cache #t a-dir) (req #t #"HEAD" empty))
+                #"HTTP/1.1 200 OK\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nAccept-Ranges: bytes\r\nCache-Control: immutable, max-age=89432, public\r\nContent-Length: 81\r\n\r\n")
    (test-equal?* "dir, exists, Range, get"
                 (collect (dispatch #t a-dir) (req #t #"GET" (list (make-header #"Range" #"bytes=0-80"))))
                 #"HTTP/1.1 206 Partial content\r\nDate: REDACTED GMT\r\nLast-Modified: REDACTED GMT\r\nServer: Racket\r\nAccept-Ranges: bytes\r\nContent-Length: 81\r\nContent-Range: bytes 0-80/81\r\n\r\n<html><head><title>A title</title></head><body>Here's some content!</body></html>")
