@@ -511,3 +511,45 @@ Consider this example:
 
 (do-not-return)
 ]
+
+@; ------------------------------------------------------------
+@section[#:tag "wrap"]{Wrapping Requests & Responses}
+@a-dispatcher[web-server/dispatchers/dispatch-wrap
+              @elem{provides a general-purpose wrapping dispatcher that allows one to intercept an incoming request as well as the response returned by other servlets}]{
+
+@defproc[(make [servlet (-> request? response?)]
+               [req-trans (-> request? request?)]
+               [res-trans (-> response? response?)])
+         dispatcher/c]{
+
+Returns a dispatcher that wraps @racket[res-trans] around
+@racket[servlet], which itself receives requests transformed
+by @racket[req-trans]. Put differently, the servlet
+underlying the dispatcher returned by @racket[make] is
+equivalent to @racket[(λ (r) (res-trans (servlet (req-trans
+r))))].
+
+If you're not interested in transforming requests, pass in
+@racket[identity] (the identity function) for
+@racket[req-trans]. Similarly, using @racket[identity] for
+@racket[res-trans] will cause responses to pass through
+unchanged. (Using @racket[identity] for @emph{both}
+@racket[req-trans] and @racket[res-trans] is equivalent to
+just using @racket[servlet] as-is.)
+
+A typical use case for this dispatcher would be to inject
+headers into requests or responses. Similarly, functionally
+updating existing headers also fits into this pattern. Since
+the entire request -- not just its headers -- is available
+to @racket[req-trans] (and similarly for the response and
+@racket[res-trans]), arbitrary rewriting of request/response
+bodies is possible. Side effects in @racket[req-trans] and
+@racket[res-trans] are permitted as long as @racket[make]'s
+contracts are adhered to.
+
+}
+
+@history[#:changed "1.9"
+         @elem{First version of this dispatcher}]
+
+}
