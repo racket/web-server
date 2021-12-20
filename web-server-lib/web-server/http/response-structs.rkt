@@ -90,7 +90,7 @@
  [response/full (-> response-code/c (or/c #f bytes?) real? (or/c #f bytes?) (listof header?) (listof bytes?) response?)]
  [response/output (->* ((-> output-port? any))
                        (#:code response-code/c
-                        #:message bytes?
+                        #:message (or/c bytes? #f)
                         #:seconds real?
                         #:mime-type (or/c bytes? #f)
                         #:headers (listof header?))
