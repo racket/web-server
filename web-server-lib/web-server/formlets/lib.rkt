@@ -70,8 +70,13 @@
       (dynamic->* #:mandatory-domain-contracts (list listof-binding)
                   #:range-contracts (map (curry coerce-contract 'formlet/c)
                                          contracts)))]))
+
+(define (maybe-path->collects-relative p)
+  (if (path? p)
+      (path->collects-relative p)
+      p))
 (define quote-this-module-path
-  (path->collects-relative (quote-module-path)))
+  (maybe-path->collects-relative (quote-module-path)))
 (define-syntax formlet/c
   (syntax-parser
     [(_ range ...)
@@ -84,7 +89,7 @@
         (-> contract? (... ...) contract?)
         dynamic-formlet/c
         quote-this-module-path
-        (path->collects-relative (quote-module-path))
+        (maybe-path->collects-relative (quote-module-path))
         "formlet/c"
         #'name)]))
 
