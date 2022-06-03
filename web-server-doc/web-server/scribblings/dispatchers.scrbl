@@ -418,13 +418,13 @@ Creates a denied procedure from an authorized procedure.
  application.}
 
 @history[
-  #:changed "1.9"
-  @elem{Support a number of options for setting a @tt{Cache-Control} response header}
   #:changed "1.7"
   @elem{Support for non-{GET,HEAD} requests.}
   #:changed "1.7"
   @elem{Treat unreadable files as non-existing files.}
   #:changed "1.9"
+  @elem{Support a number of options for setting a @tt{Cache-Control} response header}
+  #:changed "1.10"
   @elem{Support @racket[#:path->headers].}
 ]
 
