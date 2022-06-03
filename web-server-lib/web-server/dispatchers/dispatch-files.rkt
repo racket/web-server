@@ -17,6 +17,7 @@
  [make
   (->* (#:url->path url->path/c)
        (#:path->mime-type (path-string? . -> . (or/c false/c bytes?))
+        #:path->headers (path-string? . -> . (listof header?))
         #:indices (listof path-string?)
         #:cache-max-age (or/c false/c (and/c exact-integer? positive?))
         #:cache-smaxage (or/c false/c (and/c exact-integer? positive?))
@@ -85,6 +86,7 @@
 
 (define (make #:url->path url->path
               #:path->mime-type [path->mime-type (lambda (path) #f)]
+              #:path->headers [path->headers (λ (path) '())]
               #:indices [indices (list "index.html" "index.htm")]
               #:cache-max-age [cache-max-age #f]
               #:cache-smaxage [cache-smaxage #f]
@@ -129,7 +131,7 @@
                    method
                    (path->mime-type path)
                    (read-range-header (request-headers/raw req))
-                   headers))
+                   (append headers (path->headers path))))
     (define path/string (url-path->string (url-path uri)))
     (define (emit-index-if-possible dir)
       (let/ec esc
