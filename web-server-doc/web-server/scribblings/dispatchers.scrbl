@@ -350,7 +350,8 @@ Creates a denied procedure from an authorized procedure.
                 It defines a dispatcher construction procedure.}]{
 
 @defproc[(make [#:url->path url->path url->path/c]
-               [#:path->mime-type path->mime-type (path? . -> . (or/c false/c bytes)?) (lambda (path) #f)]
+               [#:path->mime-type path->mime-type (path? . -> . (or/c false/c bytes?)) (lambda (path) #f)]
+               [#:path->headers path->headers (path? . -> . (listof header?)) (lambda (path) '())]
                [#:indices indices (listof string?) (list "index.html" "index.htm")]
                [#:cache-max-age cache-max-age (or/c false/c (and/c exact-integer? positive?)) #f]
                [#:cache-smaxage cache-smaxage (or/c false/c (and/c exact-integer? positive?)) #f]
@@ -372,8 +373,10 @@ Creates a denied procedure from an authorized procedure.
  If the path is a directory, then the @racket[indices] are checked in order
  for an index file to serve. In that case, or in the case of a path that is
  a file already, @racket[path->mime-type] is consulted for the MIME
- Type of the path. The file is then
- streamed out the connection object.
+ Type of the path.
+ Similarly, @racket[path->headers] is consulted for additional
+ headers of the path.
+ The file is then streamed out the connection object.
 
  This dispatcher supports HTTP Range GET requests and HEAD
  requests. If the request's method is neither HEAD nor GET,
@@ -421,6 +424,8 @@ Creates a denied procedure from an authorized procedure.
   @elem{Support for non-{GET,HEAD} requests.}
   #:changed "1.7"
   @elem{Treat unreadable files as non-existing files.}
+  #:changed "1.9"
+  @elem{Support @racket[#:path->headers].}
 ]
 
 }
