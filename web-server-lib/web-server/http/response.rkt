@@ -27,7 +27,10 @@
   [output-file
    (->* (connection? path-string? bytes? (or/c bytes? #f) (or/c pair? #f))
         ((listof header?))
-        any)]))
+        any)]
+  [current-header-handler (parameter/c (-> response? response?))]))
+
+(define current-header-handler (make-parameter values))
 
 (define-simple-macro (define/ext (~and (name:id conn:id arg:formal ...) fun-header)
                        body:expr ...+)
@@ -103,7 +106,10 @@
      #'(let ([out-id out-e])
          write-e ...)]))
 
-(define (output-response-head conn bresp [chunked? #f])
+(define (output-response-head conn raw-bresp [chunked? #f])
+  (define bresp ((current-header-handler)
+                 (struct-copy response raw-bresp
+                              [output void])))
   (cprintf
    (connection-o-port conn)
    #"HTTP/1.1 ~a ~a\r\n"
