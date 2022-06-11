@@ -25,7 +25,7 @@
          (prefix-in files: web-server/dispatchers/dispatch-files)
          (prefix-in filter: web-server/dispatchers/dispatch-filter)
          (prefix-in servlets: web-server/dispatchers/dispatch-servlets)
-         (prefix-in log: web-server/dispatchers/dispatch-log))
+         (prefix-in log: web-server/dispatchers/dispatch-logresp))
 
 (define (quit-server sema)
   (lift:make
@@ -69,7 +69,7 @@
                   #:servlet-path string?
                   #:servlet-regexp regexp?
                   #:log-file (or/c #f path-string? output-port?)
-                  #:log-format (or/c log:log-format/c log:format-req/c))
+                  #:log-format (or/c log:log-format/c log:format-reqresp/c))
                  . ->* .
                  any)])
 
@@ -158,11 +158,6 @@
          [log-format 'apache-default])
   (define (dispatcher sema)
     (dispatcher-sequence
-     (and log-file (log:make #:format
-                             (if (symbol? log-format)
-                               (log:log-format->format log-format)
-                               log-format)
-                             #:log-path log-file))
      (and quit? (filter:make #rx"^/quit$" (quit-server sema)))
      (dispatch/servlet
       start
@@ -197,7 +192,17 @@
       #:indices (list "index.html" "index.htm"))
      (lift:make (compose any->response file-not-found-responder))))
   (serve/launch/wait
-   dispatcher
+   (λ (sema)
+     (define core-dispatcher (dispatcher sema))
+     (cond
+       [log-file
+        (log:make #:format
+                  (if (symbol? log-format)
+                      (log:log-format->format log-format)
+                      log-format)
+                  #:log-path log-file
+                  core-dispatcher)]
+       [else core-dispatcher]))
    #:connection-close? connection-close?
    #:launch-path (if launch-browser? servlet-path #f)
    #:banner? banner?
