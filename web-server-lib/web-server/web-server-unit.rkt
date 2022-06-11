@@ -23,7 +23,7 @@
          (prefix-in files: web-server/dispatchers/dispatch-files)
          (prefix-in servlets: web-server/dispatchers/dispatch-servlets)
          (prefix-in path-procedure: web-server/dispatchers/dispatch-pathprocedure)
-         (prefix-in log: web-server/dispatchers/dispatch-log)
+         (prefix-in log: web-server/dispatchers/dispatch-logresp)
          (prefix-in host: web-server/dispatchers/dispatch-host)
          (prefix-in filter: web-server/dispatchers/dispatch-filter)
          (prefix-in lift: web-server/dispatchers/dispatch-lift))
@@ -58,13 +58,18 @@
 
   ;; host-info->dispatcher : host-info -> conn request -> void
   (define (host-info->dispatcher host-info)
+    (define core-dispatcher (host-info->dispatcher* host-info))
     (sequencer:make
      (timeout:make (safety-limits-request-read-timeout safety-limits)) ;; ????
      (if (and (host-log-format host-info)
               (host-log-path host-info))
          (log:make #:format (log:log-format->format (host-log-format host-info))
-                   #:log-path (host-log-path host-info))
-         (lambda (conn req) (next-dispatcher)))
+                   #:log-path (host-log-path host-info)
+                   core-dispatcher)
+         core-dispatcher)))
+
+  (define (host-info->dispatcher* host-info)
+    (sequencer:make
      (if (host-passwords host-info)
          (let-values ([(update-password-cache! password-check)
                        (passwords:password-file->authorized? (host-passwords host-info))])

@@ -8,7 +8,9 @@
 (require web-server/dispatchers/dispatch
          web-server/http
          web-server/http/response)
-(define format-reqresp/c (request? response? . -> . string?))
+(define format-reqresp/c
+  (or/c (-> request? string?)
+        (-> request? response? string?)))
 (define log-format/c (symbols 'parenthesized-default 'extended 'apache-default))
 
 (provide/contract
@@ -112,7 +114,12 @@
                                new-log-p))
                            log-p)
                        log-path-or-port))
-                 (display (format-reqresp req resp) the-log-p)
+                 (display
+                  (cond
+                    [(procedure-arity-includes? format-reqresp 2)
+                     (format-reqresp req resp)]
+                    [else (format-reqresp req)])
+                  the-log-p)
                  the-log-p))])))))))
   (lambda args
     (thread-resume log-thread (current-custodian))
