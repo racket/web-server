@@ -1,17 +1,15 @@
 #lang racket/base
-(require net/url
-         (prefix-in srfi-date: srfi/19)
-         racket/date
-         racket/async-channel
-         racket/match
-         racket/contract)
-(require web-server/dispatchers/dispatch
+
+(require racket/contract
+         web-server/dispatchers/dispatch
          web-server/http
-         web-server/http/response)
+         web-server/http/response
+         "private/log.rkt"
+         (submod web-server/dispatchers/dispatch-log private))
+
 (define format-reqresp/c
   (or/c (-> request? string?)
         (-> request? response? string?)))
-(define log-format/c (symbols 'parenthesized-default 'extended 'apache-default))
 
 (provide/contract
  [format-reqresp/c contract?]
@@ -26,11 +24,13 @@
              #:log-path (or/c path-string? output-port?))
             dispatcher/c)])
 
-(define ((log-header-handler log-message req original-handler) resp)
-  (log-message req resp)
-  (original-handler resp))
-
 (define interface-version 'v1)
+
+(define ((log-header-handler log-message req original-handler) resp)
+  (define new-resp (original-handler resp))
+  (log-message req new-resp)
+  new-resp)
+
 (define (make #:format [format paren-format]
               #:log-path [log-path "log"]
               dispatcher)
@@ -38,7 +38,13 @@
     (if (symbol? format)
         (log-format->format format)
         format))
-  (define log-message (make-log-message log-path final-format))
+  (define log-message (make-log-message
+                       log-path
+                       (λ (req resp)
+                         (cond
+                           [(procedure-arity-includes? final-format 2)
+                            (final-format req resp)]
+                           [else (final-format req)]))))
   (lambda (conn req)
     (with-handlers ([exn:dispatcher? (lambda (e) (next-dispatcher))])
       (parameterize ([current-header-handler (log-header-handler log-message req (current-header-handler))])
@@ -53,75 +59,20 @@
     [(apache-default)
      apache-default-format]))
 
-(define (request-line-raw req)
-  (format "~a ~a HTTP/1.1"
-          (string-upcase (bytes->string/utf-8 (request-method req)))
-          (url->string (request-uri req))))
-(define (apache-default-format req resp)
-  (define request-time (srfi-date:current-date))
-  (format "~a - - [~a] \"~a\" ~a ~a\n"
-          (request-client-ip req)
-          (srfi-date:date->string request-time "~d/~b/~Y:~T ~z")
-          (request-line-raw req)
-          (response-code resp)
-          "-"))
+(define apache-default-format
+  (make-format "~a - - [~a] \"~a\" ~a -\n"
+               (λ (req resp)
+                 (append (apache-default-format/obj req)
+                         (list (response-code resp))))))
 
-(define (paren-format req resp)
-  (format "~s\n"
-          (list 'from (request-client-ip req)
-                'to (request-host-ip req)
-                'for (url->string (request-uri req))
-                'at (date->string (seconds->date (current-seconds)) #t)
-                'code (response-code resp))))
+(define paren-format
+  (make-format "~s\n"
+               (λ (req resp)
+                 (list (append (car (paren-format/obj req))
+                               (list 'code (response-code resp)))))))
 
-(define (extended-format req resp)
-  (format "~s\n"
-          `((client-ip ,(request-client-ip req))
-            (host-ip ,(request-host-ip req))
-            (referer ,(let ([R (headers-assq* #"Referer" (request-headers/raw req))])
-                        (if R
-                            (header-value R)
-                            #f)))
-            (uri ,(url->string (request-uri req)))
-            (time ,(current-seconds))
-            (code ,(response-code resp)))))
-
-(define (make-log-message log-path-or-port format-reqresp)
-  (define log-ch (make-async-channel))
-  (define log-thread
-    (thread/suspend-to-kill
-     (lambda ()
-       (let loop ([log-p #f])
-         (sync
-          (handle-evt
-           log-ch
-           (match-lambda
-             [(list req resp)
-              (loop
-               (with-handlers ([exn:fail? (lambda (e)
-                                            ((error-display-handler) "dispatch-logresp.rkt Error writing log entry" e)
-                                            (with-handlers ([exn:fail? (lambda (e) #f)])
-                                              (close-output-port log-p))
-                                            #f)])
-                 (define the-log-p
-                   (if (path-string? log-path-or-port)
-                       (if (not (and log-p (file-exists? log-path-or-port)))
-                           (begin
-                             (unless (eq? log-p #f)
-                               (close-output-port log-p))
-                             (let ([new-log-p (open-output-file log-path-or-port #:exists 'append)])
-                               (file-stream-buffer-mode new-log-p 'line)
-                               new-log-p))
-                           log-p)
-                       log-path-or-port))
-                 (display
-                  (cond
-                    [(procedure-arity-includes? format-reqresp 2)
-                     (format-reqresp req resp)]
-                    [else (format-reqresp req)])
-                  the-log-p)
-                 the-log-p))])))))))
-  (lambda args
-    (thread-resume log-thread (current-custodian))
-    (async-channel-put log-ch args)
-    (void)))
+(define extended-format
+  (make-format "~s\n"
+               (λ (req resp)
+                 (list (append (car (extended-format/obj req))
+                               (list (list 'code (response-code resp))))))))
