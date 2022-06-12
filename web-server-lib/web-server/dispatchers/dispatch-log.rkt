@@ -1,12 +1,13 @@
 #lang racket/base
+
 (require net/url
-         (prefix-in srfi-date: srfi/19)
+         racket/contract
          racket/date
-         racket/async-channel
-         racket/match
-         racket/contract)
-(require web-server/dispatchers/dispatch
+         racket/path
+         (prefix-in srfi-date: srfi/19)
+         web-server/dispatchers/dispatch
          web-server/http)
+
 (define format-req/c (request? . -> . string?))
 (define log-format/c (symbols 'parenthesized-default 'extended 'apache-default))
 
@@ -31,7 +32,7 @@
         (log-format->format format)
         format))
   (define log-message (make-log-message log-path final-format))
-  (lambda (conn req)
+  (lambda (_conn req)
     (log-message req)
     (next-dispatcher)))
 
@@ -48,6 +49,7 @@
   (format "~a ~a HTTP/1.1"
           (string-upcase (bytes->string/utf-8 (request-method req)))
           (url->string (request-uri req))))
+
 (define (apache-default-format req)
   (define request-time (srfi-date:current-date))
   (format "~a - - [~a] \"~a\" ~a ~a\n"
@@ -76,36 +78,66 @@
             (time ,(current-seconds)))))
 
 (define (make-log-message log-path-or-port format-req)
-  (define log-ch (make-async-channel))
+  (define path (if (output-port? log-path-or-port) #f log-path-or-port))
+  (define dir-path (and path (simple-form-path (build-path path 'up))))
+  (define (make-dir-change-evt)
+    (if dir-path (filesystem-change-evt dir-path) never-evt))
+  (define (open-output-port)
+    (cond
+      [path
+       (define out (open-output-file path #:exists 'append))
+       (begin0 out
+         (file-stream-buffer-mode out 'line))]
+      [else
+       log-path-or-port]))
+  (define log-ch (make-channel))
   (define log-thread
     (thread/suspend-to-kill
      (lambda ()
-       (let loop ([log-p #f])
+       (let loop ([log-p #f]
+                  [dir-evt (make-dir-change-evt)])
          (sync
           (handle-evt
+           dir-evt
+           (lambda (_)
+             (define-values (the-log-p the-dir-evt)
+               (with-handlers ([exn:fail?
+                                (lambda (e)
+                                  ((error-display-handler) "dispatch-log.rkt Error watching filesystem" e)
+                                  (close-output-port/safe log-p)
+                                  (values #f never-evt))])
+                 ;; Something in the directory changed ...
+                 (cond
+                   [(not log-p)
+                    ;; ... but we haven't opened the file yet.
+                    (values #f (make-dir-change-evt))]
+                   [(file-exists? path)
+                    ;; ... but our target file is intact.
+                    (values log-p (make-dir-change-evt))]
+                   [else
+                    ;; ... and the file has been rotated, so open a new port.
+                    (close-output-port/safe log-p)
+                    (values (open-output-port) (make-dir-change-evt))])))
+             (loop the-log-p the-dir-evt)))
+          (handle-evt
            log-ch
-           (match-lambda
-             [(list req)
-              (loop
-               (with-handlers ([exn:fail? (lambda (e)
-                                            ((error-display-handler) "dispatch-log.rkt Error writing log entry" e)
-                                            (with-handlers ([exn:fail? (lambda (e) #f)])
-                                              (close-output-port log-p))
-                                            #f)])
+           (lambda (req)
+             (define the-log-p
+               (with-handlers ([exn:fail?
+                                 (lambda (e)
+                                   ((error-display-handler) "dispatch-log.rkt Error writing log entry" e)
+                                   (close-output-port/safe log-p)
+                                   (loop #f dir-evt))])
                  (define the-log-p
-                   (if (path-string? log-path-or-port)
-                       (if (not (and log-p (file-exists? log-path-or-port)))
-                           (begin
-                             (unless (eq? log-p #f)
-                               (close-output-port log-p))
-                             (let ([new-log-p (open-output-file log-path-or-port #:exists 'append)])
-                               (file-stream-buffer-mode new-log-p 'line)
-                               new-log-p))
-                           log-p)
-                       log-path-or-port))
-                 (display (format-req req) the-log-p)
-                 the-log-p))])))))))
-  (lambda args
+                   (or log-p (open-output-port)))
+                 (begin0 the-log-p
+                   (display (format-req req) the-log-p))))
+             (loop the-log-p dir-evt))))))))
+  (lambda (req)
     (thread-resume log-thread (current-custodian))
-    (async-channel-put log-ch args)
-    (void)))
+    (channel-put log-ch req)))
+
+(define (close-output-port/safe p)
+  (when p
+    (with-handlers ([exn:fail? void])
+      (close-output-port p))))
