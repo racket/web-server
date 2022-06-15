@@ -10,6 +10,7 @@
 ;; a private submodule providing accessor functions and a match expander.
 (provide timeout/c
          nonnegative-length/c
+         positive-count/c
          safety-limits?
          (contract-out
           [make-safety-limits make-safety-limits/c]
@@ -22,6 +23,9 @@
 
 (define/final-prop nonnegative-length/c
   (or/c exact-nonnegative-integer? +inf.0))
+
+(define/final-prop positive-count/c
+  (or/c exact-positive-integer? +inf.0))
 
 (define-syntax-parser define-safety-limits/private-submodule
   [(_ (~seq field:id contract:expr default:expr (~optional (~seq #:unlimited unlimited:expr)))
@@ -65,6 +69,7 @@
 
 
 (define-safety-limits/private-submodule
+  max-concurrent positive-count/c 1000 #:unlimited +inf.0
   max-waiting exact-nonnegative-integer? 511 #:unlimited 511 ;; contract from tcp-listen
   request-read-timeout timeout/c 60
   max-request-line-length nonnegative-length/c (* 8 1024)
@@ -80,4 +85,3 @@
   max-form-data-header-length nonnegative-length/c (* 8 1024)
   response-timeout timeout/c 60
   response-send-timeout timeout/c 60)
-
