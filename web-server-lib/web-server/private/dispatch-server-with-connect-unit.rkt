@@ -138,8 +138,12 @@
   (define conn
     (new-connection cm ip op (current-custodian) #f))
 
-  (with-handlers ([exn-expected?
-                   (lambda (_)
+  (with-handlers ([exn:fail?
+                   (lambda (e)
+                     (unless (exn-expected? e)
+                       ((error-display-handler)
+                        (format "Connection error:" (exn-message e))
+                        e))
                      (kill-connection! conn))])
     (let connection-loop ()
       (define-values (req close?)

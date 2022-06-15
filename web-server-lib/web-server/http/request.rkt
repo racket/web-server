@@ -93,7 +93,7 @@
                  #:max-request-body-length max-request-body-length)
     limits)
 
-  (define (do-read-request conn host-port port-addresses)
+  (lambda (conn host-port port-addresses)
     (reset-connection-timeout! conn read-timeout)
     (define ip (connection-i-port conn))
     (define-values (method uri major minor)
@@ -120,16 +120,7 @@
       (or connection-close?
           (close-connection? headers major minor
                              client-ip host-ip)))
-    (values request close?))
-
-  (define (read-request conn host-port port-addresses)
-    (with-handlers ([exn:fail?
-                     (λ (exn)
-                       (kill-connection! conn)
-                       (raise exn))])
-      (do-read-request conn host-port port-addresses)))
-
-  read-request)
+    (values request close?)))
 
 (define read-request
   (make-read-request))
