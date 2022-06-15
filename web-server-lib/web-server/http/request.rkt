@@ -68,6 +68,8 @@
                      (#:safety-limits safety-limits?)
                      (listof header?))]))
 
+(module+ private
+  (provide make-read-request))
 
 (module* internal-test #f
   (provide read-http-line/limited
