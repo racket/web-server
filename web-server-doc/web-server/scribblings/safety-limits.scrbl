@@ -22,6 +22,7 @@
 @deftogether[
  (@defproc[(safety-limits? [v any/c]) boolean?]
    @defproc[(make-safety-limits
+             [#:max-concurrent max-concurrent positive-count/c 1000]
              [#:max-waiting max-waiting exact-nonnegative-integer? 511]
              [#:request-read-timeout request-read-timeout timeout/c 60]
              [#:max-request-line-length max-request-line-length nonnegative-length/c
@@ -60,6 +61,11 @@
 
  The arguments to @racket[make-safety-limits] are used as follows:
  @itemlist[
+ @item{The @racket[max-concurrent] argument limits the number of open
+   concurrent connections to the server.  Once the limit is reached, new
+   connections are queued at the TCP level (see @racket[max-waiting])
+   until existing connections finish or time out.
+   }
  @item{The @racket[max-waiting] argument is passed to @racket[tcp-listen]
    to specify the maximum number of client connections that can be waiting for acceptance.
    When @racket[max-waiting] clients are waiting for acceptance, no new client connections can be made.
@@ -101,7 +107,7 @@
    @tt{multipart/form-data} (file upload) requests by the standard
    @sigelem[dispatch-server-config*^ read-request]
    implementation (e.g. from @racket[serve] or @racket[web-server@]).
-   
+
    The number of files and non-file ``fields'' per request are limited by
    @racket[max-form-data-files] and @racket[max-form-data-fields], respectively,
    and @racket[max-form-data-file-length] and @racket[max-form-data-field-length]
@@ -109,7 +115,7 @@
    Additionally, the total number of ``parts,'' which includes both files and fields,
    must not exceed @racket[max-form-data-parts].
    Requests that exceed these limits are rejected.
-   
+
    Files longer than @racket[request-file-memory-threshold], in bytes,
    are automatically offloaded to disk as temporary files
    to avoid running out of memory.
@@ -163,18 +169,19 @@
  and optional arguments to functions like @racket[serve]:
  if values weren't explicitly supplied, the default behavior was closest to using
  @racket[(make-unlimited-safety-limits #:request-read-timeout 60)].
- 
+
  However, version 1.6 adopted @racket[(make-safety-limits)] as the default,
  as most applications would benefit from using reasonable protections.
  When porting from earlier versions of this library,
  if you think your application may be especially resource-intensive,
  you may prefer to use @racket[make-unlimited-safety-limits] while determining
  limits that work for your application.
-     
+
  @history[#:added "1.6"]
 }
 
 @defproc[(make-unlimited-safety-limits
+          [#:max-concurrent max-concurrent positive-count/c +inf.0]
           [#:max-waiting max-waiting exact-nonnegative-integer? 511]
           [#:request-read-timeout request-read-timeout timeout/c +inf.0]
           [#:max-request-line-length max-request-line-length nonnegative-length/c +inf.0]
@@ -204,6 +211,6 @@
 
  Note that the default value for @racket[max-waiting] is @racket[511],
  @italic{not} @racket[+inf.0], due to the contract of @racket[tcp-listen].
-      
+
  @history[#:added "1.6"]
 }
