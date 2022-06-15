@@ -1,10 +1,8 @@
 #lang racket/unit
 
-(require mzlib/thread
-         net/tcp-sig
+(require net/tcp-sig
          racket/async-channel
          racket/match
-         "../safety-limits.rkt"
          (submod "../safety-limits.rkt" private)
          "connection-manager.rkt"
          "dispatch-server-sig.rkt"
@@ -31,35 +29,54 @@
 (define (serve #:confirmation-channel [confirmation-channel #f])
   (define the-server-custodian (make-custodian))
   (parameterize ([current-custodian the-server-custodian]
-                 [current-server-custodian the-server-custodian]
-                 #;[current-thread-initial-stack-size 3])
+                 [current-server-custodian the-server-custodian])
     (define cm (start-connection-manager #:safety-limits config:safety-limits))
+    (define handler (handle-connection/cm cm))
+    (define can-break? (break-enabled))
     (thread
      (lambda ()
-       (run-server
-        ;; This is the port argument, but because we specialize listen, it is ignored.
-        1
-        (handle-connection/cm cm)
-        #f
-        (lambda (exn)
-          ((error-display-handler)
-           (format "Connection error: ~a" (exn-message exn))
-           exn))
-        (lambda (_ mw re)
-          (with-handlers ([exn?
-                           (λ (x)
-                             (async-channel-put* confirmation-channel x)
-                             (raise x))])
-            (define listener
-              (tcp-listen config:port config:max-waiting #t config:listen-ip))
-            (let-values
-                ([(local-addr local-port end-addr end-port)
-                  (tcp-addresses listener #t)])
-              (async-channel-put* confirmation-channel local-port))
-            listener))
-        tcp-close
-        tcp-accept
-        tcp-accept/enable-break))))
+       (define listener
+         (with-handlers ([exn? (λ (e)
+                                 (async-channel-put* confirmation-channel e)
+                                 (raise e))])
+           (tcp-listen config:port config:max-waiting #t config:listen-ip)))
+       (define-values (_local-addr local-port _remote-addr _remote-port)
+         (tcp-addresses listener #t))
+       (async-channel-put* confirmation-channel local-port)
+
+       (dynamic-wind
+         void
+         (lambda ()
+           (define paramz (current-parameterization))
+           (define accept (if can-break?
+                              tcp-accept/enable-break
+                              tcp-accept))
+           (let loop ()
+             (define custodian (make-custodian))
+             (parameterize ([current-custodian custodian])
+               (with-handlers ([exn:fail:network? (λ (e)
+                                                    ((error-display-handler)
+                                                     (format "Connection error: ~a" (exn-message e))
+                                                     e))])
+                 (parameterize-break #f
+                   (define-values (in out)
+                     (accept listener))
+                   (thread
+                    (lambda ()
+                      (dynamic-wind
+                        void
+                        (lambda ()
+                          (call-with-parameterization
+                           paramz
+                           (lambda ()
+                             (when can-break? (break-enabled #t))
+                             (parameterize ([current-custodian (make-custodian custodian)])
+                               (handler in out)))))
+                        (lambda ()
+                          (custodian-shutdown-all custodian))))))))
+             (loop)))
+         (lambda ()
+           (tcp-close listener))))))
   (lambda ()
     (custodian-shutdown-all the-server-custodian)))
 
