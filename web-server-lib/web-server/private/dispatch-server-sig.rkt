@@ -1,11 +1,11 @@
 #lang racket/base
 
-(require racket/unit
+(require racket/async-channel
          racket/contract
-         racket/async-channel
-         "../safety-limits.rkt"
+         racket/unit
+         web-server/private/connection-manager
          web-server/private/util
-         web-server/private/connection-manager)
+         web-server/safety-limits)
 
 (define-signature dispatch-server^
   ((contracted

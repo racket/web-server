@@ -18,6 +18,7 @@
          web-server/web-server-sig
          web-server/web-server-unit
          (prefix-in http: web-server/http/request)
+         (prefix-in http/private: (submod web-server/http/request private))
          (prefix-in http: web-server/http/response))
 
 (provide/contract
@@ -99,7 +100,7 @@
                                          #:max-waiting _max-waiting
                                          #:request-read-timeout _timeout)])
   (define read-request
-    (http:make-read-request
+    (http/private:make-read-request
      #:connection-close? connection-close?
      #:safety-limits safety-limits))
   (define-unit-binding a-dispatch-server-connect@
