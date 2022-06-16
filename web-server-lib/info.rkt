@@ -6,7 +6,6 @@
                ("base" #:version "7.4.0.5")
                "net-lib"
                "net-cookies-lib"
-               "compatibility-lib"
                "scribble-text-lib"
                "parser-tools-lib"))
 (define build-deps '("rackunit-lib"))
@@ -15,7 +14,7 @@
 
 (define pkg-authors '(jay))
 
-(define version "1.10")
+(define version "1.11")
 
 (define license
   '(Apache-2.0 OR MIT))

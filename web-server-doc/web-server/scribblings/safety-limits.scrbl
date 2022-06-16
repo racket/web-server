@@ -49,6 +49,8 @@
             safety-limits?]
    @defthing[nonnegative-length/c flat-contract?
              #:value (or/c exact-nonnegative-integer? +inf.0)]
+   @defthing[positive-count/c flat-contract?
+             #:value (or/c exact-positive-integer? +inf.0)]
    @defthing[timeout/c flat-contract?
              #:value (>=/c 0)])]{
  The web server uses opaque @deftech{safety limits} values, recognized
@@ -178,6 +180,7 @@
  limits that work for your application.
 
  @history[#:added "1.6"]
+ @history[#:changed "1.11" @elem{added the @racket[max-concurrent] limit}]
 }
 
 @defproc[(make-unlimited-safety-limits
@@ -213,4 +216,5 @@
  @italic{not} @racket[+inf.0], due to the contract of @racket[tcp-listen].
 
  @history[#:added "1.6"]
+ @history[#:changed "1.11" @elem{added the @racket[max-concurrent] limit}]
 }
