@@ -61,42 +61,42 @@
              (define listener-evt (if (evt? listener) listener always-evt))
              (define max-concurrent (safety-limits-max-concurrent config:safety-limits))
              (let loop ([in-progress 0])
-               (define custodian (make-custodian))
                (loop
                 (with-handlers ([exn:fail:network? (λ (e)
                                                      ((error-display-handler)
                                                       (format "Connection error: ~a" (exn-message e))
                                                       e)
                                                      in-progress)])
-                  (parameterize ([current-custodian custodian])
-                    (do-sync
-                     (handle-evt
-                      (thread-receive-evt)
-                      (lambda (_)
-                        (let drain-loop ([in-progress in-progress])
-                          (if (thread-try-receive)
-                              (drain-loop (sub1 in-progress))
-                              in-progress))))
-                     (handle-evt
-                      (if (< in-progress max-concurrent) listener-evt never-evt)
-                      (lambda (l)
+                  (do-sync
+                   (handle-evt
+                    (thread-receive-evt)
+                    (lambda (_)
+                      (let drain-loop ([in-progress in-progress])
+                        (if (thread-try-receive)
+                            (drain-loop (sub1 in-progress))
+                            in-progress))))
+                   (handle-evt
+                    (if (< in-progress max-concurrent) listener-evt never-evt)
+                    (lambda (l)
+                      (define custodian (make-custodian))
+                      (parameterize ([current-custodian custodian])
                         (parameterize-break #f
                           (define-values (in out)
                             (do-accept l))
+                          (define handler-thd
+                            (thread
+                             (lambda ()
+                               (call-with-parameterization
+                                paramz
+                                (lambda ()
+                                  (when can-break? (break-enabled #t))
+                                  (parameterize ([current-custodian (make-custodian custodian)])
+                                    (handler in out)))))))
                           (thread
                            (lambda ()
-                             (dynamic-wind
-                               void
-                               (lambda ()
-                                 (call-with-parameterization
-                                  paramz
-                                  (lambda ()
-                                    (when can-break? (break-enabled #t))
-                                    (parameterize ([current-custodian (make-custodian custodian)])
-                                      (handler in out)))))
-                               (lambda ()
-                                 (thread-send listener-thd 'done)
-                                 (custodian-shutdown-all custodian)))))
+                             (thread-wait handler-thd)
+                             (thread-send listener-thd 'done)
+                             (custodian-shutdown-all custodian)))
                           (add1 in-progress))))))))))
            (lambda ()
              (tcp-close listener))))))
