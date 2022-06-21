@@ -38,19 +38,24 @@
           (handle-evt
            (thread-receive-evt)
            (lambda (_)
-             (match (thread-receive)
-               [(cons 'add t)
-                (define deadline (timer-deadline t))
-                (define-values (first-deadline* deadline-evt*)
-                  (if (< deadline first-deadline)
-                      (values deadline (alarm-evt deadline))
-                      (values first-deadline deadline-evt)))
-                (hash-set! timers t #t)
-                (loop first-deadline* deadline-evt*)]
+             (let drain-loop ([first-deadline first-deadline]
+                              [deadline-evt deadline-evt])
+               (match (thread-try-receive)
+                 [`(add . ,t)
+                  (define deadline (timer-deadline t))
+                  (define-values (first-deadline* deadline-evt*)
+                    (if (< deadline first-deadline)
+                        (values deadline (alarm-evt deadline))
+                        (values first-deadline deadline-evt)))
+                  (hash-set! timers t #t)
+                  (drain-loop first-deadline* deadline-evt*)]
 
-               [(cons 'remove t)
-                (hash-remove! timers t)
-                (loop first-deadline deadline-evt)])))
+                 [`(remove . ,t)
+                  (hash-remove! timers t)
+                  (drain-loop first-deadline deadline-evt)]
+
+                 [#f
+                  (loop first-deadline deadline-evt)]))))
 
           (handle-evt
            deadline-evt
