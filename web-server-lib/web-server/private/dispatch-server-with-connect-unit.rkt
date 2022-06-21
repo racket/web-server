@@ -58,7 +58,7 @@
              ;; exist implementations where it isn't.  For backwards
              ;; compatibility, use `always-evt' when the listener is
              ;; not synchronizable.
-             (define listener-evt (if (evt? listener) listener always-evt))
+             (define listener-evt (if (evt? listener) listener (handle-evt always-evt (λ (_) listener))))
              (define max-concurrent (safety-limits-max-concurrent config:safety-limits))
              (let loop ([in-progress 0])
                (loop
