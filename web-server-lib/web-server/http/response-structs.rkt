@@ -1,6 +1,5 @@
 #lang racket/base
 (require racket/contract
-         racket/match
          web-server/http/request-structs
          "status-code.rkt")
 
@@ -97,3 +96,6 @@
                        response?)]
  [TEXT/HTML-MIME-TYPE bytes?]
  [APPLICATION/JSON-MIME-TYPE bytes?])
+
+(module+ private
+  (provide (struct-out response)))

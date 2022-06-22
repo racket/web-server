@@ -8,7 +8,7 @@
          racket/match
          racket/port
          racket/promise
-         web-server/http/request-structs
+         (submod web-server/http/request-structs private)
          web-server/safety-limits
          (submod web-server/safety-limits private)
          web-server/private/connection-manager
@@ -116,8 +116,9 @@
       (read-bindings&post-data/raw data-ip method uri headers
                                    #:safety-limits limits))
     (define request
-      (make-request method uri headers bindings/raw-promise raw-post-data
-                    host-ip host-port client-ip))
+      (make-request
+       method uri headers bindings/raw-promise raw-post-data
+       host-ip host-port client-ip))
     (define close?
       (or connection-close?
           (close-connection? headers major minor
@@ -370,8 +371,9 @@
          [(list-rest k v)
           (and (symbol? k)
                (string? v)
-               (make-binding:form (string->bytes/utf-8 (symbol->string k))
-                                  (string->bytes/utf-8 v)))])
+               (binding:form
+                (string->bytes/utf-8 (symbol->string k))
+                (string->bytes/utf-8 v)))])
        (url-query uri))))
 
   (define (read-data who proc)
@@ -429,8 +431,9 @@
                       "Couldn't extract form field name for file upload")]
 
                     [(#f (list _ _ f0 f1))
-                     (make-binding:form (or f0 f1)
-                                        (port->bytes contents))]
+                     (binding:form
+                      (or f0 f1)
+                      (port->bytes contents))]
 
                     [((list _ _ f00 f01) (list _ _ f10 f11))
                      (make-binding:file/port (or f10 f11)
@@ -477,20 +480,16 @@
              [#f
               ;; skip the & or do nothing on #<eof>
               (read-byte in)
-              (loop (cons (make-binding:form (urldecode key) #"")
-                          bindings))]
+              (loop (cons (binding:form (urldecode key) #"") bindings))]
 
              ;; k=...&...
              [(list _ value _)
-              (loop (cons (make-binding:form (urldecode key)
-                                             (urldecode value))
-                          bindings))])]
+              (loop (cons (binding:form (urldecode key) (urldecode value)) bindings))])]
 
           ;; k
           ;; k&
           [(list _ key (or #"" #"&"))
-           (loop (cons (make-binding:form (urldecode key) #"")
-                       bindings))]
+           (loop (cons (binding:form (urldecode key) #"") bindings))]
 
           ;; #<eof>
           [#f

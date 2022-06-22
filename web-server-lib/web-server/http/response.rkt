@@ -7,8 +7,8 @@
          racket/match
          web-server/private/connection-manager
          (submod web-server/private/connection-manager private)
-         web-server/http/request-structs
-         web-server/http/response-structs
+         (submod web-server/http/request-structs private)
+         (submod web-server/http/response-structs private)
          web-server/private/util
          syntax/parse/define
          (for-syntax racket/base
