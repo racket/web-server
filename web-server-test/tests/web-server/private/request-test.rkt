@@ -269,12 +269,25 @@
 ;
 ;
 
+(define (bytes->nonnegative-integer-suite base)
+  (test-suite
+   (~a "base " base)
+
+   (check-false (bytes->nonnegative-integer #"" base))
+   (check-false (bytes->nonnegative-integer #"-123" base))
+   (check-false (bytes->nonnegative-integer #"$!#$W" base))
+   (for ([i (in-range #xFFFF)])
+     (check-equal? i (bytes->nonnegative-integer (string->bytes/utf-8 (number->string i base)) base)))))
+
 (define request-tests
   (test-suite
    "HTTP Requests"
 
    (test-suite
     "Utilities"
+
+    (bytes->nonnegative-integer-suite 10)
+    (bytes->nonnegative-integer-suite 16)
 
     (test-suite
      "read-http-line/limited"

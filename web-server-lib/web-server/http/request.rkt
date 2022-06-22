@@ -78,7 +78,8 @@
            read-bindings&post-data/raw
            make-spooled-temporary-file
            (struct-out mime-part)
-           read-mime-multipart))
+           read-mime-multipart
+           bytes->nonnegative-integer))
 
 ;; **************************************************
 ;; read-request: connection number (input-port -> string string) -> request boolean?
@@ -134,8 +135,23 @@
 ;; **************************************************
 ;; complete-request
 
-(define (hex-string->number s)
-  (string->number s 16))
+(define (bytes->nonnegative-integer bs [base 10])
+  (and (not (zero? (bytes-length bs)))
+       (case base
+         [(10)
+          (for/fold ([n 0])
+                    ([b (in-bytes bs)] #:when n)
+            (and (>= b 48) (<= b 58) (+ (* n 10) (- b 48))))]
+         [(16)
+          (for/fold ([n 0])
+                    ([b (in-bytes bs)] #:when n)
+            (or
+             (and (>= b 48) (<= b 57)  (+ (* n 16) (- b 48))) ;; 0-9
+             (and (>= b 65) (<= b 70)  (+ (* n 16) (- b 55))) ;; A-F
+             (and (>= b 97) (<= b 102) (+ (* n 16) (- b 87))) ;; a-f
+             ))]
+         [else
+          (raise-argument-error 'bytes->number "(or/c 10 16)" base)])))
 
 ; complete-request: inp (listof header) number number number -> inp (listof header)
 ; if the request contains chunked body data, then decode that data
@@ -155,7 +171,7 @@
          (define size-in-bytes
            (match (regexp-split #rx";" size-line)
              [(cons size-in-hex _)
-              (hex-string->number (bytes->string/utf-8 size-in-hex))]))
+              (bytes->nonnegative-integer size-in-hex 16)]))
 
          (cond
            [(zero? size-in-bytes) total-size]
@@ -313,8 +329,8 @@
                       (string->url (format "//~a" us))]
                      [else
                       u1]))
-                 (string->number (bytes->string/utf-8 major))
-                 (string->number (bytes->string/utf-8 minor)))])))
+                 (bytes->nonnegative-integer major)
+                 (bytes->nonnegative-integer minor))])))
 
 
 
@@ -380,7 +396,7 @@
     (match (headers-assq* #"Content-Length" headers)
       [(struct header (_ value))
        (cond
-         [(string->number (bytes->string/utf-8 value))
+         [(bytes->nonnegative-integer value)
           => (lambda (len)
                (when (> len max-body-length)
                  (network-error 'read-bindings "body length exceeds limit"))
