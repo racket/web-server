@@ -286,8 +286,11 @@
    (test-suite
     "Utilities"
 
-    (bytes->nonnegative-integer-suite 10)
-    (bytes->nonnegative-integer-suite 16)
+    (test-suite
+     "bytes->nonnegative-integer-suite"
+
+     (bytes->nonnegative-integer-suite 10)
+     (bytes->nonnegative-integer-suite 16))
 
     (test-suite
      "read-http-line/limited"
