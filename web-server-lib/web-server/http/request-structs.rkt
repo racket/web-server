@@ -1,24 +1,22 @@
 #lang racket/base
 
-(require racket/contract
-         racket/serialize
+(require (for-syntax racket/base
+                     racket/struct-info
+                     syntax/transformer)
+         net/url-structs
+         racket/contract
          racket/match
          racket/port
          racket/promise
-         net/url-structs
-         web-server/private/util
-         (for-syntax racket/base
-                     racket/struct-info
-                     racket/match
-                     syntax/transformer))
-
-;; Most serializable structs are protected
-;; with struct-guard/c rather than contract-out.
+         racket/serialize
+         web-server/private/util)
 
 (provide
  ;; header
- (struct-out header)
  (contract-out
+  [struct header
+    ([field bytes?]
+     [value bytes?])]
   [headers-assq
    (-> bytes? (listof header?) (or/c #f header?))]
   [headers-assq*
@@ -38,10 +36,13 @@
    (-> request? (listof binding?))])
  ;; ----------------------------------------
  ;; binding
- (struct-out binding)
- (struct-out binding:form)
  binding:file/port?
  (contract-out
+  [struct binding
+    ([id bytes?])]
+  [struct (binding:form binding)
+    ([id bytes?]
+     [value bytes?])]
   [struct (binding:file binding)
     ;; enforce the `binding:file-content` contract to be extra careful
     ([id bytes?]
@@ -57,21 +58,30 @@
   [bindings-assq-all
    (-> bytes? (listof binding?) (listof binding?))]))
 
-;                                        
-;   ;;                      ;;           
-;   ;;                      ;;           
+(module+ private
+  (provide
+   (struct-out request)
+   (struct-out header)
+   headers-assq
+   headers-assq*
+   binding?
+   (struct-out binding:form)
+   make-binding:file/port))
+
+;
+;   ;;                      ;;
+;   ;;                      ;;
 ;   ;;;;;   ;;    ;;     ;;;;;  ;;   ;; ;
-;   ;;  ;  ;  ;  ;  ;   ;   ;; ;  ;  ;;; 
-;   ;;  ;; ;  ;     ;;  ;   ;; ;  ;  ;;  
-;   ;;  ;;;;;;;;  ;;;; ;;   ;;;;;;;; ;;  
-;   ;;  ;; ;     ;  ;;  ;   ;; ;     ;;  
-;   ;;  ;; ;    ;;  ;;  ;   ;; ;     ;;  
-;   ;;  ;;  ;;;  ;;; ;   ;;; ;  ;;;  ;;  
-;                                        
+;   ;;  ;  ;  ;  ;  ;   ;   ;; ;  ;  ;;;
+;   ;;  ;; ;  ;     ;;  ;   ;; ;  ;  ;;
+;   ;;  ;;;;;;;;  ;;;; ;;   ;;;;;;;; ;;
+;   ;;  ;; ;     ;  ;;  ;   ;; ;     ;;
+;   ;;  ;; ;    ;;  ;;  ;   ;; ;     ;;
+;   ;;  ;;  ;;;  ;;; ;   ;;; ;  ;;;  ;;
+;
 
 (define-serializable-struct header
   (field value)
-  #:guard (struct-guard/c bytes? bytes?)
   #:transparent)
 
 (define (headers-assq* f hs)
@@ -84,49 +94,47 @@
               #:when (bytes=? f (header-field h)))
     h))
 
-;                                          
-;                                       ;; 
-;                                       ;; 
+;
+;                                       ;;
+;                                       ;;
 ;   ;; ;  ;;    ;;; ; ;; ;;   ;;    ;; ;;;;
-;   ;;;  ;  ;  ;   ;; ;; ;;  ;  ; ;;  ; ;; 
-;   ;;   ;  ;  ;   ;; ;; ;;  ;  ;  ;    ;; 
-;   ;;  ;;;;;;;;   ;; ;; ;; ;;;;;;  ;;  ;; 
-;   ;;   ;     ;   ;; ;; ;;  ;        ;;;; 
-;   ;;   ;     ;   ;;  ; ;;  ;    ;   ;  ; 
+;   ;;;  ;  ;  ;   ;; ;; ;;  ;  ; ;;  ; ;;
+;   ;;   ;  ;  ;   ;; ;; ;;  ;  ;  ;    ;;
+;   ;;  ;;;;;;;;   ;; ;; ;; ;;;;;;  ;;  ;;
+;   ;;   ;     ;   ;; ;; ;;  ;        ;;;;
+;   ;;   ;     ;   ;;  ; ;;  ;    ;   ;  ;
 ;   ;;    ;;;   ;;;;;  ;;;;   ;;;  ;;;   ;;
-;                  ;;                      
-;                  ;;                      
-;                  ;;                      
-;                                          
+;                  ;;
+;                  ;;
+;                  ;;
+;
 
 (define-struct request
-  (method uri headers/raw bindings/raw-promise post-data/raw
-          host-ip host-port client-ip)
+  (method uri headers/raw bindings/raw-promise post-data/raw host-ip host-port client-ip)
   #:transparent)
 
 (define (request-bindings/raw r)
   (force (request-bindings/raw-promise r)))
 
 
-;                                           
-;                                           
-;   ;;     ;;            ;; ;;              
-;   ;;                   ;;                 
+;
+;
+;   ;;     ;;            ;; ;;
+;   ;;                   ;;
 ;   ;;;;   ;; ; ;;;   ;;;;; ;; ; ;;;   ;;;;;
-;   ;;  ;  ;; ;;  ;  ;   ;; ;; ;;  ;  ;  ;  
-;   ;;  ;  ;; ;;  ;; ;   ;; ;; ;;  ;;;;  ;; 
-;   ;;  ;; ;; ;;  ;;;;   ;; ;; ;;  ;; ;  ;  
-;   ;;  ;  ;; ;;  ;; ;   ;; ;; ;;  ;;  ;;   
-;   ;;  ;  ;; ;;  ;; ;   ;; ;; ;;  ;;;;     
-;   ; ;;   ;; ;;  ;;  ;;; ; ;; ;;  ;; ;;;;; 
+;   ;;  ;  ;; ;;  ;  ;   ;; ;; ;;  ;  ;  ;
+;   ;;  ;  ;; ;;  ;; ;   ;; ;; ;;  ;;;;  ;;
+;   ;;  ;; ;; ;;  ;;;;   ;; ;; ;;  ;; ;  ;
+;   ;;  ;  ;; ;;  ;; ;   ;; ;; ;;  ;;  ;;
+;   ;;  ;  ;; ;;  ;; ;   ;; ;; ;;  ;;;;
+;   ; ;;   ;; ;;  ;;  ;;; ; ;; ;;  ;; ;;;;;
 ;                                     ;   ;;
-;                                    ;;   ; 
-;                                      ;;;  
-;                                           
+;                                    ;;   ;
+;                                      ;;;
+;
 
 (define-serializable-struct binding
   (id)
-  #:guard (struct-guard/c bytes?)
   #:transparent)
 
 (define (bindings-assq ti bs)
@@ -141,7 +149,6 @@
 
 (define-serializable-struct (binding:form binding)
   (value)
-  #:guard (struct-guard/c bytes? bytes?)
   #:transparent)
 
 ;; The implementation of `binding:file` is complicated
@@ -348,4 +355,3 @@
        imp-prop:raw
        raw))
     make-binding:file/port))
-
