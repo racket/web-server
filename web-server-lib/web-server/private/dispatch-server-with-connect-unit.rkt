@@ -142,7 +142,7 @@
                    (lambda (e)
                      (unless (exn-expected? e)
                        ((error-display-handler)
-                        (format "Connection error:" (exn-message e))
+                        (format "Connection error: ~a" (exn-message e))
                         e))
                      (kill-connection! conn))])
     (let connection-loop ()
