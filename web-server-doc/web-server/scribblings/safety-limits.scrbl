@@ -22,7 +22,7 @@
 @deftogether[
  (@defproc[(safety-limits? [v any/c]) boolean?]
    @defproc[(make-safety-limits
-             [#:max-concurrent max-concurrent positive-count/c 1000]
+             [#:max-concurrent max-concurrent positive-count/c 10000]
              [#:max-waiting max-waiting exact-nonnegative-integer? 511]
              [#:request-read-timeout request-read-timeout timeout/c 60]
              [#:max-request-line-length max-request-line-length nonnegative-length/c
