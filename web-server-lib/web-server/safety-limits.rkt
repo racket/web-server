@@ -14,8 +14,7 @@
          safety-limits?
          (contract-out
           [make-safety-limits make-safety-limits/c]
-          [make-unlimited-safety-limits make-safety-limits/c]
-          ))
+          [make-unlimited-safety-limits make-safety-limits/c]))
 
 (define/final-prop timeout/c
   ;; requires a nonnegative real that is not +nan.0
@@ -69,7 +68,7 @@
 
 
 (define-safety-limits/private-submodule
-  max-concurrent positive-count/c 1000 #:unlimited +inf.0
+  max-concurrent positive-count/c 10000 #:unlimited +inf.0
   max-waiting exact-nonnegative-integer? 511 #:unlimited 511 ;; contract from tcp-listen
   request-read-timeout timeout/c 60
   max-request-line-length nonnegative-length/c (* 8 1024)
