@@ -1,13 +1,9 @@
 #lang racket/base
 (require rackunit
-         (only-in mzlib/file
-                  make-temporary-file)
          racket/port
          racket/promise
          net/url
-         mzlib/list
          web-server/http
-         web-server/dispatchers/dispatch
          (prefix-in logger: web-server/dispatchers/dispatch-log)
          (prefix-in sequencer: web-server/dispatchers/dispatch-sequencer)
          "../util.rkt")
