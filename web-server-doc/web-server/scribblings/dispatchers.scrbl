@@ -195,29 +195,30 @@ This is used in the standard @web-server pipeline to provide
 a URL that refreshes the password file, servlet cache, etc.}
 
 @; ------------------------------------------------------------
-@section[#:tag "dispatch-log"]{Logging}
-@a-dispatcher[web-server/dispatchers/dispatch-log
+@section[#:tag "dispatch-logresp"]{Logging}
+@a-dispatcher[web-server/dispatchers/dispatch-logresp
               @elem{defines a dispatcher constructor
-                    for transparent logging of requests.}]{
+                    for transparent logging of requests and responses.}]{
 
-@defthing[format-req/c contract?]{
- Equivalent to @racket[(request? . -> . string?)].
+@defthing[format-reqresp/c contract?]{
+ Equivalent to @racket[(or/c (request? . -> . string?) (request? response? . -> . string?))].
 }
 
-@defthing[paren-format format-req/c]{
- Formats a request by:
+@defthing[paren-format format-reqresp/c]{
+ Formats a request and a response by:
  @racketblock[
   (format
    "~s\n"
    (list 'from (request-client-ip req)
          'to (request-host-ip req)
-         'for (url->string (request-uri req)) 'at
-         (date->string
-          (seconds->date (current-seconds)) #t)))
+         'for (url->string (request-uri req))
+         'at (date->string
+              (seconds->date (current-seconds)) #t)
+         'code (response-code resp)))
   ]}
 
-@defthing[extended-format format-req/c]{
- Formats a request by:
+@defthing[extended-format format-reqresp/c]{
+ Formats a request and a response by:
  @racketblock[
   (format
    "~s\n"
@@ -231,15 +232,66 @@ a URL that refreshes the password file, servlet cache, etc.}
              (header-value R)
              #f)))
      (uri ,(url->string (request-uri req)))
-     (time ,(current-seconds))))
+     (time ,(current-seconds))
+     (code ,(response-code resp))))
  ]}
 
-@defthing[apache-default-format format-req/c]{
+@defthing[apache-default-format format-reqresp/c]{
+ Formats a request and a response like Apache's default. However, Apache's default
+ includes information about the size of the object returned to the client,
+ which this function does not have access to, so it defaults the last field
+ to @litchar{-}.
+}
 
+@defthing[log-format/c contract?]{
+ Equivalent to @racket[(symbols 'parenthesized-default 'extended 'apache-default)].
+}
+
+@defproc[(log-format->format [id log-format/c])
+         format-reqresp/c]{
+ Maps @racket['parenthesized-default] to @racket[paren-format],
+ @racket['extended] to @racket[extended-format], and
+ @racket['apache-default] to @racket[apache-default-format].
+}
+
+@defproc[(make [#:format format (or/c log-format/c format-reqresp/c) paren-format]
+               [#:log-path log-path (or/c path-string? output-port?) "log"]
+               [dispatcher dispatcher/c])
+         dispatcher/c]{
+ If @racket[dispatcher] is successfully dispatched,
+ logs requests and responses (without the @racket[body] information)
+ to @racket[log-path], which can be either a filepath or an @racket[output-port?],
+ using @racket[format] to format the requests and responses
+ (or just requests if @racket[format] only accepts one argument).
+ If @racket[format] is a symbol, a log formatter will be tacitly made using @racket[log-format->format].
+
+ @history[#:added "1.12"]
+}}
+
+@; ------------------------------------------------------------
+@section[#:tag "dispatch-log"]{Basic Logging}
+@a-dispatcher[web-server/dispatchers/dispatch-log
+              @elem{defines a dispatcher constructor
+                    for transparent logging of requests.
+                    Consider using the facilities in
+                    @secref{dispatch-logresp} instead,
+                    as it provides more flexibility.}]{
+
+@defthing[format-req/c contract?]{
+ Equivalent to @racket[(request? . -> . string?)].
+}
+
+@defthing[paren-format format-req/c]{
+ Formats a request like its counterpart in @secref{dispatch-logresp}, but without the response code information.}
+
+@defthing[extended-format format-req/c]{
+ Formats a request like its counterpart in @secref{dispatch-logresp}, but without the response code information.}
+
+@defthing[apache-default-format format-req/c]{
  Formats a request like Apache's default. However, Apache's default
  includes information about the response to a request, which this
  function does not have access to, so it defaults the last two fields
- to @racket[200] and @racket[512].
+ to @litchar{-} and @litchar{-}.
 
 }
 
@@ -258,8 +310,9 @@ a URL that refreshes the password file, servlet cache, etc.}
                [#:log-path log-path (or/c path-string? output-port?) "log"])
          dispatcher/c]{
  Logs requests to @racket[log-path], which can be either a filepath or an @racket[output-port?],
- using @racket[format] to format the requests. (If @racket[format] is a symbol, a log formatter
- will be tacitly made using @racket[log-format->format].)
+ using @racket[format] to format the requests.
+ If @racket[format] is a symbol,
+ a log formatter will be tacitly made using @racket[log-format->format].
  Then invokes @racket[next-dispatcher].
 
  @history[
