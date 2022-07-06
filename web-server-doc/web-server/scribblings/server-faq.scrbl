@@ -43,9 +43,9 @@ Using @exec{exec} will reuse the same process, and therefore, the PID
 file will be accurate.
 
 Second, if you want to make your own Racket start-up script, you can write:
-@(require (for-label mzlib/os))
+@(require (for-label racket/os))
 @racketblock[
-  (require mzlib/os)
+  (require racket/os)
   (with-output-to-file _your-pid-file (lambda () (write (getpid))))
   (_start-server)
 ]
