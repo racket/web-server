@@ -55,7 +55,8 @@
                                (#:attributes 
                                 (-> any/c (listof (list/c symbol? string?)))
                                 #:checked? (any/c . -> . boolean?)
-                                #:display (any/c . -> . pretty-xexpr/c))
+                                #:display (any/c . -> . pretty-xexpr/c)
+                                #:wrap (any/c any/c . -> . xexpr-forest/c))
                                (serial-formlet/c (listof any/c)))]
           [submit (->* ((or/c bytes? string?))
                        (#:attributes (listof (list/c symbol? string?)))
