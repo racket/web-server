@@ -206,12 +206,14 @@
 (define (checkbox-group l 
                         #:attributes [attrs (λ (x) null)]
                         #:checked? [checked? (λ (x) #f)]
-                        #:display [display (λ (x) x)])
+                        #:display [display (λ (x) x)]
+                        #:wrap [wrap (λ (x y) (list x y))])
   (input-group l
                #:kind "checkbox"
                #:attributes attrs
                #:checked? checked?
-               #:display display))
+               #:display display
+               #:wrap wrap))
 
 (define (submit value
                 #:attributes [attrs null])
