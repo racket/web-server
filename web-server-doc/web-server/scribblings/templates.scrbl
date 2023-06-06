@@ -234,8 +234,8 @@ Suppose that we change the template to use @racket[for/list] (which combines the
 Now the result is:
 @verbatim[#:indent 2]|{
  <table>
-  </tr>
-  </tr>
+  </td></tr>
+  </td></tr>
  </table>
 }|
 because only the final expression of the body of the @racket[for/list]
