@@ -55,7 +55,7 @@ Second, if you want to make your own Racket start-up script, you can write:
 This requires an SSL certificate and private key. This is very platform specific, but we will provide
 the details for using OpenSSL on UNIX:
 
-@commandline{openssl genrsa -des3 -out private-key.pem 1024}
+@commandline{openssl genrsa -des3 -out private-key.pem 4096}
 
 This will generate a new private key, but it will have a passphrase on it. You can remove this via:
 
