@@ -7,7 +7,7 @@
 (require racket/path
          racket/contract)
 
-(define log-format/c (symbols 'parenthesized-default 'extended 'apache-default))
+(define log-format/c (symbols 'parenthesized-default 'extended 'apache-default 'combined))
 
 (define (make-log-message log-path-or-port formatter)
   (define path (if (output-port? log-path-or-port) #f log-path-or-port))
