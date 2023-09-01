@@ -243,15 +243,22 @@ a URL that refreshes the password file, servlet cache, etc.}
  to @litchar{-}.
 }
 
+@defthing[combined-log-format format-reqresp/c]{
+ Formats a request and a response to approximate the Common Log Format.
+ As this function does not have access to the size of the object returned
+ to the client, it defaults the field to @litchar{-}.
+}
+
 @defthing[log-format/c contract?]{
- Equivalent to @racket[(symbols 'parenthesized-default 'extended 'apache-default)].
+ Equivalent to @racket[(symbols 'parenthesized-default 'extended 'apache-default 'combined)].
 }
 
 @defproc[(log-format->format [id log-format/c])
          format-reqresp/c]{
  Maps @racket['parenthesized-default] to @racket[paren-format],
- @racket['extended] to @racket[extended-format], and
- @racket['apache-default] to @racket[apache-default-format].
+ @racket['extended] to @racket[extended-format],
+ @racket['apache-default] to @racket[apache-default-format], and
+ @racket['combined] to @racket[combined-log-format]
 }
 
 @defproc[(make [#:format format (or/c log-format/c format-reqresp/c) paren-format]
@@ -292,18 +299,24 @@ a URL that refreshes the password file, servlet cache, etc.}
  includes information about the response to a request, which this
  function does not have access to, so it defaults the last two fields
  to @litchar{-} and @litchar{-}.
+}
 
+@defthing[combined-log-format format-req/c]{
+ Formats a request and a response to approximate the Common Log Format.
+ As this function does not have access to the size of the object returned
+ to the client, it defaults the field to @litchar{-}.
 }
 
 @defthing[log-format/c contract?]{
- Equivalent to @racket[(symbols 'parenthesized-default 'extended 'apache-default)].
+ Equivalent to @racket[(symbols 'parenthesized-default 'extended 'apache-default 'combined)].
 }
 
 @defproc[(log-format->format [id log-format/c])
          format-req/c]{
  Maps @racket['parenthesized-default] to @racket[paren-format],
- @racket['extended] to @racket[extended-format], and
- @racket['apache-default] to @racket[apache-default-format].
+ @racket['extended] to @racket[extended-format],
+ @racket['apache-default] to @racket[apache-default-format], and
+ @racket['combined] to @racket[combined-log-format]
 }
 
 @defproc[(make [#:format format (or/c log-format/c format-req/c) paren-format]
