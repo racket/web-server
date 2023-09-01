@@ -1,6 +1,7 @@
 #lang racket/base
 
 (require racket/contract
+         racket/list
          web-server/dispatchers/dispatch
          web-server/http
          web-server/http/response
@@ -18,6 +19,7 @@
  [paren-format format-reqresp/c]
  [extended-format format-reqresp/c]
  [apache-default-format format-reqresp/c]
+ [combined-log-format format-reqresp/c]
  [interface-version dispatcher-interface-version/c]
  [make (->* (dispatcher/c)
             (#:format (or/c log-format/c format-reqresp/c)
@@ -57,13 +59,23 @@
     [(extended)
      extended-format]
     [(apache-default)
-     apache-default-format]))
+     apache-default-format]
+    [(combined)
+     combined-log-format]))
 
 (define apache-default-format
   (make-format "~a - - [~a] \"~a\" ~a -\n"
                (λ (req resp)
                  (append (apache-default-format/obj req)
                          (list (response-code resp))))))
+
+(define combined-log-format
+  (make-format "~a - - [~a] \"~a\" ~a - ~a ~a\n"
+               (λ (req resp)
+                 (define request-data (combined-log-format/obj req))
+                 (append (take request-data 3)
+                         (list (response-code resp))
+                         (drop request-data 3)))))
 
 (define paren-format
   (make-format "~s\n"
