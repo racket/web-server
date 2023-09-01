@@ -244,7 +244,7 @@ a URL that refreshes the password file, servlet cache, etc.}
 }
 
 @defthing[combined-log-format format-reqresp/c]{
- Formats a request and a response to approximate the Common Log Format.
+ Formats a request and a response to approximate the Combined Log Format.
  As this function does not have access to the size of the object returned
  to the client, it defaults the field to @litchar{-}.
 }
@@ -302,7 +302,7 @@ a URL that refreshes the password file, servlet cache, etc.}
 }
 
 @defthing[combined-log-format format-req/c]{
- Formats a request and a response to approximate the Common Log Format.
+ Formats a request and a response to approximate the Combined Log Format.
  As this function does not have access to the size of the object returned
  to the client, it defaults the field to @litchar{-}.
 }
