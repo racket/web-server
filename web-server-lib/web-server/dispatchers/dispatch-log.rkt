@@ -17,6 +17,7 @@
  [paren-format format-req/c]
  [extended-format format-req/c]
  [apache-default-format format-req/c]
+ [combined-log-format format-req/c]
  [interface-version dispatcher-interface-version/c]
  [make (->* ()
             (#:format (or/c log-format/c format-req/c)
@@ -43,7 +44,9 @@
     [(extended)
      extended-format]
     [(apache-default)
-     apache-default-format]))
+     apache-default-format]
+    [(combined)
+     combined-log-format]))
 
 (define (request-line-raw req)
   (format "~a ~a HTTP/1.1"
@@ -58,6 +61,25 @@
 
 (define apache-default-format
   (make-format "~a - - [~a] \"~a\" - -\n" apache-default-format/obj))
+
+(define (combined-log-format/obj req)
+  (define request-time (srfi-date:current-date))
+  (define referer (let ([R (headers-assq* #"Referer" (request-headers/raw req))])
+                    (if R
+                        (string-append "\"" (bytes->string/utf-8 (header-value R)) "\"")
+                        "-")))
+  (define user-agent (let ([UA (headers-assq* #"User-Agent" (request-headers/raw req))])
+                       (if UA
+                           (string-append "\"" (bytes->string/utf-8 (header-value UA)) "\"")
+                           "-")))
+  (list (request-client-ip req)
+        (srfi-date:date->string request-time "~d/~b/~Y:~T ~z")
+        (request-line-raw req)
+        referer
+        user-agent))
+
+(define combined-log-format
+  (make-format "~a - - [~a] \"~a\" - - ~a ~a\n" combined-log-format/obj))
 
 (define (paren-format/obj req)
   (list (list 'from (request-client-ip req)
@@ -81,5 +103,6 @@
 
 (module+ private
   (provide apache-default-format/obj
+           combined-log-format/obj
            paren-format/obj
            extended-format/obj))
