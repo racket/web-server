@@ -514,12 +514,16 @@
 
 ;; make-200-response : integer bytes integer (listof header) -> basic-response
 (define (make-200-response modified-seconds maybe-mime-type total-content-length headers)
+  (define (ma h)
+    (if (headers-assq* (header-field h) headers)
+      null
+      (list h)))
   (response
    200 #"OK"
    modified-seconds
    maybe-mime-type
-   (append (list (make-header #"Accept-Ranges" #"bytes")
-                 (make-content-length-header total-content-length))
+   (append (ma (make-header #"Accept-Ranges" #"bytes"))
+           (ma (make-content-length-header total-content-length))
            headers)
    void))
 
