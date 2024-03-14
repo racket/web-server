@@ -1439,7 +1439,7 @@ Finally, here are instructions for using the server in HTTPS mode.
 This requires an SSL certificate and a private key.  It is also very
 platform-specific, but here are the details for using OpenSSL on UNIX:
 
-@commandline{openssl genrsa -des3 -out private-key.pem 1024}
+@commandline{openssl genrsa -des3 -out private-key.pem 2048}
 
 This will generate a new private key, but with a passphrase, which you
 can remove as follows:
