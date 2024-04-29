@@ -454,6 +454,13 @@ transmission that the server @bold{will not catch}.}
                      web-server/http/response-structs
                      web-server/http/cookie))
 
+@(begin
+   (define-syntax-rule (define-from-net/cookies/server name export)
+     (begin
+       (require (for-label net/cookies/server))
+       (define name @racket[export])))
+   (define-from-net/cookies/server net:make-cookie make-cookie))
+
 @(define rfc6265
    (hyperlink "https://tools.ietf.org/html/rfc6265.html"
               "RFC 6265"))
@@ -474,7 +481,7 @@ transmission that the server @bold{will not catch}.}
           cookie?]{
    Constructs a cookie with the appropriate fields.
 
-   This is a wrapper around @racket[make-cookie] from @racketmodname[net/cookies/server]
+   This is a wrapper around @|net:make-cookie| from @racketmodname[net/cookies/server]
    for backwards compatibility. The @racket[comment] argument is ignored.
    If @racket[expires] is given as a string, it should match
    @link["https://tools.ietf.org/html/rfc7231#section-7.1.1.2"]{RFC 7231, Section 7.1.1.2},
