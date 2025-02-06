@@ -66,8 +66,8 @@ These functions optimize the construction of dispatchers and launching of server
           [#:port port number? 8000]
           [#:ssl-cert ssl-cert (or/c #f path-string?) #f]
           [#:ssl-key ssl-key (or/c #f path-string?) #f]
-          [#:ssl-key-rsa? boolean? #t]
-          [#:ssl-key-asn1? boolean? #f]
+          [#:ssl-key-rsa? ssl-key-rsa? boolean? #t]
+          [#:ssl-key-asn1? ssl-key-asn1? boolean? #f]
           [#:max-waiting max-waiting exact-nonnegative-integer? 511]
           [#:safety-limits safety-limits safety-limits?
            (make-safety-limits #:max-waiting max-waiting)])

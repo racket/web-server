@@ -176,8 +176,8 @@ Like always, you don't even need to save the file.
                         [#:ssl? ssl? boolean? #f]
                         [#:ssl-cert ssl-cert (or/c #f path-string?) (and ssl? (build-path server-root-path "server-cert.pem"))]
                         [#:ssl-key ssl-key (or/c #f path-string?) (and ssl? (build-path server-root-path "private-key.pem"))]
-                        [#:ssl-key-rsa? boolean? #t]
-                        [#:ssl-key-asn1? boolean? #f]
+                        [#:ssl-key-rsa? ssl-key-rsa? boolean? #t]
+                        [#:ssl-key-asn1? ssl-key-asn1? boolean? #f]
                         [#:log-file log-file (or/c #f path-string? output-port?) #f]
                         [#:log-format log-format (or/c log-format/c format-reqresp/c) 'apache-default])
                        any]{
