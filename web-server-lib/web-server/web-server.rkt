@@ -6,7 +6,6 @@
          racket/unit
          racket/async-channel
          racket/contract
-         (only-in racket/string string-contains?)
          (only-in racket/tcp listen-port-number?)
          openssl
          web-server/dispatchers/dispatch
