@@ -47,7 +47,9 @@
                       #:max-waiting timeout/c
                       #:safety-limits safety-limits?
                       #:ssl-cert (or/c #f path-string?)
-                      #:ssl-key (or/c #f path-string?))
+                      #:ssl-key (or/c #f path-string?)
+                      #:ssl-key-rsa? boolean?
+                      #:ssl-key-asn1? boolean?)
                      . ->* .
                      any)])
 
@@ -86,8 +88,8 @@
                  (parameterize ([current-custodian (make-custodian)]
                                 [current-namespace namespace-now])
                    (if stateless?
-                     (make-stateless.servlet servlet-current-directory stuffer manager start)
-                     (make-v2.servlet servlet-current-directory manager start)))])
+                       (make-stateless.servlet servlet-current-directory stuffer manager start)
+                       (make-v2.servlet servlet-current-directory manager start)))])
             (set-box! servlet-box servlet)
             servlet))))))
 
@@ -105,14 +107,18 @@
          [listen-ip "127.0.0.1"]
          #:port
          [port-arg 8000]
-         
+
          #:max-waiting [_max-waiting 511]
          #:safety-limits [limits (make-safety-limits #:max-waiting _max-waiting)]
-         
+
          #:ssl-cert
          [ssl-cert #f]
          #:ssl-key
-         [ssl-key #f])
+         [ssl-key #f]
+         #:ssl-key-rsa?
+         [ssl-key-rsa? #t]
+         #:ssl-key-asn1?
+         [ssl-key-asn1? #f])
   (define ssl? (and ssl-cert ssl-key))
   (define sema (make-semaphore 0))
   (define confirm-ch (make-async-channel 1))
@@ -124,38 +130,38 @@
            #:port port-arg
            #:safety-limits limits
            #:dispatch-server-connect@ (if ssl?
-                                        (make-ssl-connect@ ssl-cert ssl-key)
-                                        raw:dispatch-server-connect@)))
+                                          (make-ssl-connect@ ssl-cert ssl-key ssl-key-rsa? ssl-key-asn1?)
+                                          raw:dispatch-server-connect@)))
   (define serve-res (async-channel-get confirm-ch))
   (if (exn? serve-res)
-    (begin
-      (when banner? (eprintf "There was an error starting the Web server.\n"))
-      (match serve-res
-        [(app exn-message (regexp "tcp-listen: listen on .+ failed \\(Address already in use; errno=.+\\)" (list _)))
-         (when banner? (eprintf "\tThe TCP port (~a) is already in use.\n" port-arg))]
-        [_
-         (void)]))
-    (local [(define port serve-res)
-            (define server-url
-              (string-append (if ssl? "https" "http")
-                             "://localhost"
-                             (if (and (not ssl?) (= port 80))
-                               "" (format ":~a" port))))]
-      (when launch-path
-        ((send-url) (string-append server-url launch-path) #t))
-      (when banner?
-        (printf "Your Web application is running at ~a.\n"
-                (if launch-path
-                  (string-append server-url launch-path)
-                  server-url))
-        (printf "Stop this program at any time to terminate the Web Server.\n")
-        (flush-output))
-      (let ([bye (lambda ()
-                   (when banner? (printf "\nWeb Server stopped.\n"))
-                   (shutdown-server))])
-        (with-handlers ([exn:break? (lambda (exn) (bye))])
-          (semaphore-wait/enable-break sema)
-          ; Give the final response time to get there
-          (sleep 2)
-          ;; We can get here if a /quit url is visited
-          (bye))))))
+      (begin
+        (when banner? (eprintf "There was an error starting the Web server.\n"))
+        (match serve-res
+          [(app exn-message (regexp "tcp-listen: listen on .+ failed \\(Address already in use; errno=.+\\)" (list _)))
+           (when banner? (eprintf "\tThe TCP port (~a) is already in use.\n" port-arg))]
+          [_
+           (void)]))
+      (local [(define port serve-res)
+              (define server-url
+                (string-append (if ssl? "https" "http")
+                               "://localhost"
+                               (if (and (not ssl?) (= port 80))
+                                   "" (format ":~a" port))))]
+        (when launch-path
+          ((send-url) (string-append server-url launch-path) #t))
+        (when banner?
+          (printf "Your Web application is running at ~a.\n"
+                  (if launch-path
+                      (string-append server-url launch-path)
+                      server-url))
+          (printf "Stop this program at any time to terminate the Web Server.\n")
+          (flush-output))
+        (let ([bye (lambda ()
+                     (when banner? (printf "\nWeb Server stopped.\n"))
+                     (shutdown-server))])
+          (with-handlers ([exn:break? (lambda (exn) (bye))])
+            (semaphore-wait/enable-break sema)
+            ; Give the final response time to get there
+            (sleep 2)
+            ;; We can get here if a /quit url is visited
+            (bye))))))

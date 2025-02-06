@@ -176,7 +176,8 @@ Like always, you don't even need to save the file.
                         [#:ssl? ssl? boolean? #f]
                         [#:ssl-cert ssl-cert (or/c #f path-string?) (and ssl? (build-path server-root-path "server-cert.pem"))]
                         [#:ssl-key ssl-key (or/c #f path-string?) (and ssl? (build-path server-root-path "private-key.pem"))]
-
+                        [#:ssl-key-rsa? boolean? #t]
+                        [#:ssl-key-asn1? boolean? #f]
                         [#:log-file log-file (or/c #f path-string? output-port?) #f]
                         [#:log-format log-format (or/c log-format/c format-reqresp/c) 'apache-default])
                        any]{
@@ -208,6 +209,7 @@ customizations do not, which the rest of this section describes.
  
  If @racket[ssl-cert] and @racket[ssl-key] are not false, then the server runs in HTTPS mode with @racket[ssl-cert]
  and @racket[ssl-key] as the certificates and private keys.
+ The @racket[ssl-key-rsa?] and @racket[ssl-key-asn1?] arguments specify the format of the private key file. 
  
  The servlet is loaded with @racket[manager]
  as its continuation manager. (The default manager limits the amount of memory to 64 MB and
