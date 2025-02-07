@@ -60,8 +60,9 @@
        (-> any/c))]
  [raw:dispatch-server-connect@ (unit/c (import) (export dispatch-server-connect^))]
  [make-ssl-connect@
-  (-> path-string? path-string?
-      (unit/c (import) (export dispatch-server-connect^)))]
+  (->* (path-string? path-string?)
+       (#:key-rsa? boolean? #:key-asn1? boolean?)
+       (unit/c (import) (export dispatch-server-connect^)))]
  [do-not-return (-> none/c)]
  [serve/web-config@
   (->*
