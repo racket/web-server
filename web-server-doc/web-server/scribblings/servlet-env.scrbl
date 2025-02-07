@@ -244,7 +244,9 @@ order they appear in the list.
  If @racket[connection-close?] is @racket[#t], then every connection is closed after one
  request. Otherwise, the client decides based on what HTTP version it uses.
 
- @history[#:changed "1.6"
+ @history[#:changed "8.16"
+          @elem{Added the @racket[#:ssl-key-rsa?] and @racket[#:ssl-key-asn1?] arguments.}
+          #:changed "1.6"
           @elem{Added the @racket[safety-limits] argument as with @racket[serve/launch/wait]:
             see @elemref["safety-limits-porting"]{compatability note}.}
           #:changed "1.3"

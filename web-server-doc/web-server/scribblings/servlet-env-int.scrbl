@@ -104,7 +104,9 @@ These functions optimize the construction of dispatchers and launching of server
   If neither @racket[max-waiting] nor @racket[safety-limits] are given,
   the default @tech{safety limits} value is equivalent to @racket[(make-safety-limits)].
  
-  @history[#:changed "1.6"
+  @history[#:changed "8.16"
+           @elem{Added the @racket[#:key-rsa?] and @racket[#:key-asn1?] arguments.}
+           #:changed "1.6"
            @elem{Added the @racket[safety-limits] argument:
               see @elemref["safety-limits-porting"]{compatability note}.}]
 }

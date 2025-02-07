@@ -188,12 +188,16 @@ A default implementation of the dispatch server's connection-conversion abstract
 
 
 @defproc[(make-ssl-connect@ [server-cert-file path-string?]
-                            [server-key-file path-string?])
+                            [server-key-file path-string?]
+                            [#:key-rsa? key-rsa? boolean? #t]
+                            [#:key-asn1? key-asn1? boolean? #f])
          (unit/c (import) (export dispatch-server-connect^))]{
 
 Constructs an implementation of the dispatch server's connection-conversion abstraction for OpenSSL.
 
-@history[#:added "1.1"]}
+@history[#:changed "8.16"
+         @elem{Added the @racket[#:key-rsa?] and @racket[#:key-asn1?] arguments.}
+         #:added "1.1"]}
 
 
 @defproc[(do-not-return) none/c]{

@@ -70,7 +70,7 @@
     #:tcp@ (unit/c (import) (export tcp^)))
    (-> any/c))])
 
-(define (make-ssl-connect@ server-cert-file server-key-file [key-rsa? #t] [key-asn1? #f])
+(define (make-ssl-connect@ server-cert-file server-key-file #:key-rsa? [key-rsa? #t] #:key-asn1? [key-asn1? #f])
   (define the-ctxt
     (ssl-make-server-context))
   (ssl-load-certificate-chain! the-ctxt server-cert-file)

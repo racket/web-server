@@ -130,7 +130,7 @@
            #:port port-arg
            #:safety-limits limits
            #:dispatch-server-connect@ (if ssl?
-                                          (make-ssl-connect@ ssl-cert ssl-key ssl-key-rsa? ssl-key-asn1?)
+                                          (make-ssl-connect@ ssl-cert ssl-key #:key-rsa? ssl-key-rsa? #:key-asn1? ssl-key-asn1?)
                                           raw:dispatch-server-connect@)))
   (define serve-res (async-channel-get confirm-ch))
   (if (exn? serve-res)
