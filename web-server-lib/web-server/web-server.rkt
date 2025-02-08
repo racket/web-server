@@ -74,7 +74,7 @@
   (define the-ctxt
     (ssl-make-server-context))
   (ssl-load-certificate-chain! the-ctxt server-cert-file)
-  (ssl-load-private-key! the-ctxt server-key-file)
+  (ssl-load-private-key! the-ctxt server-key-file #f)
   (define-unit ssl:dispatch-server-connect@
     (import) (export dispatch-server-connect^)
     (define (port->real-ports ip op)
