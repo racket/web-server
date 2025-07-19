@@ -5,6 +5,7 @@ jobs:
     name: "Build on Racket '${{ matrix.racket-version }}' (${{ matrix.racket-variant }})"
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         racket-version: ["8.0", "8.1", "current"]
         racket-variant: ["BC", "CS"]
