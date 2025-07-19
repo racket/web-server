@@ -14,7 +14,7 @@
 
 (define pkg-authors '(jay))
 
-(define version "1.12")
+(define version "1.13")
 
 (define license
   '(Apache-2.0 OR MIT))

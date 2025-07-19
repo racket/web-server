@@ -226,4 +226,5 @@
 
  @history[#:added "1.6"]
  @history[#:changed "1.11" @elem{added the @racket[max-concurrent] limit}]
+ @history[#:changed "1.13" @elem{added the @racket[shutdown-grace-period] limit}]
 }
