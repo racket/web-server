@@ -14,7 +14,8 @@
          "formlets-test.rkt"
          "dispatch-test.rkt"
          "servlet-env-test.rkt"
-         "test-tests.rkt")
+         "test-tests.rkt"
+         "serve-tests.rkt")
 (provide all-web-server-tests)
 
 (define all-web-server-tests
@@ -34,4 +35,5 @@
    all-servlet-tests
    servlet-env-tests
    test-tests
-   all-e2e-tests))
+   all-e2e-tests
+   serve-tests))
