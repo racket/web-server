@@ -8,9 +8,12 @@ jobs:
       matrix:
         racket-version: ["8.0", "8.1", "current"]
         racket-variant: ["BC", "CS"]
+        exclude:
+          - racket-variant: BC
+            racket-version: current
     steps:
       - uses: actions/checkout@master
-      - uses: Bogdanp/setup-racket@v1.11
+      - uses: Bogdanp/setup-racket@v1.14
         with:
           architecture: x64
           distribution: full
