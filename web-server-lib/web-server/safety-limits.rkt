@@ -1,10 +1,10 @@
 #lang racket/base
 
-(require racket/contract
+(require (for-syntax racket/base
+                     racket/syntax)
+         racket/contract
          racket/match
-         syntax/parse/define
-         (for-syntax racket/base
-                     racket/syntax))
+         syntax/parse/define)
 
 ;; Also, define-safety-limits/private-submodule generates
 ;; a private submodule providing accessor functions and a match expander.
@@ -83,4 +83,5 @@
   max-form-data-parts nonnegative-length/c (+ max-form-data-fields max-form-data-files)
   max-form-data-header-length nonnegative-length/c (* 8 1024)
   response-timeout timeout/c 60
-  response-send-timeout timeout/c 60)
+  response-send-timeout timeout/c 60
+  shutdown-grace-period (or/c #f timeout/c) #f)

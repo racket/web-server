@@ -45,7 +45,8 @@
              [#:max-form-data-field-length max-form-data-field-length nonnegative-length/c
               (code:line (* 8 1024) (code:comment #,(elem "8 KiB")))]
              [#:response-timeout response-timeout timeout/c 60]
-             [#:response-send-timeout response-send-timeout timeout/c 60])
+             [#:response-send-timeout response-send-timeout timeout/c 60]
+             [#:shutdown-grace-period shutdown-grace-period (or/c #f timeout/c) #f])
             safety-limits?]
    @defthing[nonnegative-length/c flat-contract?
              #:value (or/c exact-nonnegative-integer? +inf.0)]
@@ -144,7 +145,14 @@
    If your application uses streaming responses or long polling,
    either adjust this value or make sure that your request handler sends
    data periodically, such as a no-op, to avoid hitting this limit.
-   }]
+   }
+ @item{The @racket[shutdown-grace-period] argument controls how long,
+   during shutdown, the server will wait for in-flight requests to
+   finish before stopping. If @racket[#f], in-flight requests are killed
+   immediately. Otherwise, the server stops accepting new connections
+   and waits until either all in-flight requests complete, or the grace
+   period passes, at which point it shuts down its custodian.}
+ ]
 
 
  @elemtag["safety-limits-porting"]{@bold{Compatibility note:}}
@@ -202,7 +210,8 @@
           [#:max-form-data-fields max-form-data-fields nonnegative-length/c +inf.0]
           [#:max-form-data-field-length max-form-data-field-length nonnegative-length/c +inf.0]
           [#:response-timeout response-timeout timeout/c +inf.0]
-          [#:response-send-timeout response-send-timeout timeout/c +inf.0])
+          [#:response-send-timeout response-send-timeout timeout/c +inf.0]
+          [#:shutdown-grace-period shutdown-grace-period (or/c #f timeout/c) #f])
          safety-limits?]{
  Like @racket[make-safety-limits], but with default values that avoid
  imposing any limits that aren't explicitly specified,

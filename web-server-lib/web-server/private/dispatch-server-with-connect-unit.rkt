@@ -37,14 +37,14 @@
       (thread
        (lambda ()
          (define listener
-           (with-handlers ([exn? (λ (e)
-                                   (async-channel-put* confirmation-channel e)
-                                   (raise e))])
+           (with-handlers ([exn?
+                            (lambda (e)
+                              (async-channel-put* confirmation-channel e)
+                              (raise e))])
              (tcp-listen config:port config:max-waiting #t config:listen-ip)))
          (define-values (_local-addr local-port _remote-addr _remote-port)
            (tcp-addresses listener #t))
          (async-channel-put* confirmation-channel local-port)
-
          (dynamic-wind
            void
            (lambda ()
@@ -60,48 +60,70 @@
              ;; not synchronizable.
              (define listener-evt (if (evt? listener) listener (handle-evt always-evt (λ (_) listener))))
              (define max-concurrent (safety-limits-max-concurrent config:safety-limits))
-             (let loop ([in-progress 0])
-               (loop
-                (with-handlers ([exn:fail:network? (λ (e)
-                                                     ((error-display-handler)
-                                                      (format "Connection error: ~a" (exn-message e))
-                                                      e)
-                                                     in-progress)])
-                  (do-sync
-                   (handle-evt
-                    (thread-receive-evt)
-                    (lambda (_)
-                      (let drain-loop ([in-progress in-progress])
-                        (if (thread-try-receive)
-                            (drain-loop (sub1 in-progress))
-                            in-progress))))
-                   (handle-evt
-                    (if (< in-progress max-concurrent) listener-evt never-evt)
-                    (lambda (l)
-                      (define custodian (make-custodian))
-                      (parameterize ([current-custodian custodian])
-                        (parameterize-break #f
-                          (define-values (in out)
-                            (do-accept l))
-                          (define handler-thd
-                            (thread
-                             (lambda ()
-                               (call-with-parameterization
-                                paramz
-                                (lambda ()
-                                  (when can-break? (break-enabled #t))
-                                  (parameterize ([current-custodian (make-custodian custodian)])
-                                    (handler in out)))))))
-                          (thread
-                           (lambda ()
-                             (thread-wait handler-thd)
-                             (thread-send listener-thd 'done)
-                             (custodian-shutdown-all custodian)))
-                          (add1 in-progress))))))))))
+             (let loop ([in-progress 0]
+                        [stopped? #f])
+               (define accepting?
+                 (and (not stopped?)
+                      (in-progress . < . max-concurrent)))
+               (define-values (in-progress* stopped?*)
+                 (with-handlers ([exn:fail:network?
+                                  (lambda (e)
+                                    ((error-display-handler)
+                                     (format "Connection error: ~a" (exn-message e))
+                                     e)
+                                    (values in-progress stopped?))])
+                   (do-sync
+                    (handle-evt
+                     (thread-receive-evt)
+                     (lambda (_)
+                       (match (thread-receive)
+                         ['done (values (sub1 in-progress) stopped?)]
+                         ['stop (values in-progress #t)])))
+                    (handle-evt
+                     (if accepting? listener-evt never-evt)
+                     (lambda (l)
+                       (define custodian (make-custodian))
+                       (parameterize ([current-custodian custodian])
+                         (parameterize-break #f
+                           (define-values (in out)
+                             (do-accept l))
+                           (define handler-thd
+                             (thread
+                              (lambda ()
+                                (call-with-parameterization
+                                  paramz
+                                  (lambda ()
+                                    (when can-break? (break-enabled #t))
+                                    (parameterize ([current-custodian (make-custodian custodian)])
+                                      (handler in out)))))))
+                           (thread
+                            (lambda ()
+                              (thread-wait handler-thd)
+                              (thread-send listener-thd 'done)
+                              (custodian-shutdown-all custodian)))
+                           (values (add1 in-progress) stopped?))))))))
+               (unless (and stopped?* (zero? in-progress*))
+                 (loop in-progress* stopped?*))))
            (lambda ()
              (tcp-close listener))))))
-    (lambda ()
-      (custodian-shutdown-all the-server-custodian))))
+    ;; When there is a grace period, calling stop the first time causes the server to stop accepting
+    ;; new connections and waits for in-progress connections to finish. Calling it a second time
+    ;; immediately kills the server. This can come in handy when implementing dev tooling where stop
+    ;; can be called after a break to begin shutdown, and it can be called again after another break
+    ;; to kill the server (eg. if the developer doesn't want to wait for requests in flight at that
+    ;; particular moment).
+    (let ([stopping? #f])
+      (lambda ()
+        (cond
+          [(and (not stopping?)
+                (safety-limits-shutdown-grace-period config:safety-limits))
+           => (lambda (timeout)
+                (set! stopping? #t)
+                (thread-send listener-thd 'stop)
+                (sync/timeout timeout listener-thd)
+                (custodian-shutdown-all the-server-custodian))]
+          [else
+           (custodian-shutdown-all the-server-custodian)])))))
 
 ;; serve-ports : input-port output-port -> void
 ;; returns immediately, spawning a thread to handle
