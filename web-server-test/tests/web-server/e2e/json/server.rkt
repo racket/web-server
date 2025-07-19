@@ -1,10 +1,11 @@
 #lang racket/base
 
 (require json
+         racket/async-channel
          racket/port
+         web-server/safety-limits
          web-server/servlet
          web-server/servlet-dispatch
-         web-server/safety-limits
          web-server/web-server)
 
 (provide start)
@@ -21,7 +22,7 @@
    (lambda (out)
      (write-json e out))))
 
-(define (all-books req)
+(define (all-books _req)
   (response/json
    (for/list ([book (in-list (unbox *all-books*))])
      (hasheq 'title (book-title book)
@@ -49,13 +50,22 @@
    [("books") #:method "post" add-book]
    [("books") all-books]))
 
-(define (start port)
+(define (start)
   ;; One of the tests tries to send invalid JSON, which causes the
   ;; request handler to throw an exception, which would normally get
   ;; logged to stderr. This swallows that logging to avoid failing drdr.
   (parameterize ([current-error-port (open-output-nowhere)])
-    (serve
-     #:port port
-     #:dispatch (dispatch/servlet go)
-     #:safety-limits (make-safety-limits
-                      #:max-request-body-length 255))))
+    (define confirmation-ch
+      (make-async-channel))
+    (define stop
+      (serve
+       #:port 0
+       #:dispatch (dispatch/servlet go)
+       #:confirmation-channel confirmation-ch
+       #:safety-limits (make-safety-limits
+                        #:max-request-body-length 255)))
+    (define port-or-exn
+      (sync confirmation-ch))
+    (when (exn:fail? port-or-exn)
+      (raise port-or-exn))
+    (values stop port-or-exn)))

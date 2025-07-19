@@ -7,9 +7,9 @@
 
 (provide make-tests)
 
-(define (make-tests port)
+(define (make-tests get-port _get-stop)
   (define (make-url [path "/"])
-    (string->url (format "http://127.0.0.1:~a/~a" port path)))
+    (string->url (format "http://127.0.0.1:~a/~a" (get-port) path)))
 
   (define (get-books)
     (read-json (get-pure-port (make-url "books"))))

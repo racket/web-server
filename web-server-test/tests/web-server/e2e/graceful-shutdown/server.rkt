@@ -1,11 +1,19 @@
 #lang racket/base
 
 (require racket/async-channel
+         web-server/safety-limits
          web-server/servlet
          web-server/servlet-dispatch
          web-server/web-server)
 
 (provide start)
+
+(define (app _req)
+  (response/output
+   (lambda (out)
+     (for ([idx (in-range 5)])
+       (displayln idx out)
+       (sleep 1)))))
 
 (define (start)
   (define confirmation-ch
@@ -13,13 +21,13 @@
   (define stop
     (serve
      #:port 0
-     #:dispatch (dispatch/servlet
-                 (lambda (_req)
-                   (response/output
-                    #:headers (list (make-header #"X-Example" #"Found"))
-                    (lambda (out)
-                      (displayln "hello" out)))))
-     #:confirmation-channel confirmation-ch))
+     #:dispatch (dispatch/servlet app)
+     #:confirmation-channel confirmation-ch
+     #:safety-limits
+     (make-safety-limits
+      #:max-concurrent 1
+      #:max-waiting 10
+      #:shutdown-grace-period 6)))
   (define port-or-exn
     (sync confirmation-ch))
   (when (exn:fail? port-or-exn)

@@ -5,12 +5,12 @@
 
 (provide make-tests)
 
-(define (make-tests port)
+(define (make-tests get-port _get-stop)
   ;; net/url and net/http-client both ignore the body of HEAD requests
   ;; if present so we can't use them to test this.
   (define (request method path)
     (define-values (in out)
-      (tcp-connect "127.0.0.1" port))
+      (tcp-connect "127.0.0.1" (get-port)))
 
     (display (format "~a ~a HTTP/1.1\r\n" method path) out)
     (display "\r\n" out)

@@ -7,7 +7,7 @@
 
 (provide make-tests)
 
-(define (make-tests port)
+(define (make-tests get-port _get-stop)
   (define-check (check-concurrent-requests n min-successes min-failures)
     (let ([sema (make-semaphore)])
       (define result-ch (make-channel))
@@ -17,7 +17,7 @@
            (lambda ()
              (with-handlers ([(λ (_) #t)
                               (λ (e) (channel-put result-ch e))])
-               (define conn (http-conn-open "127.0.0.1" #:port port))
+               (define conn (http-conn-open "127.0.0.1" #:port (get-port)))
                (semaphore-wait sema)
                (define-values (line _headers in)
                  (http-conn-sendrecv! conn "/"))
@@ -45,7 +45,7 @@
     "sequential requests"
     (for ([_ (in-range 10)])
       (define-values (_line _headers in)
-        (http-sendrecv "127.0.0.1" #:port port "/"))
+        (http-sendrecv "127.0.0.1" #:port (get-port) "/"))
       (check-equal? (port->string in) "ok")))
 
    (test-suite

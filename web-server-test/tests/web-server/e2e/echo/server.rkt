@@ -1,6 +1,7 @@
 #lang racket/base
 
-(require web-server/servlet
+(require racket/async-channel
+         web-server/servlet
          web-server/servlet-dispatch
          web-server/web-server)
 
@@ -15,7 +16,16 @@
    (lambda (out)
      (display msg out))))
 
-(define (start port)
-  (serve
-   #:port port
-   #:dispatch (dispatch/servlet echo)))
+(define (start)
+  (define confirmation-ch
+    (make-async-channel))
+  (define stop
+    (serve
+     #:port 0
+     #:dispatch (dispatch/servlet echo)
+     #:confirmation-channel confirmation-ch))
+  (define port-or-exn
+    (sync confirmation-ch))
+  (when (exn:fail? port-or-exn)
+    (raise port-or-exn))
+  (values stop port-or-exn))

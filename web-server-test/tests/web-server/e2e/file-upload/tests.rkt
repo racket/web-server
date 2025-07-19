@@ -1,20 +1,18 @@
 #lang racket/base
 
-(require net/url
-         openssl/sha1
-         racket/list
+(require openssl/sha1
          racket/port
+         racket/random
          racket/string
          racket/tcp
-         racket/random
          rackunit)
 
 (provide make-tests)
 
-(define (make-tests port)
+(define (make-tests get-port _get-stop)
   (define (upload-files . ins)
     (define-values (in out)
-      (tcp-connect "127.0.0.1" port))
+      (tcp-connect "127.0.0.1" (get-port)))
 
     (define boundary
       (sha1-bytes (open-input-bytes (crypto-random-bytes 32))))

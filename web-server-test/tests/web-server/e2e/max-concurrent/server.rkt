@@ -1,6 +1,7 @@
 #lang racket/base
 
-(require web-server/safety-limits
+(require racket/async-channel
+         web-server/safety-limits
          web-server/servlet
          web-server/servlet-dispatch
          web-server/web-server)
@@ -12,10 +13,19 @@
    (lambda (out)
      (display "ok" out))))
 
-(define (start port)
-  (serve
-   #:port port
-   #:dispatch (dispatch/servlet app)
-   #:safety-limits (make-safety-limits
-                    #:max-concurrent 1
-                    #:max-waiting 10)))
+(define (start)
+  (define confirmation-ch
+    (make-async-channel))
+  (define stop
+    (serve
+     #:port 0
+     #:dispatch (dispatch/servlet app)
+     #:confirmation-channel confirmation-ch
+     #:safety-limits (make-safety-limits
+                      #:max-concurrent 1
+                      #:max-waiting 10)))
+  (define port-or-exn
+    (sync confirmation-ch))
+  (when (exn:fail? port-or-exn)
+    (raise port-or-exn))
+  (values stop port-or-exn))

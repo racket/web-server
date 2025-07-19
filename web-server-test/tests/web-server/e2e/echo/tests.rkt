@@ -9,9 +9,9 @@
 (define get-response
   (compose1 port->string get-pure-port string->url))
 
-(define (make-tests port)
+(define (make-tests get-port _get-stop)
   (define (make-uri [path "/"])
-    (format "http://127.0.0.1:~a/~a" port path))
+    (format "http://127.0.0.1:~a/~a" (get-port) path))
 
   (test-suite
    "echo"
