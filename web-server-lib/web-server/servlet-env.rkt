@@ -54,6 +54,8 @@
                   #:ssl? boolean?
                   #:ssl-cert (or/c #f path-string?)
                   #:ssl-key (or/c #f path-string?)
+                  #:ssl-key-rsa? boolean?
+                  #:ssl-key-asn1? boolean?
                   #:manager manager?
                   #:servlet-namespace (listof module-path?)
                   #:server-root-path path-string?
@@ -142,8 +144,8 @@
          #:mime-types-path
          [mime-types-path (let ([p (build-path server-root-path "mime.types")])
                             (if (file-exists? p)
-                              p
-                              (build-path default-web-root "mime.types")))]
+                                p
+                                (build-path default-web-root "mime.types")))]
 
          #:ssl?
          [ssl? #f]
@@ -151,7 +153,10 @@
          [ssl-cert (and ssl? (build-path server-root-path "server-cert.pem"))]
          #:ssl-key
          [ssl-key (and ssl? (build-path server-root-path "private-key.pem"))]
-
+         #:ssl-key-rsa?
+         [ssl-key-rsa? #t]
+         #:ssl-key-asn1?
+         [ssl-key-asn1? #f]
          #:log-file
          [log-file #f]
          #:log-format
@@ -210,4 +215,6 @@
    #:port the-port
    #:safety-limits limits
    #:ssl-cert ssl-cert
-   #:ssl-key ssl-key))
+   #:ssl-key ssl-key
+   #:ssl-key-rsa? ssl-key-rsa?
+   #:ssl-key-asn1? ssl-key-asn1?))

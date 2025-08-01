@@ -60,8 +60,9 @@
        (-> any/c))]
  [raw:dispatch-server-connect@ (unit/c (import) (export dispatch-server-connect^))]
  [make-ssl-connect@
-  (-> path-string? path-string?
-      (unit/c (import) (export dispatch-server-connect^)))]
+  (->* (path-string? path-string?)
+       (#:key-rsa? boolean? #:key-asn1? boolean?)
+       (unit/c (import) (export dispatch-server-connect^)))]
  [do-not-return (-> none/c)]
  [serve/web-config@
   (->*
@@ -70,11 +71,11 @@
     #:tcp@ (unit/c (import) (export tcp^)))
    (-> any/c))])
 
-(define (make-ssl-connect@ server-cert-file server-key-file)
+(define (make-ssl-connect@ server-cert-file server-key-file #:key-rsa? [key-rsa? #t] #:key-asn1? [key-asn1? #f])
   (define the-ctxt
     (ssl-make-server-context))
   (ssl-load-certificate-chain! the-ctxt server-cert-file)
-  (ssl-load-private-key! the-ctxt server-key-file)
+  (ssl-load-private-key! the-ctxt server-key-file key-rsa? key-asn1?)
   (define-unit ssl:dispatch-server-connect@
     (import) (export dispatch-server-connect^)
     (define (port->real-ports ip op)

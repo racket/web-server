@@ -66,6 +66,8 @@ These functions optimize the construction of dispatchers and launching of server
           [#:port port number? 8000]
           [#:ssl-cert ssl-cert (or/c #f path-string?) #f]
           [#:ssl-key ssl-key (or/c #f path-string?) #f]
+          [#:ssl-key-rsa? ssl-key-rsa? boolean? #t]
+          [#:ssl-key-asn1? ssl-key-asn1? boolean? #f]
           [#:max-waiting max-waiting exact-nonnegative-integer? 511]
           [#:safety-limits safety-limits safety-limits?
            (make-safety-limits #:max-waiting max-waiting)])
@@ -86,7 +88,8 @@ These functions optimize the construction of dispatchers and launching of server
  For example, providing @racket["127.0.0.1"] (the default) as @racket[listen-ip] creates a server that accepts only connections to @racket["127.0.0.1"] (the loopback interface) from the local machine.
 
  If @racket[ssl-key] and @racket[ssl-cert] are not false, then the server runs in HTTPS mode with @racket[ssl-cert]
- and @racket[ssl-key] as paths to the certificate and private key.    
+ and @racket[ssl-key] as paths to the certificate and private key. 
+ The @racket[ssl-key-rsa?] and @racket[ssl-key-asn1?] arguments specify the format of the private key file.   
  
  If @racket[connection-close?] is @racket[#t], then every connection is closed after one
  request. Otherwise, the client decides based on what HTTP version it uses.
@@ -101,7 +104,9 @@ These functions optimize the construction of dispatchers and launching of server
   If neither @racket[max-waiting] nor @racket[safety-limits] are given,
   the default @tech{safety limits} value is equivalent to @racket[(make-safety-limits)].
  
-  @history[#:changed "1.6"
+  @history[#:changed "8.16"
+           @elem{Added the @racket[#:key-rsa?] and @racket[#:key-asn1?] arguments.}
+           #:changed "1.6"
            @elem{Added the @racket[safety-limits] argument:
               see @elemref["safety-limits-porting"]{compatability note}.}]
 }
