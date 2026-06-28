@@ -191,7 +191,6 @@
                             "/some-path"
                             #t
                             #t
-                            #f
                             "ext"))
        (check-match (cookie->header c)
                     (header
