@@ -80,19 +80,22 @@
     ;; [1]: https://github.com/racket/racket/pull/5296
     (when (version<=? "8.17.0.6" (version))
       (test-case "waits for in-progress requests to finish"
+        (define finished? #f)
         (call-with-web-server
          (lambda (_req)
            (response/output
             (lambda (out)
               (for ([idx (in-range 2)])
                 (displayln idx out)
-                (sleep 1)))))
+                (sleep 1))
+              (set! finished? #t))))
          (lambda (port stop)
            (define hc (http-conn-open "127.0.0.1" #:port port))
            (define-values (status _headers in)
              (http-conn-sendrecv! hc "/"))
            (check-equal? status #"HTTP/1.1 200 OK")
-           (check-duration stop 2 6 6)
+           (check-duration stop 0 6 6)
+           (check-true finished?)
            (check-equal? (port->bytes in) #"0\n1\n"))))
 
       (test-case "stops when in-progress requests stop"
