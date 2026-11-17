@@ -193,7 +193,9 @@ A default implementation of the dispatch server's connection-conversion abstract
 
 Constructs an implementation of the dispatch server's connection-conversion abstraction for OpenSSL.
 
-@history[#:added "1.1"]}
+@history[#:changed "8.16"
+         @elem{Changed the handling of private keys to support the PEM-encoded PKCS#8 format by default.}
+         #:added "1.1"]}
 
 
 @defproc[(do-not-return) none/c]{
