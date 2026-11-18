@@ -15,7 +15,7 @@
       (tcp-connect "127.0.0.1" (get-port)))
 
     (define boundary
-      (sha1-bytes (open-input-bytes (crypto-random-bytes 32))))
+      (sha1 (open-input-bytes (crypto-random-bytes 32))))
 
     (with-handlers ([exn:fail:network? (lambda _
                                          (values 'reset null ""))])
